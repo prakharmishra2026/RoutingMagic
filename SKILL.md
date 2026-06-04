@@ -23,7 +23,7 @@ description: >
 | World | Gateway | Models | Activation |
 |---|---|---|---|
 | **NATIVE** | Direct → `api.anthropic.com` (keychain OAuth) | Opus 4.8 · Sonnet 4.6 · Haiku 4.5 | Default `claude`, `/model` picker, `ccs`/`cco`/`ccq` |
-| **FREE** | `127.0.0.1:20128` → 9router → OpenRouter | 9 free models (see roster) | `cc*` aliases only |
+| **FREE** | `127.0.0.1:20128` → 9router → OpenRouter | 11 free models (see roster) | `cc*` aliases only |
 
 **Critical rule:** NEVER put `env`, `ANTHROPIC_BASE_URL`, or any proxy in `~/.claude/settings.json`.
 The `/model` picker sends bare IDs (`claude-sonnet-4-6`) that any proxy rejects.
@@ -101,15 +101,25 @@ pick** and the first fallback whenever another free model is rate-limited.
 **Best for:** Reasoning · agentic/tool-use tasks · general coding · the universal 429 fallback
 **Chain:** reasoning (`ccg → ccu → ccx`) · agentic (`ccg → ccx → cc`)
 
-#### Qwen3-Coder (`cck` — `openrouter/qwen/qwen3-coder:free`)  — UI/frontend slot
+#### Qwen3-Coder (`ccc` — `openrouter/qwen/qwen3-coder:free`)  — UI/frontend DEFAULT
 **Context:** 1M · **Providers:** 7 · **Tools:** yes
-Alibaba's dedicated coding model (replaces the chronically rate-limited Kimi K2.6 on the `cck`
-slot). Excellent at React/Next.js structure, Tailwind composition, Framer Motion, and idiomatic
-TypeScript — give it a design system and it sticks to it. 1M context also makes it a strong
-large-codebase coder. First call for any UI/frontend work.
+Alibaba's dedicated coding model and the **reliable UI/frontend default** (the practical
+replacement for Kimi). Excellent at React/Next.js structure, Tailwind composition, Framer Motion,
+and idiomatic TypeScript — give it a design system and it sticks to it. 1M context also makes it a
+strong large-codebase coder. First call for any UI/frontend work.
 **Best for:** React/Next.js · Tailwind · Framer Motion · glassmorphism · TS components · frontend bugs
 **Avoid for:** security-critical code · production deploys without review
-**Chain:** UI/frontend (`cck → ccz → ccm`)
+**Chain:** UI/frontend (`ccc → ccz → ccm`)
+
+#### Kimi K2.6 (`cck` — `openrouter/moonshotai/kimi-k2.6:free`)  ⚠ kept, often 429s
+**Context:** 262k · **Tools:** yes
+Moonshot AI's K2.6 — historically a strong frontend coder, **kept on the `cck` slot** so it
+auto-works again if its upstream provider (Crucible) recovers. Today it 429s frequently
+("rate-limited upstream"), so it is **not** the default — reach for `ccc` (Qwen3-Coder) first and
+only try `cck` if it happens to be available. Same role as `ccc` when it works.
+**Best for:** UI/React/Tailwind/animations — *when available*
+**Avoid for:** anything time-sensitive (assume it may 429); security-critical code
+**Chain:** UI/frontend (optional; primary is `ccc → ccz → ccm`)
 
 #### Qwen3-Next-80B (`ccx` — `openrouter/qwen/qwen3-next-80b-a3b-instruct:free`)
 **Context:** 262k · **Providers:** 6 · **Tools:** yes
@@ -123,14 +133,14 @@ speed; handles backend logic, API work, and multi-step tasks well. The general/a
 Zhipu's fast, lightweight all-rounder. Quick to respond, solid on frontend and general edits.
 The primary UI fallback and a fast alternative for quick work.
 **Best for:** Fast all-round coding · UI fallback · quick edits
-**Chain:** UI fallback (`cck → ccz`) · quick fallback (`cch → ccz`)
+**Chain:** UI fallback (`ccc → ccz`) · quick fallback (`cch → ccz`)
 
 #### Gemma-4-31B (`ccm` — `openrouter/google/gemma-4-31b-it:free`)
 **Context:** 262k · **Providers:** 11 · **Tools:** yes
 Google's Gemma 4. High provider diversity (11) makes it very 429-resistant. Reliable general
 model with a large context. The deep UI fallback and a dependable general backup.
 **Best for:** Resilient general work · large-context tasks · deep UI fallback
-**Chain:** UI deep fallback (`cck → ccz → ccm`)
+**Chain:** UI deep fallback (`ccc → ccz → ccm`)
 
 #### Laguna M.1 (`cc` — `openrouter/poolside/laguna-m.1:free`)  — general default
 **Context:** 262k · **Tools:** yes
@@ -153,7 +163,7 @@ NVIDIA's 120B MoE. The 1M context is real and reliable — the workhorse for ing
 medium-to-large codebase in one pass. Deliberate, thorough, excellent structured markdown output.
 Not a speed demon. Use when breadth of context matters more than speed.
 **Best for:** Full codebase audits · large-context analysis (>100k) · whole-file-tree reads · checklists/architecture docs from real code
-**Chain:** large context (`cca → cck → ccu`, all 1M)
+**Chain:** large context (`cca → ccc → ccu`, all 1M)
 
 #### Nemotron 3 Ultra 550B (`ccu` — `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free`)  ⚠ single provider
 **Context:** 1M · **Providers:** 1 (DeepInfra) · **Tools:** yes · **Reasoning:** yes
@@ -163,7 +173,7 @@ and is more 429-prone than the multi-provider models. Kept as a **flagship-reaso
 large-context fallback only** — reach for it when you need maximum free-tier capability and
 can tolerate the occasional retry. Never make it a primary daily driver.
 **Best for:** Hardest free-tier reasoning · large-context fallback · when capability > reliability
-**Chain:** reasoning fallback (`ccg → ccu`) · large-context fallback (`cca → cck → ccu`)
+**Chain:** reasoning fallback (`ccg → ccu`) · large-context fallback (`cca → ccc → ccu`)
 
 #### Builder / Auto-Router (`ccb` — 9router combo)
 9router's multi-model orchestrator; auto-selects a free model per task. Less predictable than
@@ -179,10 +189,10 @@ its role chain. Antigravity / Claude Code always has a backup this way.
 
 | Role | Primary | Fallback 1 | Fallback 2 | Notes |
 |---|---|---|---|---|
-| **UI / frontend** | `cck` Qwen3-Coder | `ccz` GLM-4.5-Air | `ccm` Gemma-4-31B | all strong on TS/Tailwind |
+| **UI / frontend** | `ccc` Qwen3-Coder | `ccz` GLM-4.5-Air | `ccm` Gemma-4-31B | `cck` Kimi is optional (⚠ 429s) |
 | **General coding** | `cc` Laguna M.1 | `ccg` GPT-OSS-120B | `ccx` Qwen3-Next-80B | ccg = safest |
 | **Reasoning** | `ccg` GPT-OSS-120B | `ccu` Nemotron 550B ⚠ | `ccx` Qwen3-Next-80B | ccu = max capability |
-| **Large context (1M)** | `cca` Nemotron Super | `cck` Qwen3-Coder | `ccu` Nemotron 550B ⚠ | all genuine 1M |
+| **Large context (1M)** | `cca` Nemotron Super | `ccc` Qwen3-Coder | `ccu` Nemotron 550B ⚠ | all genuine 1M |
 | **Quick / trivial** | `cch` Laguna XS.2 | `ccz` GLM-4.5-Air | — | speed first |
 | **Agentic / tools** | `ccg` GPT-OSS-120B | `ccx` Qwen3-Next-80B | `cc` Laguna M.1 | ccg = best tool-use |
 
@@ -204,13 +214,13 @@ Is this PRODUCTION CODE — security, auth, payments, SEBI, hotfix?
   → ⚡ NATIVE — Sonnet (ccs)
 
 Is this UI/FRONTEND — React, Tailwind, Framer Motion, layout?
-  → 🟢 FREE — Qwen3-Coder (cck)      fallback: ccz → ccm
+  → 🟢 FREE — Qwen3-Coder (ccc)      fallback: ccz → ccm   (cck/Kimi optional)
 
 Is this REASONING / AGENTIC / TOOL-USE (free tier)?
   → 🟢 FREE — GPT-OSS-120B (ccg)     fallback: ccu/ccx
 
 Is this LARGE CONTEXT — full codebase, audit, >50k tokens?
-  → 🟢 FREE — Nemotron Super (cca)   fallback: cck → ccu  (all 1M)
+  → 🟢 FREE — Nemotron Super (cca)   fallback: ccc → ccu  (all 1M)
 
 Is this a QUICK EDIT — rename, one-liner, scratchpad update?
   → 🟢 FREE — Laguna XS.2 (cch)      fallback: ccz
@@ -295,13 +305,13 @@ This is what a real delegation block looks like — the exact output Sonnet prod
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔀 DELEGATE → Qwen3-Coder — launch with: cck   (429? fallback: ccz → ccm)
+🔀 DELEGATE → Qwen3-Coder — launch with: ccc   (429? fallback: ccz → ccm)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Why this model: Tailwind + React mobile nav is Qwen3-Coder's specialty.
 I'll wait for you to say "done" before continuing.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📋 COPY EVERYTHING BELOW THIS LINE AND PASTE INTO cck TERMINAL:
+📋 COPY EVERYTHING BELOW THIS LINE AND PASTE INTO ccc TERMINAL:
 ┌─────────────────────────────────────────────────────
 You are working on the Investogram project — a Neo-Luxury dark-theme
 financial dashboard built with Next.js 14 App Router + Tailwind CSS +
@@ -350,10 +360,10 @@ When done, write COMPLETE as your final line.
 
 | Task Type | Route To | Alias | 429 fallback |
 |---|---|---|---|
-| Mobile nav / new UI component | Qwen3-Coder | `cck` | `ccz` → `ccm` |
+| Mobile nav / new UI component | Qwen3-Coder | `ccc` | `ccz` → `ccm` (`cck`/Kimi optional) |
 | Implement `/api/*` backend | Laguna M.1 | `cc` | `ccg` → `ccx` |
 | Auth middleware / RLS policy | Sonnet | `ccs` | never delegate |
-| Full codebase audit | Nemotron Super | `cca` | `cck` → `ccu` |
+| Full codebase audit | Nemotron Super | `cca` | `ccc` → `ccu` |
 | Heavy reasoning / algorithm | GPT-OSS-120B | `ccg` | `ccu` → `ccx` |
 | Agentic pipeline / MCP / tools | GPT-OSS-120B | `ccg` | `ccx` → `cc` |
 | Update scratchpad / memory | Laguna XS.2 | `cch` | `ccz` |
@@ -371,7 +381,8 @@ When done, write COMPLETE as your final line.
 cc    → Laguna M.1            general coding (default)   262k
 cch   → Laguna XS.2           quick edits / one-liners   262k
 cca   → Nemotron 3 Super      large context              1M
-cck   → Qwen3-Coder           UI / frontend / coder      1M   (7 providers)
+ccc   → Qwen3-Coder           UI / frontend (DEFAULT)    1M   (7 providers)
+cck   → Kimi K2.6             UI (kept) ⚠ 429s often — prefer ccc
 ccg   → GPT-OSS-120B          reasoning + tools  131k  (19 providers) ★safest
 ccx   → Qwen3-Next-80B        general / agentic          262k (6 providers)
 ccz   → GLM-4.5-Air           fast all-rounder           131k (4 providers)
@@ -406,7 +417,7 @@ nc -z 127.0.0.1 20128 && echo "9router UP" || echo "9router DOWN"
 
   ─────────────────────────────────────────────────────────
   NATIVE → /model (picker) or: ccs / cco / ccq
-  FREE   → open parallel terminal: cc / cch / cca / cck / ccg / ccx / ccz / ccm / ccu / ccb
+  FREE   → open parallel terminal: cc / cch / cca / ccc / cck / ccg / ccx / ccz / ccm / ccu / ccb
   ─────────────────────────────────────────────────────────
   9router up?  nc -z 127.0.0.1 20128 && echo up || echo down
 ```

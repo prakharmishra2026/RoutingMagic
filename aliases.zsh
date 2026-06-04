@@ -9,7 +9,7 @@
 #                     Default everywhere. Global ~/.claude/settings.json
 #                     stays clean — never put a proxy in it.
 #
-#   FREE models    →  cc / cch / cca / cck / ccg / ccx / ccz / ccm / ccu / ccb
+#   FREE models    →  cc cch cca cck ccc ccg ccx ccz ccm ccu ccb
 #                     Route through your local 9router gateway
 #                     (127.0.0.1:20128 → OpenRouter). Set INLINE per-call so
 #                     they never touch global config.
@@ -17,8 +17,11 @@
 #  WHY SO MANY FREE MODELS? — 429 RESILIENCE.
 #  OpenRouter free models share a global rate limit AND can be throttled by
 #  their upstream provider ("rate-limited upstream", e.g. the Crucible 429
-#  that killed Kimi K2.6). The cure is a FALLBACK CHAIN: if your first pick
+#  that broke Kimi K2.6). The cure is a FALLBACK CHAIN: if your first pick
 #  429s, jump to the next model in the same role. See the chains below.
+#
+#  KIMI NOTE: cck (Kimi K2.6) is KEPT for when its upstream provider recovers,
+#  but it 429s frequently today — use ccc (Qwen3-Coder) as the UI default.
 #
 #  To install: add this line to your ~/.zshrc, then `source ~/.zshrc`
 #     source ~/RoutingMagic/aliases.zsh
@@ -43,7 +46,8 @@ _9r() {
 cc()  { _9r openrouter/poolside/laguna-m.1:free "$@"; }                       # general coding (default) · 262k
 cch() { _9r openrouter/poolside/laguna-xs.2:free "$@"; }                      # quick edits / one-liners · 262k
 cca() { _9r openrouter/nvidia/nemotron-3-super-120b-a12b:free "$@"; }         # large context · 1M
-cck() { _9r openrouter/qwen/qwen3-coder:free "$@"; }                          # UI / frontend / coder · 1M · 7 providers
+cck() { _9r openrouter/moonshotai/kimi-k2.6:free "$@"; }                      # UI (Kimi) · 262k · ⚠ 429s often — prefer ccc
+ccc() { _9r openrouter/qwen/qwen3-coder:free "$@"; }                          # UI / frontend / coder (DEFAULT) · 1M · 7 providers
 ccg() { _9r openrouter/openai/gpt-oss-120b:free "$@"; }                       # reasoning + tools · 131k · 19 providers (MOST reliable)
 ccx() { _9r openrouter/qwen/qwen3-next-80b-a3b-instruct:free "$@"; }          # general / agentic · 262k · 6 providers
 ccz() { _9r openrouter/z-ai/glm-4.5-air:free "$@"; }                          # fast all-rounder · 131k · 4 providers
@@ -67,7 +71,8 @@ cc-models() {
 ║  cc    Laguna M.1            general coding (default)   262k        ║
 ║  cch   Laguna XS.2           quick edits / one-liners   262k        ║
 ║  cca   Nemotron 3 Super      large context              1M          ║
-║  cck   Qwen3-Coder           UI / frontend / coder      1M   7 prov ║
+║  ccc   Qwen3-Coder           UI / frontend (DEFAULT)    1M    7 prov ║
+║  cck   Kimi K2.6             UI (kept) ⚠ 429s often — prefer ccc    ║
 ║  ccg   GPT-OSS-120B          reasoning + tools  131k  19 prov ★safe ║
 ║  ccx   Qwen3-Next-80B        general / agentic   262k         6 prov ║
 ║  ccz   GLM-4.5-Air           fast all-rounder    131k         4 prov ║
@@ -82,12 +87,12 @@ cc-models() {
 ║  ccq   Haiku 4.5             fastest native                         ║
 ╠════════════════════════════════════════════════════════════════════╣
 ║  429 FALLBACK CHAINS  (if a free model is rate-limited, go next →)  ║
-║  UI / frontend   :  cck → ccz → ccm                                 ║
+║  UI / frontend   :  ccc → ccz → ccm        (cck/Kimi if available) ║
 ║  General coding  :  cc  → ccg → ccx                                 ║
 ║  Reasoning       :  ccg → ccu → ccx                                 ║
-║  Large context   :  cca → cck → ccu      (all 1M)                   ║
+║  Large context   :  cca → ccc → ccu       (all 1M)                  ║
 ║  Quick / trivial :  cch → ccz                                       ║
-║  Agentic / tools :  ccg → ccx → cc       (★ gpt-oss = best tools)   ║
+║  Agentic / tools :  ccg → ccx → cc        (★ gpt-oss = best tools)  ║
 ╠════════════════════════════════════════════════════════════════════╣
 ║  SMART ROUTER                                                       ║
 ║  cc-route "task"   analyse → pick best model → launch               ║
@@ -120,31 +125,31 @@ _cc_route_match() {
   # ── FREE: UI / Frontend / Design System ──────────────────────────
   elif echo "$t" | grep -qiE \
     "\bUI\b|\bUX\b|\bcomponent\b|frontend|tailwind|framer|figma|design system|layout|responsive|mobile.first|dark mode|glassmorphism|neo.luxury|color scheme|typography|\bcard\b|\bmodal\b|sidebar|navbar|dashboard UI|loading state|skeleton|animation|\bCSS\b"; then
-    echo "openrouter/qwen/qwen3-coder:free|🟢 FREE|UI / Frontend → Qwen3-Coder (fallback: ccz, ccm)|9r"
+    echo "openrouter/qwen/qwen3-coder:free|🟢 FREE|UI / Frontend → Qwen3-Coder (ccc; fallback: ccz, ccm)|9r"
 
   # ── FREE: Agent / Automation / Tool Use ──────────────────────────
   elif echo "$t" | grep -qiE \
     "\bagent\b|tool use|function call|\bpipeline\b|orchestrat|workflow|multi.step|\bMCP\b|\bRAG\b|vector store|\bn8n\b|webhook|integration|react agent|tool.?calling|automat"; then
-    echo "openrouter/openai/gpt-oss-120b:free|🟢 FREE|Agent / Tools → GPT-OSS-120B (fallback: ccx, cc)|9r"
+    echo "openrouter/openai/gpt-oss-120b:free|🟢 FREE|Agent / Tools → GPT-OSS-120B (ccg; fallback: ccx, cc)|9r"
 
   # ── FREE: Large Context / Full Codebase ──────────────────────────
   elif echo "$t" | grep -qiE \
     "(entire codebase|full audit|all files|large context|comprehensive review|read everything|scan all|full repo|every file|summarize the whole|inventory all|full analysis|deep dive)"; then
-    echo "openrouter/nvidia/nemotron-3-super-120b-a12b:free|🟢 FREE|Large Context → Nemotron 3 Super 1M (fallback: cck, ccu)|9r"
+    echo "openrouter/nvidia/nemotron-3-super-120b-a12b:free|🟢 FREE|Large Context → Nemotron 3 Super 1M (cca; fallback: ccc, ccu)|9r"
 
   # ── FREE: Heavy Reasoning ────────────────────────────────────────
   elif echo "$t" | grep -qiE \
     "(reason|think through|step by step|prove|derive|complex logic|algorithm design|optimi[sz]e|math|analy[sz]e deeply)"; then
-    echo "openrouter/openai/gpt-oss-120b:free|🟢 FREE|Reasoning → GPT-OSS-120B (fallback: ccu, ccx)|9r"
+    echo "openrouter/openai/gpt-oss-120b:free|🟢 FREE|Reasoning → GPT-OSS-120B (ccg; fallback: ccu, ccx)|9r"
 
   # ── FREE: Quick / Trivial ────────────────────────────────────────
   elif echo "$t" | grep -qiE \
     "(^quick |^just |^simple |one.?liner|typo|rename this|what is |what does |explain this|how does |how do i|just a |fast answer|short answer|definition of|meaning of)"; then
-    echo "openrouter/poolside/laguna-xs.2:free|🟢 FREE|Quick / Trivial → Laguna XS.2 (fallback: ccz)|9r"
+    echo "openrouter/poolside/laguna-xs.2:free|🟢 FREE|Quick / Trivial → Laguna XS.2 (cch; fallback: ccz)|9r"
 
   # ── DEFAULT: General coding ───────────────────────────────────────
   else
-    echo "openrouter/poolside/laguna-m.1:free|🟢 FREE|General Coding → Laguna M.1 (fallback: ccg, ccx)|9r"
+    echo "openrouter/poolside/laguna-m.1:free|🟢 FREE|General Coding → Laguna M.1 (cc; fallback: ccg, ccx)|9r"
   fi
 }
 

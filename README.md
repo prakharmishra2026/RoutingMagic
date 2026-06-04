@@ -38,7 +38,8 @@ Kimi K2.6). There's no single free model that never 429s, so RoutingMagic does t
 | `cc`  | Laguna M.1 | general coding (default) | 262k | — |
 | `cch` | Laguna XS.2 | quick edits / one-liners | 262k | — |
 | `cca` | Nemotron 3 Super 120B | large context | **1M** | — |
-| `cck` | **Qwen3-Coder** | UI / frontend / coder | **1M** | 7 |
+| `ccc` | **Qwen3-Coder** | UI / frontend (default) | **1M** | 7 |
+| `cck` | Kimi K2.6 ⚠ | UI (kept) — 429s often, prefer `ccc` | 262k | — |
 | `ccg` | **GPT-OSS-120B** ★ | reasoning + tools | 131k | **19** |
 | `ccx` | **Qwen3-Next-80B** | general / agentic | 262k | 6 |
 | `ccz` | **GLM-4.5-Air** | fast all-rounder | 131k | 4 |
@@ -49,6 +50,8 @@ Kimi K2.6). There's no single free model that never 429s, so RoutingMagic does t
 ★ `ccg` (GPT-OSS-120B) is the **most reliable** free model — the universal fallback.
 ⚠ `ccu` (Nemotron 550B) is the most *capable* free reasoner but is served by a **single
 provider**, so it's more 429-prone — use it as a fallback, not a daily driver.
+⚠ `cck` (Kimi K2.6) is **kept** so it auto-works if its upstream recovers, but it 429s
+frequently today — the UI default is `ccc` (Qwen3-Coder).
 
 ### NATIVE (direct to Anthropic)
 
@@ -66,10 +69,10 @@ When a free model returns 429, jump to the next alias in its role chain:
 
 | Role | Primary | → Fallback 1 | → Fallback 2 |
 |------|---------|--------------|--------------|
-| UI / frontend | `cck` | `ccz` | `ccm` |
+| UI / frontend | `ccc` | `ccz` | `ccm` (`cck`/Kimi optional) |
 | General coding | `cc` | `ccg` | `ccx` |
 | Reasoning | `ccg` | `ccu` ⚠ | `ccx` |
-| Large context (1M) | `cca` | `cck` | `ccu` ⚠ |
+| Large context (1M) | `cca` | `ccc` | `ccu` ⚠ |
 | Quick / trivial | `cch` | `ccz` | — |
 | Agentic / tools | `ccg` | `ccx` | `cc` |
 
@@ -109,12 +112,12 @@ cc-models        # print the cheatsheet + fallback chains
 
 ```bash
 # Pick a model directly
-cck                       # launch Claude Code on Qwen3-Coder (UI work)
+ccc                       # launch Claude Code on Qwen3-Coder (UI work)
 ccg                       # GPT-OSS-120B (reasoning / safest free)
 ccs                       # native Sonnet 4.6
 
 # Let the router decide
-cc-route "build a Tailwind modal with a slide-in animation"   # → cck
+cc-route "build a Tailwind modal with a slide-in animation"   # → ccc
 cc-route "audit the entire codebase for auth bugs"            # → ccs (security → native)
 cc-route "read all files and summarize the architecture"     # → cca (1M context)
 
@@ -137,6 +140,8 @@ output from `scratchpad.md` / `tmp_*` files.
 | `SKILL.md` | The skill Claude Code loads — roster, decision tree, fallback chains, delegation protocol |
 | `aliases.zsh` | All `cc*` shell functions + `cc-route` + `cc-models` (self-contained) |
 | `install.sh` | Idempotent installer (zshrc source line + skill symlink) |
+| `memory.md` | Durable routing decisions & rules (also a free-model delegation output target) |
+| `progress.md` | Chronological log of what's been built (also a delegation output target) |
 
 ---
 
