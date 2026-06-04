@@ -279,6 +279,69 @@ deliverable, one output location. If the named alias 429s, tell the user the fal
 
 Never apply free-model code output to production paths without Sonnet reading and approving it.
 
+### 6.4 — How Sonnet Picks Up Results
+
+After the user says "done":
+1. Sonnet reads the output file specified in the prompt.
+2. Validates: does it match what was requested? Is it complete?
+3. For code output: reviews for correctness and security before writing to the real path.
+4. Continues the main task using the result as context.
+
+Never apply free-model code output to production paths without Sonnet reading and approving it first.
+
+### 6.5 — Worked Example (Investogram: mobile nav)
+
+This is what a real delegation block looks like — the exact output Sonnet produces.
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔀 DELEGATE → Qwen3-Coder — launch with: cck   (429? fallback: ccz → ccm)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Why this model: Tailwind + React mobile nav is Qwen3-Coder's specialty.
+I'll wait for you to say "done" before continuing.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 COPY EVERYTHING BELOW THIS LINE AND PASTE INTO cck TERMINAL:
+┌─────────────────────────────────────────────────────
+You are working on the Investogram project — a Neo-Luxury dark-theme
+financial dashboard built with Next.js 14 App Router + Tailwind CSS +
+Framer Motion.
+
+Design system:
+  Background: #0B0C10  |  Surfaces: #1F2833  |  Text: #F4F5F7
+  Gold accent: #C5A059  |  Error: #801B2B
+  No borders unless necessary. No bright colours. No rounded-xl overkill.
+
+Current problem:
+  The top navigation at frontend/src/components/TopNav.tsx hides all nav
+  links (SCREENER, PORTFOLIO, CARDS, FUNDS, IPO, SETTINGS) below 640px
+  with no hamburger menu replacement. Mobile users are stuck.
+
+Current nav links array (approximate):
+  ['SCREENER /screener', 'PORTFOLIO /portfolio', 'CARDS /cards',
+   'FUNDS /funds', 'IPO /ipo', 'SETTINGS /settings']
+
+Task:
+  Write a complete replacement <MobileMenu /> React component in TypeScript
+  that:
+  1. Shows a hamburger icon (3 lines, gold #C5A059) in the top-right at <640px
+  2. Tapping it opens a full-screen overlay (bg #0B0C10, 95% opacity)
+  3. Nav links listed vertically, uppercase, letter-spaced, gold on hover
+  4. Close button (X) top-right of overlay
+  5. Uses Framer Motion for open/close animation (slide down, 200ms)
+  6. Works with Next.js <Link> for SPA navigation (no window.location.href)
+  7. Closes automatically when a link is clicked
+
+Output:
+  Write the complete component to the file: tmp_outskill
+  Use this exact format — first line must be the file path comment:
+  // tmp_outskill — MobileMenu component for Investogram TopNav
+
+Do not modify any other files.
+When done, write COMPLETE as your final line.
+└─────────────────────────────────────────────────────
+```
+
 ---
 
 ## Part 7 — Project Routing Table (adapt per project)
