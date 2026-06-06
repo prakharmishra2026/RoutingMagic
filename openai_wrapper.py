@@ -6,15 +6,19 @@ Supports:
   - OpenAI models
   - OpenRouter / local 9Router models (free/paid)
   - Smart Routing: Auto-selects the best NVIDIA free model based on task.
+  - Dual-Tier Context: Instant context sniffing or deep codebase summarization.
 
 Usage:
-  ask "your prompt"          # Auto-routes to the best free model
+  ask "your prompt"          # Auto-routes with instant context
+  ask --deep "your prompt"   # Scans and summarizes the codebase before routing
   chat gpt-4o                # Start interactive REPL with a specific model
 """
 import os
 import sys
 import socket
 import re
+import json
+import subprocess
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -36,6 +40,95 @@ NVIDIA_API_MAP = {
     "nvidia/cosmos3-nano-reasoner": "NVAPI_KEY_COSMOS",
     "nvidia/z-ai/glm-5.1": "NVAPI_KEY"
 }
+
+def get_instant_context():
+    """Builds a ~150 token context string in milliseconds without calling any APIs."""
+    cwd = os.getcwd()
+    project_name = os.path.basename(cwd)
+    tech_stack = []
+    
+    if os.path.exists("package.json"):
+        try:
+            with open("package.json", "r") as f:
+                data = json.load(f)
+                deps = list(data.get("dependencies", {}).keys()) + list(data.get("devDependencies", {}).keys())
+                tech_stack.extend(deps[:15])
+        except Exception:
+            pass
+    if os.path.exists("requirements.txt"):
+        tech_stack.append("Python dependencies present")
+        
+    readme_snippet = ""
+    if os.path.exists("README.md"):
+        try:
+            with open("README.md", "r") as f:
+                lines = f.readlines()
+                readme_snippet = "".join(lines[:5]).strip()
+        except Exception:
+            pass
+            
+    try:
+        dirs = [d for d in os.listdir(".") if os.path.isdir(d) and not d.startswith(".")]
+    except Exception:
+        dirs = []
+        
+    context = f"Project Context:\n- Directory: {cwd} (Name: {project_name})\n"
+    if tech_stack:
+        context += f"- Tech Stack/Dependencies: {', '.join(tech_stack)}\n"
+    if dirs:
+        context += f"- Root Folders: {', '.join(dirs[:10])}\n"
+    if readme_snippet:
+        context += f"- README excerpt: {readme_snippet}\n"
+        
+    return context
+
+def get_deep_context():
+    """Builds a comprehensive codebase payload and uses a fast model to summarize it."""
+    cwd = os.getcwd()
+    project_name = os.path.basename(cwd)
+    content = f"Repository Context for {project_name}:\n\n"
+    
+    try:
+        # Get tree of max 2 levels to avoid huge output
+        tree_output = subprocess.check_output(["ls", "-R"], stderr=subprocess.DEVNULL, text=True)
+        content += "Directory Tree:\n" + tree_output[:2000] + "\n\n"
+    except Exception:
+        pass
+        
+    files_to_read = ["README.md", "package.json", "schema.sql", "schema_v2.sql", "requirements.txt", "pyproject.toml"]
+    for f in files_to_read:
+        if os.path.exists(f):
+            try:
+                with open(f, "r") as fd:
+                    content += f"--- {f} ---\n{fd.read()[:5000]}\n\n"
+            except Exception:
+                pass
+                
+    summarizer_models = ["deepseek-ai/deepseek-v4-flash", "google/gemma-4-31b-it", "mistralai/mistral-medium-3.5-128b"]
+    prompt = f"Summarize the architecture, tech stack, and purpose of this codebase based on the following context. Be concise and focus on structural elements useful for a developer.\n\n{content}"
+    
+    print("\033[93m[Smart Router] Scanning codebase for deep context...\033[0m")
+    
+    for model in summarizer_models:
+        try:
+            client, target = get_client_and_model(model)
+            kwargs = {
+                "model": target,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.3
+            }
+            if "deepseek-v4-flash" in target:
+                kwargs["extra_body"] = {"chat_template_kwargs":{"thinking":True,"reasoning_effort":"low"}}
+                
+            resp = client.chat.completions.create(**kwargs)
+            summary = resp.choices[0].message.content
+            print(f"\033[92m[Smart Router] Codebase summarized via {model}.\033[0m")
+            return f"Project Deep Context:\n{summary}"
+        except Exception as e:
+            print(f"\033[91m[Smart Router] Summarizer {model} failed. Trying next...\033[0m")
+            
+    print("\033[91m[Smart Router] All summarizer models failed. Falling back to instant context.\033[0m")
+    return get_instant_context()
 
 def is_port_open(ip, port):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -95,14 +188,14 @@ def get_client_and_model(model_name):
         key_env_var = NVIDIA_API_MAP.get(model_name, "NVAPI_KEY")
         api_key = os.getenv(key_env_var) or os.getenv("NVAPI_KEY") or os.getenv("NVIDIA_API_KEY")
         base_url = "https://integrate.api.nvidia.com/v1"
-        return OpenAI(api_key=api_key, base_url=base_url), clean_model
+        return OpenAI(api_key=api_key, base_url=base_url, timeout=15), clean_model
         
     # 2. OpenAI
     if model_name.startswith("openai/") or model_name.startswith("gpt-") or model_name.startswith("o1-") or model_name.startswith("o3-"):
         if model_name.startswith("openai/"):
             clean_model = model_name.replace("openai/", "")
         api_key = os.getenv("OPENAI_API_KEY")
-        return OpenAI(api_key=api_key), clean_model
+        return OpenAI(api_key=api_key, timeout=15), clean_model
 
     # 3. Fallback to OpenRouter / 9Router
     if is_port_open("127.0.0.1", 20128):
@@ -112,14 +205,22 @@ def get_client_and_model(model_name):
         base_url = "https://openrouter.ai/api/v1"
         api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("9ROUTER_API_KEY")
         
-    return OpenAI(api_key=api_key, base_url=base_url), model_name
+    return OpenAI(api_key=api_key, base_url=base_url, timeout=15), model_name
 
-def chat_oneshot(model, prompt):
+def chat_oneshot(model, prompt, use_deep_context=False):
     if model == "smart":
         target_model, task_type = smart_route(prompt)
         print(f"\033[94m[Smart Router] Selected '{target_model}' for task type: {task_type}\033[0m")
     else:
         target_model = model
+
+    # Determine Context
+    if use_deep_context:
+        context_str = get_deep_context()
+    else:
+        context_str = get_instant_context()
+
+    system_message = {"role": "system", "content": f"You are a highly capable AI assistant helping a developer. Always incorporate the following project context into your answers to be as specific and useful as possible.\n\n{context_str}"}
 
     client, final_model_id = get_client_and_model(target_model)
     
@@ -132,7 +233,7 @@ def chat_oneshot(model, prompt):
     
     kwargs = {
         "model": final_model_id,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": [system_message, {"role": "user", "content": prompt}],
         "temperature": 0.7,
         "stream": True
     }
@@ -162,7 +263,7 @@ def chat_oneshot(model, prompt):
         # Fallback handling
         if model == "smart":
             print(f"\033[91m[Smart Router] Request failed. Falling back to glm-5.1...\033[0m")
-            chat_oneshot("nvidia/z-ai/glm-5.1", prompt)
+            chat_oneshot("nvidia/z-ai/glm-5.1", prompt, use_deep_context)
         else:
             sys.exit(1)
 
@@ -171,7 +272,7 @@ def repl(model):
     print(f"🦾 Universal Chat REPL — model: {model} (Target: {target_model})")
     print("Type your message. Exit with Ctrl-D or empty line.\n")
     
-    messages = []
+    messages = [{"role": "system", "content": f"You are a helpful assistant. Context:\n{get_instant_context()}"}]
     while True:
         try:
             line = input(">>> ")
@@ -210,17 +311,25 @@ def repl(model):
 
 def main():
     if len(sys.argv) < 2:
-        sys.stderr.write("Usage: openai_wrapper.py <model_id|smart> [prompt...]\n")
+        sys.stderr.write("Usage: openai_wrapper.py <model_id|smart> [--deep] [prompt...]\n")
         sys.exit(1)
+        
     model_id = sys.argv[1]
-    if len(sys.argv) == 2 and model_id != "smart":
+    args = sys.argv[2:]
+    
+    use_deep = False
+    if "--deep" in args:
+        use_deep = True
+        args.remove("--deep")
+        
+    if len(args) == 0 and model_id != "smart":
         repl(model_id)
     else:
-        if model_id == "smart" and len(sys.argv) == 2:
-            sys.stderr.write("Usage: ask \"your prompt\"\n")
+        if model_id == "smart" and len(args) == 0:
+            sys.stderr.write("Usage: ask [--deep] \"your prompt\"\n")
             sys.exit(1)
-        prompt = " ".join(sys.argv[2:])
-        chat_oneshot(model_id, prompt)
+        prompt = " ".join(args)
+        chat_oneshot(model_id, prompt, use_deep_context=use_deep)
 
 if __name__ == "__main__":
     main()
