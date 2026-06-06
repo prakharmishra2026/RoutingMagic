@@ -337,7 +337,9 @@ def chat_oneshot(model, prompt, use_deep_context=False):
         kwargs["extra_body"] = extra_body
 
     try:
+        print(f"\n\033[96m🤖 assistant ({final_model_id}):\033[0m\n", end="", flush=True)
         resp = client.chat.completions.create(**kwargs)
+        was_reasoning = False
         for chunk in resp:
             if not getattr(chunk, "choices", None) or len(chunk.choices) == 0:
                 continue
@@ -345,10 +347,15 @@ def chat_oneshot(model, prompt, use_deep_context=False):
             delta = chunk.choices[0].delta
             reasoning = getattr(delta, "reasoning_content", None)
             if reasoning:
+                was_reasoning = True
                 print(f"\033[90m{reasoning}\033[0m", end="", flush=True)
                 
             content = getattr(delta, "content", None)
             if content:
+                if was_reasoning:
+                    print("\n\n", end="")
+                    was_reasoning = False
+                    
                 if len(content) > 30:
                     for char in content:
                         sys.stdout.write(char)
@@ -412,7 +419,7 @@ def repl(model, use_deep_context=False):
         
     while True:
         try:
-            line = input(">>> ")
+            line = input("\n\033[92m>>> \033[0m")
         except (EOFError, KeyboardInterrupt):
             handle_exit(messages)
             break
@@ -564,7 +571,7 @@ def repl(model, use_deep_context=False):
                 elif "deepseek-v4-flash" in temp_target:
                     extra_body = {"chat_template_kwargs": {"thinking": True, "reasoning_effort": "high"}}
 
-                print(f"assistant ({temp_target}): ", end="", flush=True)
+                print(f"\n\033[96m🤖 assistant ({temp_target}):\033[0m\n", end="", flush=True)
 
                 full_messages = PINNED_CONTEXT + messages
 
@@ -587,6 +594,7 @@ def repl(model, use_deep_context=False):
                 request_timestamps.append(now)
                 daily_requests += 1
                 
+                was_reasoning = False
                 for chunk in resp:
                     if not getattr(chunk, "choices", None) or len(chunk.choices) == 0:
                         continue
@@ -594,10 +602,15 @@ def repl(model, use_deep_context=False):
                     
                     reasoning = getattr(delta, "reasoning_content", None)
                     if reasoning:
+                        was_reasoning = True
                         print(f"\033[90m{reasoning}\033[0m", end="", flush=True)
                         
                     content = getattr(delta, "content", None)
                     if content:
+                        if was_reasoning:
+                            print("\n\n", end="")
+                            was_reasoning = False
+                            
                         if len(content) > 30:
                             for char in content:
                                 sys.stdout.write(char)
