@@ -7,11 +7,7 @@ Supports:
   - OpenRouter / local 9Router models (free/paid)
   - Smart Routing: Auto-selects the best NVIDIA free model based on task.
   - Dual-Tier Context: Instant context sniffing or deep codebase summarization.
-
-Usage:
-  ask "your prompt"          # Auto-routes with instant context
-  ask --deep "your prompt"   # Scans and summarizes the codebase before routing
-  chat gpt-4o                # Start interactive REPL with a specific model
+  - Fallback loops, cost tracking, workspaces, failsafes, error interception.
 """
 import os
 import sys
@@ -20,6 +16,7 @@ import re
 import json
 import subprocess
 import shutil
+import time
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -27,8 +24,15 @@ from dotenv import load_dotenv
 load_dotenv(os.path.expanduser("~/Projects/investogram/.env"))
 load_dotenv(os.path.expanduser("~/global.env"))
 
-TEMP_MEM_FILE = ".rm_session.tmp"
+WORKSPACE = "default"
+TEMP_MEM_FILE = f".rm_session_{WORKSPACE}.tmp"
 SESSION_DIR = os.path.expanduser("~/Projects/RoutingMagic/sessions")
+
+SESSION_COST = 0.0
+MAX_BUDGET = 5.0
+PINNED_CONTEXT = []
+request_timestamps = []
+daily_requests = 0
 
 # Mapping of NVIDIA NIM models to their specific API keys
 NVIDIA_API_MAP = {
@@ -170,44 +174,27 @@ def smart_route(prompt):
     """Intelligently routes the prompt to the best available free model."""
     prompt_lower = prompt.lower()
     
-    # Task 1: Deep Reasoning & Planning
     if re.search(r'\b(reason deeply|architecture|strategy|plan|tradeoffs|complex analysis|tool orchestration)\b', prompt_lower):
         return "nvidia/nemotron-3-ultra-550b-a55b", "deep_reasoning_planning"
-        
-    # Task 2: Fast Coding & Debugging
     if re.search(r'\b(code|fix bug|refactor|write function|regex|sql|snippet|debug|react|css|html)\b', prompt_lower):
         return "deepseek-ai/deepseek-v4-flash", "fast_coding"
-        
-    # Task 3: Long Horizon Agentic Coding
     if re.search(r'\b(large repo|multi-step coding|agent loop|tool use|long workflow|codebase reasoning)\b', prompt_lower):
         return "moonshotai/kimi-k2.6", "long_horizon_agentic_coding"
-        
-    # Task 4: Multimodal Reasoning (Fallback if triggered by text, though intended for images)
     if re.search(r'\b(image and text|video and text|multimodal reasoning)\b', prompt_lower):
         return "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", "multimodal_reasoning"
-        
-    # Task 5: Safety Moderation
     if re.search(r'\b(moderation|toxicity|unsafe content|policy check|compliance screening)\b', prompt_lower):
         return "nvidia/nemotron-3.5-content-safety", "safety_moderation"
-        
-    # Task 6: Office Productivity
     if re.search(r'\b(office tasks|rewrite email|business drafting|document help)\b', prompt_lower):
         return "minimaxai/minimax-m2.7", "office_productivity"
-        
-    # Task 7: Budget Dense Reasoning
     if re.search(r'\b(small dense model|light reasoning|budget coding)\b', prompt_lower):
         return "google/gemma-4-31b-it", "budget_dense_reasoning"
         
-    # Default: General Chat
     return "nvidia/z-ai/glm-5.1", "default_general"
 
 def get_client_and_model(model_name, is_summarizer=False):
     clean_model = model_name
-    
-    # Use shorter timeout for summarizers to fail fast, longer for main response
     req_timeout = 10 if is_summarizer else 45
     
-    # 1. NVIDIA NIM Models
     if model_name in NVIDIA_API_MAP or "nvidia" in model_name or "glm" in model_name or "deepseek" in model_name or "kimi" in model_name or "mistral" in model_name or "minimax" in model_name or "gemma" in model_name:
         if model_name.startswith("nvidia/"):
             clean_model = model_name.replace("nvidia/", "")
@@ -219,14 +206,12 @@ def get_client_and_model(model_name, is_summarizer=False):
         base_url = "https://integrate.api.nvidia.com/v1"
         return OpenAI(api_key=api_key, base_url=base_url, timeout=req_timeout), clean_model
         
-    # 2. OpenAI
     if model_name.startswith("openai/") or model_name.startswith("gpt-") or model_name.startswith("o1-") or model_name.startswith("o3-"):
         if model_name.startswith("openai/"):
             clean_model = model_name.replace("openai/", "")
         api_key = os.getenv("OPENAI_API_KEY")
         return OpenAI(api_key=api_key, timeout=req_timeout), clean_model
 
-    # 3. Fallback to OpenRouter / 9Router
     if is_port_open("127.0.0.1", 20128):
         base_url = "http://127.0.0.1:20128/v1"
         api_key = "9router-local"
@@ -272,12 +257,8 @@ def compress_context(messages):
     if len(messages) <= 6:
         return messages
     
-    # Keep system prompt
     sys_msg = messages[0]
-    # Keep last 3 messages
     recent_msgs = messages[-3:]
-    
-    # Summarize the middle
     middle_msgs = messages[1:-3]
     hist = json.dumps(middle_msgs)
     
@@ -308,7 +289,6 @@ def chat_oneshot(model, prompt, use_deep_context=False):
     else:
         target_model = model
 
-    # Determine Context
     if use_deep_context:
         context_str = get_deep_context()
     else:
@@ -318,7 +298,6 @@ def chat_oneshot(model, prompt, use_deep_context=False):
 
     client, final_model_id = get_client_and_model(target_model)
     
-    # Some models need specific parameters
     extra_body = {}
     if "nemotron-3-ultra" in final_model_id:
         extra_body = {"chat_template_kwargs":{"enable_thinking":True},"reasoning_budget":4096}
@@ -342,8 +321,6 @@ def chat_oneshot(model, prompt, use_deep_context=False):
                 continue
                 
             delta = chunk.choices[0].delta
-            
-            # Print reasoning if available (DeepSeek/Nemotron)
             reasoning = getattr(delta, "reasoning_content", None)
             if reasoning:
                 print(f"\033[90m{reasoning}\033[0m", end="", flush=True)
@@ -353,11 +330,8 @@ def chat_oneshot(model, prompt, use_deep_context=False):
         print()
     except Exception as e:
         sys.stderr.write(f"\nRequest failed: {e}\n")
-        
-        # Fallback handling
         if model == "smart":
-            print(f"\033[91m[Smart Router] Primary request failed. Falling back to glm-5.1 with INSTANT context to prevent loops...\033[0m")
-            # CRITICAL FIX: Pass use_deep_context=False so we NEVER repeat the deep summarizer scan during a fallback
+            print(f"\033[91m[Smart Router] Primary request failed. Falling back to glm-5.1...\033[0m")
             chat_oneshot("nvidia/z-ai/glm-5.1", prompt, use_deep_context=False)
         else:
             sys.exit(1)
@@ -378,6 +352,8 @@ def handle_exit(messages):
         print("Temporary session discarded.")
 
 def repl(model, use_deep_context=False):
+    global WORKSPACE, TEMP_MEM_FILE, SESSION_COST, daily_requests, request_timestamps
+    
     if model != "smart":
         client, target_model = get_client_and_model(model)
         print(f"🦾 Universal Chat REPL — model: {model} (Target: {target_model})")
@@ -415,10 +391,118 @@ def repl(model, use_deep_context=False):
         if not line.strip():
             continue
             
-        if line.strip().lower() in ["exit", "quit", "/exit", "/quit"]:
+        line_stripped = line.strip().lower()
+            
+        if line_stripped in ["exit", "quit", "/exit", "/quit"]:
             handle_exit(messages)
             break
             
+        # 1. Context Pinning & Agent Workspaces
+        if line_stripped.startswith("/workspace "):
+            WORKSPACE = line.split(" ", 1)[1].strip()
+            TEMP_MEM_FILE = f".rm_session_{WORKSPACE}.tmp"
+            messages = load_temp_memory() or [{"role": "system", "content": f"You are a helpful assistant. Context:\n{get_instant_context()}"}]
+            print(f"\033[92mSwitched to workspace: {WORKSPACE}\033[0m")
+            continue
+            
+        if line_stripped.startswith("/pin "):
+            filepath = line.split(" ", 1)[1].strip()
+            if os.path.exists(filepath):
+                with open(filepath, "r") as f:
+                    content = f.read()
+                PINNED_CONTEXT.append({"role": "system", "content": f"[PINNED FILE: {filepath}]\\n{content}"})
+                print(f"\033[92mPinned {filepath} to context permanently.\033[0m")
+            else:
+                print(f"\033[91mFile not found: {filepath}\033[0m")
+            continue
+            
+        # 2. Auto-Commit & Failsafe Restore
+        if line_stripped == "/safe":
+            print("\033[93mCreating failsafe snapshot...\033[0m")
+            subprocess.run("git add . && git commit -m 'Auto-backup before AI changes'", shell=True)
+            print("\033[92mSnapshot created! Type /restore to undo future changes.\033[0m")
+            continue
+            
+        if line_stripped == "/restore":
+            print("\033[91mRestoring to last snapshot...\033[0m")
+            subprocess.run("git reset --hard HEAD~1", shell=True)
+            print("\033[92mRestored successfully.\033[0m")
+            continue
+            
+        # 3. Token Rate Limits & Cost Tracker
+        if line_stripped == "/cost":
+            now = time.time()
+            request_timestamps = [t for t in request_timestamps if now - t < 60]
+            rpm = len(request_timestamps)
+            print(f"\033[96mSession Cost (Paid): \033[0m ${SESSION_COST:.4f} / ${MAX_BUDGET:.2f} max")
+            print(f"\033[96mRate Limits (Free): \033[0m {rpm} RPM (Limit: ~40), {daily_requests} Requests today.")
+            continue
+            
+        # 4. Context-Aware /model Switcher
+        if line_stripped == "/model":
+            last_msg = messages[-1]["content"] if len(messages) > 1 else "general"
+            suggested_model, task_type = smart_route(last_msg)
+            
+            models_list = [
+                ("smart", "Auto (Smart Router)"),
+                ("nvidia/z-ai/glm-5.1", "GLM-5.1 (Fast, All-Rounder)"),
+                ("deepseek-ai/deepseek-v4-flash", "DeepSeek-V4 (Fast Coding)"),
+                ("openrouter/openai/gpt-oss-120b:free", "GPT-OSS-120B (Reasoning)"),
+                ("openrouter/qwen/qwen3-coder:free", "Qwen3-Coder (UI / Frontend)"),
+                ("openai/o3-mini", "o3-mini (Paid Fallback)")
+            ]
+            
+            print("\n\033[96mInteractive Model Switcher\033[0m")
+            print(f"Context detected: \033[93m{task_type}\033[0m")
+            for i, (m_id, desc) in enumerate(models_list):
+                prefix = "🌟 " if m_id == suggested_model else "   "
+                if m_id == "smart": prefix = "   "
+                print(f"{prefix}[{i}] {desc}")
+                
+            choice = input("Select model (0-5): ").strip()
+            try:
+                idx = int(choice)
+                if 0 <= idx < len(models_list):
+                    model = models_list[idx][0]
+                    if model == "smart":
+                        client, target_model = None, None
+                        print("\033[92mSwitched to Auto (Smart Router)\033[0m")
+                    else:
+                        client, target_model = get_client_and_model(model)
+                        print(f"\033[92mSwitched to {model}\033[0m")
+            except:
+                print("Invalid choice, keeping current model.")
+            continue
+            
+        # 5. Smart Error Interception & Auto-Testing
+        if line.startswith("/run ") or line.startswith("!") or line.startswith("/test "):
+            is_test = line.startswith("/test ")
+            cmd = line[6:].strip() if is_test else (line[5:].strip() if line.startswith("/run ") else line[1:].strip())
+            
+            print(f"\033[93mRunning: {cmd}\033[0m")
+            res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            if res.stdout:
+                print(res.stdout)
+                
+            if res.returncode != 0:
+                err = res.stderr or res.stdout
+                print(f"\033[91mCommand failed! Error output captured.\033[0m")
+                
+                if is_test:
+                    print("\033[93mAuto-correcting test failure...\033[0m")
+                    line = f"The test `{cmd}` failed with this error:\\n```\\n{err[:2000]}\\n```\\nPlease explain the error and provide the corrected code."
+                else:
+                    ans = input("Would you like me to explain and fix this error? (y/N): ")
+                    if ans.lower() == 'y':
+                        line = f"I ran `{cmd}` and it failed with this error:\\n```\\n{err[:2000]}\\n```\\nPlease explain why and how to fix it."
+                    else:
+                        continue
+            else:
+                if is_test:
+                    print("\033[92mTests passed!\033[0m")
+                continue
+
+        # Generate LLM response
         if model == "smart" and client is None:
             target_model, task_type = smart_route(line)
             print(f"\033[94m[Smart Router] Selected '{target_model}' for task type: {task_type}\033[0m")
@@ -426,66 +510,99 @@ def repl(model, use_deep_context=False):
             
         messages.append({"role": "user", "content": line})
         
-        try:
-            extra_body = {}
-            if "nemotron-3-ultra" in target_model:
-                extra_body = {"chat_template_kwargs": {"enable_thinking": True}, "reasoning_budget": 4096}
-            elif "deepseek-v4-flash" in target_model:
-                extra_body = {"chat_template_kwargs": {"thinking": True, "reasoning_effort": "high"}}
-
-            # Print assistant prefix instantly so user knows a response is loading
-            print("assistant: ", end="", flush=True)
-
-            kwargs = {
-                "model": target_model,
-                "messages": messages,
-                "temperature": 0.7,
-                "stream": True
-            }
-            if extra_body:
-                kwargs["extra_body"] = extra_body
-
-            resp = client.chat.completions.create(**kwargs)
-            
-            assistant_reply = ""
-            for chunk in resp:
-                if not getattr(chunk, "choices", None) or len(chunk.choices) == 0:
-                    continue
-                delta = chunk.choices[0].delta
+        # Priority Fallback Chain
+        fallback_chain = [target_model, "openrouter/google/gemma-4-31b-it:free", "openrouter/qwen/qwen3-coder:free", "openai/o3-mini"]
+        # Remove duplicates while preserving order
+        seen = set()
+        fallback_chain = [x for x in fallback_chain if not (x in seen or seen.add(x))]
+        
+        success = False
+        assistant_reply = ""
+        
+        for attempt_model in fallback_chain:
+            is_paid = "free" not in attempt_model.lower() and "nvidia" not in attempt_model.lower()
+            if is_paid and SESSION_COST >= MAX_BUDGET:
+                print(f"\033[91mBudget cap (${MAX_BUDGET}) reached. Skipping paid fallback.\033[0m")
+                continue
                 
-                # Stream reasoning / thinking content in gray if available
-                reasoning = getattr(delta, "reasoning_content", None)
-                if reasoning:
-                    print(f"\033[90m{reasoning}\033[0m", end="", flush=True)
+            try:
+                temp_client, temp_target = get_client_and_model(attempt_model)
+                extra_body = {}
+                if "nemotron-3-ultra" in temp_target:
+                    extra_body = {"chat_template_kwargs": {"enable_thinking": True}, "reasoning_budget": 4096}
+                elif "deepseek-v4-flash" in temp_target:
+                    extra_body = {"chat_template_kwargs": {"thinking": True, "reasoning_effort": "high"}}
+
+                print(f"assistant ({temp_target}): ", end="", flush=True)
+
+                full_messages = PINNED_CONTEXT + messages
+
+                kwargs = {
+                    "model": temp_target,
+                    "messages": full_messages,
+                    "temperature": 0.7,
+                    "stream": True
+                }
+                if extra_body:
+                    kwargs["extra_body"] = extra_body
+
+                resp = temp_client.chat.completions.create(**kwargs)
+                
+                now = time.time()
+                request_timestamps.append(now)
+                daily_requests += 1
+                
+                for chunk in resp:
+                    if not getattr(chunk, "choices", None) or len(chunk.choices) == 0:
+                        continue
+                    delta = chunk.choices[0].delta
                     
-                if getattr(delta, "content", None):
-                    print(delta.content, end="", flush=True)
-                    assistant_reply += delta.content
-            print()
-            
-            messages.append({"role": "assistant", "content": assistant_reply})
-            save_temp_memory(messages)
-            
-            if len(messages) > 8:
-                messages = compress_context(messages)
-                save_temp_memory(messages)
+                    reasoning = getattr(delta, "reasoning_content", None)
+                    if reasoning:
+                        print(f"\033[90m{reasoning}\033[0m", end="", flush=True)
+                        
+                    if getattr(delta, "content", None):
+                        print(delta.content, end="", flush=True)
+                        assistant_reply += delta.content
+                print()
                 
-        except Exception as e:
-            sys.stderr.write(f"\nRequest failed: {e}\n")
+                if is_paid:
+                    SESSION_COST += len(assistant_reply) * 0.00001
+                    
+                success = True
+                target_model = temp_target # update for future context
+                break 
+                
+            except Exception as e:
+                print(f"\n\033[91m[Error with {attempt_model}] {e}\033[0m")
+                if attempt_model != fallback_chain[-1]:
+                    print("\033[93mTrying fallback model...\033[0m")
+                continue
+                
+        if not success:
+            print("\033[91mAll models in the fallback chain failed.\033[0m")
             messages.pop()
+            continue
+            
+        messages.append({"role": "assistant", "content": assistant_reply})
+        save_temp_memory(messages)
+        
+        if len(messages) > 8:
+            messages = compress_context(messages)
+            save_temp_memory(messages)
 
 def main():
     if len(sys.argv) < 2:
-        sys.stderr.write("Usage: openai_wrapper.py <model_id|smart> [--deep] [prompt...]\n")
+        sys.stderr.write("Usage: openai_wrapper.py <model_id|smart> [deep] [prompt...]\\n")
         sys.exit(1)
         
     model_id = sys.argv[1]
     args = sys.argv[2:]
     
     use_deep = False
-    if "--deep" in args:
+    if args and args[0] in ["deep", "--deep"]:
         use_deep = True
-        args.remove("--deep")
+        args.pop(0)
         
     if "--resume" in args:
         if not os.path.exists(SESSION_DIR):

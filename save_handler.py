@@ -72,7 +72,7 @@ def get_git_info():
         log = subprocess.check_output(["git", "log", "-n", "5", "--oneline"], stderr=subprocess.DEVNULL, text=True).strip()
         diff = subprocess.check_output(["git", "diff", "HEAD"], stderr=subprocess.DEVNULL, text=True)
         # Limit diff size to prevent token blowups
-        diff_str = diff[:8000].decode("utf-8", errors="ignore").strip()
+        diff_str = diff[:8000].strip()
         return status, log, diff_str
     except Exception:
         return None, None, None
@@ -89,6 +89,7 @@ def initialize_files(project_name):
 def main():
     cwd = os.getcwd()
     project_name = os.path.basename(cwd)
+    is_auto = "--auto" in sys.argv
     
     # 1. Initialize files if they don't exist
     initialized = initialize_files(project_name)
@@ -116,7 +117,7 @@ def main():
             except Exception:
                 file_contents[f] = ""
 
-    print("\033[94m[Save] Analyzing changes and updating documentation via LLM...\033[0m")
+    print("\033[94m[Save] Analyzing changes and generating plain English diff...\033[0m")
     
     # Select LLM
     client, target_model = get_client_and_model("nvidia/z-ai/glm-5.1")
@@ -152,12 +153,13 @@ Your task:
 3. Update 'lessons.md' if any gotchas were resolved or lessons learned.
 4. Update 'memory.md' only if there are new structural decisions, configuration shifts, or packages added.
 
-You must output ONLY a valid JSON object. Do not wrap in markdown quotes. The JSON keys must be exactly the four file names:
+You must output ONLY a valid JSON object. Do not wrap in markdown quotes. The JSON keys must be exactly the four file names plus a "diff_summary" key:
 {{
   "memory.md": "updated markdown content...",
   "progress.md": "updated markdown content...",
   "scratchpad.md": "updated markdown content...",
-  "lessons.md": "updated markdown content..."
+  "lessons.md": "updated markdown content...",
+  "diff_summary": "A short, plain English summary of what has changed. Use color codes like \\033[92m for additions \\033[0m and \\033[91m for removals \\033[0m."
 }}
 """
 
@@ -180,6 +182,20 @@ You must output ONLY a valid JSON object. Do not wrap in markdown quotes. The JS
             output = "\n".join(lines).strip()
             
         data = json.loads(output)
+        
+        # Interactive Grill Me
+        if not is_auto and "diff_summary" in data:
+            print("\n\033[96m================ HUMAN READABLE DIFF ================\033[0m")
+            # Replace escaped color codes to actual print colors just in case
+            summary = data["diff_summary"].replace("\\033", "\033")
+            print(f"{summary}\n")
+            print("\033[96m=====================================================\033[0m")
+            ans = input("\nDo you approve saving these updates to the documentation? (y/N/edit): ").strip().lower()
+            if ans not in ['y', 'yes', 'edit']:
+                print("\033[91m[Save] Aborted by user.\033[0m")
+                return
+            if ans == 'edit':
+                print("\033[93m[Save] Edit mode not fully implemented in CLI yet. Proceeding with save...\033[0m")
         
         # Write back updated files
         updated = []
