@@ -55,6 +55,16 @@ ccm() { _9r openrouter/google/gemma-4-31b-it:free "$@"; }                     # 
 ccu() { _9r openrouter/nvidia/nemotron-3-ultra-550b-a55b:free "$@"; }         # 550B flagship reasoning · 1M · ⚠ single provider
 ccb() { _9r Builder "$@"; }                                                   # Builder combo (auto-route)
 
+# ── NVIDIA GLM‑5.1 (via 9router) ───────────────────────────────────────────
+glm() { _9r nvidia/z-ai/glm-5.1 "$@"; }                                       # GLM‑5.1 model via NVIDIA NIM
+ccn() { python "${HOME}/Projects/RoutingMagic/glm5.py" "$@"; }                # Direct fallback script
+
+# ── OpenAI Models (via 9router) ───────────────────────────────────────────
+op()   { _9r openai/gpt-5 "$@"; }                                             # General purpose flagship (GPT-5)
+opt()  { _9r openai/gpt-4-turbo "$@"; }                                       # Agentic coding model
+opo3() { _9r openai/o3-mini "$@"; }                                           # Reasoning / coding
+
+
 # ── NATIVE Claude (direct to api.anthropic.com, keychain login) ───
 ccs() { claude --model claude-sonnet-4-6 "$@"; }                              # Sonnet 4.6 — production, agentic, tools
 cco() { claude --model claude-opus-4-8 "$@"; }                                # Opus 4.8 — architecture, hardest reasoning
@@ -79,6 +89,13 @@ cc-models() {
 ║  ccm   Gemma-4-31B           resilient general   262k        11 prov ║
 ║  ccu   Nemotron 3 Ultra 550B flagship reasoning  1M  ⚠ 1 provider   ║
 ║  ccb   Builder combo         auto multi-model                       ║
+╠════════════════════════════════════════════════════════════════════╣
+║  OPENAI & NVIDIA  (via 9router)                                    ║
+║  open  GPT-5                 General purpose flagship               ║
+║  opt   GPT-4-Turbo           Agentic coding model                   ║
+║  opo3  o3-mini               Reasoning & Coding                     ║
+║  glm   GLM-5.1               NVIDIA NIM model                       ║
+║  chat  [model]               Direct Chat REPL (No tool cost, 0 limit)║
 ╠════════════════════════════════════════════════════════════════════╣
 ║  NATIVE  (direct to api.anthropic.com, keychain login)             ║
 ║  claude            default — then /model to switch                  ║
@@ -181,4 +198,20 @@ cc-route() {
   echo "   Launching: $model"
   echo ""
   _cc_launch "$model" "$mode"
+}
+co() { python3 "${HOME}/Projects/RoutingMagic/openai_wrapper.py" "$@"; }  # OpenAI generic wrapper (python fallback)
+chat() { python3 "${HOME}/Projects/RoutingMagic/openai_wrapper.py" "${1:-openai/gpt-4o}" "${@:2}"; }
+ask() { python3 "${HOME}/Projects/RoutingMagic/openai_wrapper.py" smart "$@"; }
+
+# Smart macOS open override
+open() {
+  if [[ $# -eq 0 ]]; then
+    _9r openai/gpt-5
+  elif [[ "$1" == "gpt-"* ]] || [[ "$1" == "o1-"* ]] || [[ "$1" == "o3-"* ]]; then
+    _9r "openai/$1" "${@:2}"
+  elif [[ "$1" == "openai/"* ]]; then
+    _9r "$@"
+  else
+    command open "$@"
+  fi
 }
