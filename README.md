@@ -18,8 +18,8 @@ graph TD
     A[You Type 'ask' in Terminal] --> B{RoutingMagic}
     
     B -->|OpenAI Models| C[Official OpenAI API]
-    B -->|NVIDIA Models| D[NVIDIA NIM API (Flagship/Vision/OCR)]
-    B -->|Other Models| E[OpenRouter API (Free Tier)]
+    B -->|NVIDIA Models| D["NVIDIA NIM API (Flagship/Vision/OCR)"]
+    B -->|Other Models| E["OpenRouter API (Free Tier)"]
     
     D & E -->|If 404/429| F[6-Tier Fallback Rotation]
     
