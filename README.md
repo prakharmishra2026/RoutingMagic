@@ -2,7 +2,58 @@
 
 **Your Smart AI Assistant & Codebase Router**
 
-RoutingMagic is a tool that sits on your system and helps you talk to AI models instantly and intelligently. It automatically knows which project you are working on, routes your questions to the best free or paid AI models, protects you from rate limits, and automatically maintains your project's developer status files.
+---
+
+## 📖 The User Story
+Imagine you're building a massive application. You need an AI assistant, but pasting hundreds of files into ChatGPT is exhausting, and giving an AI terminal access can be dangerous if it writes bad code. 
+
+**RoutingMagic** solves this. It sits in your Mac's terminal and automatically knows what folder you are in. When you type `ask`, it instantly acts as your pair programmer. If an AI model gets too expensive, RoutingMagic automatically switches to a free model. If the AI breaks your code, RoutingMagic has a built-in "Undo" button to instantly fix it. It even automatically writes your project documentation for you!
+
+---
+
+## 🏗️ Architecture Flow
+
+```mermaid
+graph TD
+    A[You Type 'ask' in Terminal] --> B{RoutingMagic}
+    B -->|Checks Port 20128| C[9router Local Engine]
+    C -->|If Offline / Fail| D[NVIDIA Free APIs]
+    D -->|If Rate Limited| E[OpenRouter Free Models]
+    E -->|If All Free Fails| F[Paid Fallback o3-mini]
+    
+    B --> G[REPL Chat Interface]
+    G --> H[Run Code / Intercept Errors]
+    G --> I[Git Snapshot Undo Failsafes]
+```
+
+---
+
+## 📦 Step-by-Step Installation
+
+### Step 1: Install & Start 9router
+RoutingMagic relies on **9router** to securely route requests locally before hitting the cloud. 
+1. Open your terminal.
+2. Install and start 9router so it runs in the background (it binds to port `20128` by default).
+
+### Step 2: Clone RoutingMagic
+Download the RoutingMagic tool to your computer:
+```bash
+git clone https://github.com/prakharmishra2026/RoutingMagic.git ~/Projects/RoutingMagic
+cd ~/Projects/RoutingMagic
+```
+
+### Step 3: Run the Installer
+Run the installation script to globally register the shortcuts on your computer:
+```bash
+./install.sh
+source ~/.zshrc
+```
+
+### Step 4: Add Your API Keys
+No need to configure keys for every single project:
+1. Open `~/global.env` on your computer.
+2. Add your AI provider keys (e.g., `NVIDIA_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_API_KEY`).
+*RoutingMagic will automatically merge these global keys with any specific `.env` keys in your project folders!*
 
 ---
 
@@ -52,26 +103,3 @@ When you type `ask` and enter the interactive chat room, you unlock powerful spe
 ### 🐛 Smart Error Interception & Testing
 *   `! [command]` or `/run [command]` - Run any normal terminal command (e.g., `! npm start`). If the command crashes, the system intercepts the red error text and asks if you want the LLM to automatically fix the bug.
 *   `/test [command]` - Run a background test (e.g., `/test pytest`). If the test fails, it skips the prompt and immediately feeds the error log to the LLM to auto-correct the code.
-
----
-
-## 🔑 Where do my API keys go?
-
-No need to configure keys for every single project:
-*   **Global Keys:** Put your AI provider keys (like OpenRouter, OpenAI, or NVIDIA NIM keys) in `~/global.env`.
-*   **Project Keys:** Put project-specific keys in that project's `.env` file (e.g. `~/Projects/investogram/.env`).
-*   RoutingMagic automatically merges both files together when you run a command.
-
----
-
-## 📦 How to Setup
-
-Open your terminal and run these commands to install RoutingMagic:
-
-```bash
-git clone https://github.com/prakharmishra2026/RoutingMagic.git ~/Projects/RoutingMagic
-cd ~/Projects/RoutingMagic
-./install.sh
-```
-
-*To reload your terminal after installation, close and reopen it, or run:* `source ~/.zshrc`.
