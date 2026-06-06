@@ -18,10 +18,10 @@ graph TD
     A[You Type 'ask' in Terminal] --> B{RoutingMagic}
     
     B -->|OpenAI Models| C[Official OpenAI API]
-    B -->|NVIDIA Models| D[NVIDIA NIM API]
-    B -->|Other Models| E[9router Local Engine]
+    B -->|NVIDIA Models| D[NVIDIA NIM API (Flagship/Vision/OCR)]
+    B -->|Other Models| E[OpenRouter API (Free Tier)]
     
-    E -->|If Offline / Fail| F[OpenRouter Fallback]
+    D & E -->|If 404/429| F[6-Tier Fallback Rotation]
     
     C & D & F --> G[REPL Chat Interface]
     G --> H[Run Code / Intercept Errors]
@@ -54,8 +54,23 @@ source ~/.zshrc
 ### Step 4: Add Your API Keys
 No need to configure keys for every single project:
 1. Open `~/global.env` on your computer.
-2. Add your AI provider keys (e.g., `NVIDIA_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_API_KEY`).
-*RoutingMagic will automatically merge these global keys with any specific `.env` keys in your project folders!*
+2. Add your AI provider keys (e.g., `NVAPI_KEY`, `OPENROUTER_API_KEY`).
+*RoutingMagic will automatically map specialized NVIDIA NIM endpoints to their distinct keys if provided (e.g., `NVAPI_KEY_NEMOTRON_OCR`).*
+
+---
+
+## 🧠 June 2026 AntiGravity Model Stack
+RoutingMagic uses a zero-latency heuristic algorithm (`smart_route`) to precisely direct your task to the best available model based on their documented strengths:
+
+*   **Deep Math & Finance** ➡️ `deepseek-r1:free`
+*   **Long Document Planning** ➡️ `nemotron-3-super-120b` (1M Context)
+*   **Rapid Code Refactoring** ➡️ `qwen3-coder:free`
+*   **Agentic JSON Workflows** ➡️ `llama-3.3-70b-instruct:free`
+*   **Flagship Tool Orchestration** ➡️ `nemotron-super-49b` (NVIDIA NIM)
+*   **Stock Chart Vision** ➡️ `nemotron-nano-vl-8b` (NVIDIA NIM)
+*   **Financial Document Extraction** ➡️ `nemotron-ocr-v1` (NVIDIA NIM)
+
+If OpenRouter hits its 200 req/day limit or a NIM endpoint fails, the system flawlessly streams through a 6-tier **Fallback Rotation** (`gemma -> nemotron -> gpt-oss -> qwen -> llama -> gemini`) to ensure 100% uptime.
 
 ---
 

@@ -37,6 +37,12 @@ daily_requests = 0
 # Mapping of NVIDIA NIM models to their specific API keys
 NVIDIA_API_MAP = {
     "nvidia/nemotron-3-ultra-550b-a55b": "NVAPI_KEY_NEMOTRON_ULTRA_550B",
+    "nvidia/llama-3.3-nemotron-super-49b-v1.5": "NVAPI_KEY_NEMOTRON_SUPER_49B",
+    "nvidia/llama-3.1-nemotron-nano-vl-8b-v1": "NVAPI_KEY_NEMOTRON_VL_8B",
+    "nvidia/nvidia-nemotron-nano-9b-v2": "NVAPI_KEY_NEMOTRON_NANO_9B",
+    "nvidia/nemotron-ocr-v1": "NVAPI_KEY_NEMOTRON_OCR",
+    "nvidia/nemotron-voicechat": "NVAPI_KEY_NEMOTRON_VOICECHAT",
+    "nvidia/nv-embedqa-e5-v5": "NVAPI_KEY_NV_EMBEDQA",
     "deepseek-ai/deepseek-v4-flash": "NVAPI_KEY_DEEPSEEK_V4_FLASH",
     "moonshotai/kimi-k2.6": "NVAPI_KEY_KIMI_K2_6",
     "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning": "NVAPI_KEY_NEMOTRON_OMNI_30B",
@@ -174,22 +180,40 @@ def smart_route(prompt):
     """Intelligently routes the prompt to the best available free model."""
     prompt_lower = prompt.lower()
     
-    if re.search(r'\b(reason deeply|architecture|strategy|plan|tradeoffs|complex analysis|tool orchestration)\b', prompt_lower):
-        return "nvidia/nemotron-3-ultra-550b-a55b", "deep_reasoning_planning"
-    if re.search(r'\b(code|fix bug|refactor|write function|regex|sql|snippet|debug|react|css|html)\b', prompt_lower):
-        return "deepseek-ai/deepseek-v4-flash", "fast_coding"
-    if re.search(r'\b(large repo|multi-step coding|agent loop|tool use|long workflow|codebase reasoning)\b', prompt_lower):
-        return "moonshotai/kimi-k2.6", "long_horizon_agentic_coding"
-    if re.search(r'\b(image and text|video and text|multimodal reasoning)\b', prompt_lower):
-        return "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", "multimodal_reasoning"
-    if re.search(r'\b(moderation|toxicity|unsafe content|policy check|compliance screening)\b', prompt_lower):
-        return "nvidia/nemotron-3.5-content-safety", "safety_moderation"
-    if re.search(r'\b(office tasks|rewrite email|business drafting|document help)\b', prompt_lower):
-        return "minimaxai/minimax-m2.7", "office_productivity"
-    if re.search(r'\b(small dense model|light reasoning|budget coding)\b', prompt_lower):
-        return "google/gemma-4-31b-it", "budget_dense_reasoning"
+    # 1. Financial/Math Reasoning & Deep Logic -> DeepSeek R1 (free)
+    if re.search(r'\b(math|financial analysis|deep reasoning|o1|complex logic|tradeoffs|step-by-step|chain of thought|deep analysis)\b', prompt_lower):
+        return "deepseek/deepseek-r1:free", "financial_math_reasoning"
         
-    return "nvidia/z-ai/glm-5.1", "default_general"
+    # 2. Long Document RAG & Heavy Agentic Planning -> Nemotron 3 Super 120B
+    if re.search(r'\b(large repo|long doc|architecture|strategy|plan|tool orchestration|codebase reasoning|massive context|rag|planning)\b', prompt_lower):
+        return "nvidia/nemotron-3-super-120b-a12b:free", "long_context_agentic"
+        
+    # 3. Code Generation & Fixing -> Qwen3 Coder
+    if re.search(r'\b(code|fix bug|refactor|write function|regex|sql|snippet|debug|react|css|html|typescript|python|script)\b', prompt_lower):
+        return "qwen/qwen3-coder:free", "fast_coding"
+        
+    # 4. Agentic Workflows & Tool Use -> Llama 3.3 70B
+    if re.search(r'\b(n8n|tool call|json extraction|workflow|extract data|structure this|json)\b', prompt_lower):
+        return "meta-llama/llama-3.3-70b-instruct:free", "n8n_tool_calling"
+        
+    # 5. Vision / Chart Parsing -> Nemotron VL 8B
+    if re.search(r'\b(image|chart|graph|vision|parse screenshot|look at this picture)\b', prompt_lower):
+        return "nvidia/llama-3.1-nemotron-nano-vl-8b-v1", "stock_chart_vision"
+        
+    # 6. Financial Document OCR -> Nemotron OCR v1
+    if re.search(r'\b(ocr|pdf|annual report|bse filing|table extraction|scan document)\b', prompt_lower):
+        return "nvidia/nemotron-ocr-v1", "financial_doc_ocr"
+        
+    # 7. Voice / Audio -> Nemotron Voicechat
+    if re.search(r'\b(voice|audio|speech|listen|transcribe)\b', prompt_lower):
+        return "nvidia/nemotron-voicechat", "voice_trigger"
+
+    # 8. Omni-modal fallback -> Nemotron Nano Omni 30B
+    if re.search(r'\b(video|multimodal|omni)\b', prompt_lower):
+        return "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", "multimodal_omni"
+        
+    # Default General Tasks -> Gemma 4 31B (highest free quality score)
+    return "google/gemma-4-31b-it:free", "default_general"
 
 # Models that do NOT accept a temperature parameter
 NO_TEMPERATURE_MODELS = {"o3-mini", "o1", "o1-mini", "o1-preview", "o3"}
@@ -272,9 +296,7 @@ def compress_context(messages):
     
     prompt = f"Summarize the key technical decisions, bugs fixed, and current goal of this chat history. Be concise.\n\n{hist}"
     
-    print("\n\033[93m[Smart Router] Compressing chat history to save tokens...\033[0m")
-    
-    fallback_chain = ["nvidia/z-ai/glm-5.1", "google/gemma-4-31b-it:free", "qwen/qwen3-coder:free"]
+    fallback_chain = ["google/gemma-4-31b-it:free", "nvidia/nemotron-3-super-120b-a12b:free", "qwen/qwen3-coder:free"]
     summary = None
     
     for target_model in fallback_chain:
@@ -313,7 +335,7 @@ def chat_oneshot(model, prompt, use_deep_context=False):
 
     system_message = {"role": "system", "content": f"You are a highly capable AI assistant helping a developer. Always incorporate the following project context into your answers to be as specific and useful as possible.\n\n{context_str}"}
 
-    fallback_chain = [target_model, "google/gemma-4-31b-it:free", "meta-llama/llama-3.3-70b-instruct:free", "qwen/qwen3-coder:free", "openai/o3-mini"]
+    fallback_chain = [target_model, "google/gemma-4-31b-it:free", "nvidia/nemotron-3-super-120b-a12b:free", "openai/gpt-oss-120b:free", "qwen/qwen3-coder:free", "meta-llama/llama-3.3-70b-instruct:free", "gemini-2.5-pro"]
     seen = set()
     fallback_chain = [x for x in fallback_chain if not (x in seen or seen.add(x))]
 
@@ -486,12 +508,14 @@ def repl(model, use_deep_context=False):
             
             models_list = [
                 ("smart", "Auto (Smart Router)"),
-                ("nvidia/z-ai/glm-5.1", "GLM-5.1 · NVIDIA (Fast, All-Rounder)"),
-                ("deepseek-ai/deepseek-v4-flash", "DeepSeek-V4 · NVIDIA (Fast Coding)"),
-                ("google/gemma-4-31b-it:free", "Gemma-4 31B · OpenRouter (Free)"),
-                ("qwen/qwen3-coder:free", "Qwen3 Coder · OpenRouter (Free, Large)"),
-                ("meta-llama/llama-3.3-70b-instruct:free", "Llama-3.3 70B · OpenRouter (Free)"),
-                ("openai/o3-mini", "o3-mini · OpenAI (Paid Fallback)")
+                ("google/gemma-4-31b-it:free", "Gemma-4 31B · OpenRouter (Best Free General)"),
+                ("qwen/qwen3-coder:free", "Qwen3 Coder 480B · OpenRouter (Best Free Code)"),
+                ("nvidia/nemotron-3-super-120b-a12b:free", "Nemotron 3 Super 120B · OpenRouter (1M Context)"),
+                ("deepseek/deepseek-r1:free", "DeepSeek R1 · OpenRouter (Math/Reasoning)"),
+                ("meta-llama/llama-3.3-70b-instruct:free", "Llama-3.3 70B · OpenRouter (Tools/JSON)"),
+                ("nvidia/llama-3.3-nemotron-super-49b-v1.5", "Nemotron Super 49B · NIM (Flagship)"),
+                ("gemini-2.5-pro", "Gemini 2.5 Pro · Google (Paid Anchor)"),
+                ("claude-3-7-sonnet-20250219", "Claude Sonnet 3.7 · Anthropic (Paid Anchor)")
             ]
             
             print("\n\033[96mInteractive Model Switcher\033[0m")
@@ -553,7 +577,7 @@ def repl(model, use_deep_context=False):
         
         # Priority Fallback Chain
         # OpenRouter model IDs must NOT have an "openrouter/" prefix — use vendor/model:free format directly
-        fallback_chain = [target_model, "google/gemma-4-31b-it:free", "meta-llama/llama-3.3-70b-instruct:free", "qwen/qwen3-coder:free", "openai/o3-mini"]
+        fallback_chain = [target_model, "google/gemma-4-31b-it:free", "nvidia/nemotron-3-super-120b-a12b:free", "openai/gpt-oss-120b:free", "qwen/qwen3-coder:free", "meta-llama/llama-3.3-70b-instruct:free", "gemini-2.5-pro"]
         # Remove duplicates while preserving order
         seen = set()
         fallback_chain = [x for x in fallback_chain if not (x in seen or seen.add(x))]

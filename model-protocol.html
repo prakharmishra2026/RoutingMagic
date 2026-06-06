@@ -1,0 +1,1263 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AntiGravity Model Stack Protocol</title>
+<link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&f[]=cabinet-grotesk@400,500,700,800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --text-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
+  --text-sm: clamp(0.875rem, 0.8rem + 0.35vw, 1rem);
+  --text-base: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+  --text-lg: clamp(1.125rem, 1rem + 0.75vw, 1.5rem);
+  --text-xl: clamp(1.5rem, 1.2rem + 1.25vw, 2.25rem);
+  --text-2xl: clamp(2rem, 1.2rem + 2.5vw, 3.5rem);
+  --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem; --space-4: 1rem;
+  --space-5: 1.25rem; --space-6: 1.5rem; --space-8: 2rem; --space-10: 2.5rem;
+  --space-12: 3rem; --space-16: 4rem;
+  --radius-sm: 0.375rem; --radius-md: 0.5rem; --radius-lg: 0.75rem;
+  --radius-xl: 1rem; --radius-full: 9999px;
+  --transition: 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  --font-display: 'Cabinet Grotesk', sans-serif;
+  --font-body: 'Satoshi', sans-serif;
+}
+[data-theme="dark"] {
+  --color-bg: #0d0d10;
+  --color-surface: #13131a;
+  --color-surface-2: #18181f;
+  --color-surface-offset: #1e1e28;
+  --color-border: #2a2a38;
+  --color-divider: #222230;
+  --color-text: #e2e2f0;
+  --color-text-muted: #8888aa;
+  --color-text-faint: #44445a;
+  --color-primary: #7c6fff;
+  --color-primary-hover: #9a8fff;
+  --color-primary-highlight: #2a2550;
+  --color-green: #3dffa0;
+  --color-green-dim: #1a4a35;
+  --color-yellow: #ffd666;
+  --color-yellow-dim: #3d3010;
+  --color-red: #ff6b88;
+  --color-red-dim: #3d1522;
+  --color-blue: #5ab4ff;
+  --color-blue-dim: #0d2a45;
+  --color-orange: #ff9f5a;
+  --color-orange-dim: #3d2010;
+  --color-teal: #3de8e0;
+  --color-teal-dim: #0d3836;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.5);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.6);
+}
+[data-theme="light"] {
+  --color-bg: #f5f5fa;
+  --color-surface: #ffffff;
+  --color-surface-2: #f0f0f8;
+  --color-surface-offset: #e8e8f4;
+  --color-border: #dcdcee;
+  --color-divider: #eaeaf4;
+  --color-text: #18182a;
+  --color-text-muted: #5a5a7a;
+  --color-text-faint: #a0a0c0;
+  --color-primary: #5c4fff;
+  --color-primary-hover: #4030ee;
+  --color-primary-highlight: #ede9ff;
+  --color-green: #0da060;
+  --color-green-dim: #d6f5e8;
+  --color-yellow: #c08000;
+  --color-yellow-dim: #fff8e1;
+  --color-red: #cc2244;
+  --color-red-dim: #ffe8ec;
+  --color-blue: #0066cc;
+  --color-blue-dim: #e0f0ff;
+  --color-orange: #c06000;
+  --color-orange-dim: #fff0e0;
+  --color-teal: #007a75;
+  --color-teal-dim: #e0f8f7;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.12);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.15);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-font-smoothing:antialiased;scroll-behavior:smooth;scroll-padding-top:80px}
+body{min-height:100dvh;font-family:var(--font-body);font-size:var(--text-base);color:var(--color-text);background:var(--color-bg);transition:background var(--transition),color var(--transition)}
+img,svg{display:block;max-width:100%}
+button{cursor:pointer;background:none;border:none;font:inherit;color:inherit}
+/* NAV */
+.nav{position:sticky;top:0;z-index:100;background:var(--color-bg);border-bottom:1px solid var(--color-divider);backdrop-filter:blur(12px);padding:var(--space-4) var(--space-6);display:flex;align-items:center;justify-content:space-between;gap:var(--space-4)}
+.nav-logo{display:flex;align-items:center;gap:var(--space-3);font-family:var(--font-display);font-weight:800;font-size:var(--text-lg);letter-spacing:-0.02em}
+.nav-logo svg{color:var(--color-primary)}
+.nav-actions{display:flex;align-items:center;gap:var(--space-3)}
+.nav-links{display:flex;gap:var(--space-6);list-style:none}
+.nav-links a{text-decoration:none;color:var(--color-text-muted);font-size:var(--text-sm);font-weight:500;transition:color var(--transition)}
+.nav-links a:hover{color:var(--color-text)}
+.theme-toggle{width:40px;height:40px;border-radius:var(--radius-full);background:var(--color-surface-offset);display:flex;align-items:center;justify-content:center;transition:background var(--transition);border:1px solid var(--color-border)}
+.theme-toggle:hover{background:var(--color-border)}
+/* LAYOUT */
+.container{max-width:1100px;margin-inline:auto;padding-inline:var(--space-6)}
+.hero{padding:var(--space-16) var(--space-6) var(--space-12);text-align:center}
+.hero-badge{display:inline-flex;align-items:center;gap:var(--space-2);background:var(--color-primary-highlight);color:var(--color-primary);padding:var(--space-1) var(--space-4);border-radius:var(--radius-full);font-size:var(--text-xs);font-weight:600;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:var(--space-6);border:1px solid color-mix(in oklab,var(--color-primary) 30%,transparent)}
+.hero h1{font-family:var(--font-display);font-size:var(--text-2xl);font-weight:800;letter-spacing:-0.03em;line-height:1.1;margin-bottom:var(--space-4);max-width:800px;margin-inline:auto}
+.hero h1 span{background:linear-gradient(135deg,var(--color-primary),var(--color-teal));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero p{font-size:var(--text-lg);color:var(--color-text-muted);max-width:600px;margin-inline:auto;line-height:1.6}
+/* SECTIONS */
+section{padding:var(--space-12) 0}
+.section-label{font-size:var(--text-xs);font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-primary);margin-bottom:var(--space-3)}
+.section-title{font-family:var(--font-display);font-size:var(--text-xl);font-weight:800;letter-spacing:-0.02em;margin-bottom:var(--space-4)}
+.section-desc{color:var(--color-text-muted);max-width:60ch;line-height:1.7;margin-bottom:var(--space-8)}
+/* TABS */
+.tabs{display:flex;gap:var(--space-2);border-bottom:1px solid var(--color-divider);margin-bottom:var(--space-8);overflow-x:auto;padding-bottom:0}
+.tab-btn{padding:var(--space-3) var(--space-5);font-size:var(--text-sm);font-weight:600;color:var(--color-text-muted);border-bottom:2px solid transparent;white-space:nowrap;transition:color var(--transition),border-color var(--transition)}
+.tab-btn:hover{color:var(--color-text)}
+.tab-btn.active{color:var(--color-primary);border-bottom-color:var(--color-primary)}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+/* MODEL CARDS */
+.model-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(340px,100%),1fr));gap:var(--space-5)}
+.model-card{background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:var(--space-6);display:flex;flex-direction:column;gap:var(--space-4);transition:box-shadow var(--transition),border-color var(--transition);position:relative;overflow:hidden}
+.model-card::before{content:'';position:absolute;inset:0;border-radius:var(--radius-xl);background:linear-gradient(135deg,var(--card-accent,transparent) 0%,transparent 60%);opacity:0.05;pointer-events:none}
+.model-card:hover{box-shadow:var(--shadow-md);border-color:color-mix(in oklab,var(--color-primary) 40%,var(--color-border))}
+.model-header{display:flex;align-items:flex-start;gap:var(--space-3);justify-content:space-between}
+.model-name-wrap{flex:1}
+.model-name{font-family:var(--font-display);font-weight:700;font-size:var(--text-base);letter-spacing:-0.01em;line-height:1.3}
+.model-provider{font-size:var(--text-xs);color:var(--color-text-muted);margin-top:var(--space-1)}
+.model-badges{display:flex;flex-wrap:wrap;gap:var(--space-1);align-items:flex-start;flex-shrink:0}
+.badge{display:inline-flex;align-items:center;gap:var(--space-1);padding:2px var(--space-2);border-radius:var(--radius-full);font-size:var(--text-xs);font-weight:600;white-space:nowrap}
+.badge-free{background:var(--color-green-dim);color:var(--color-green)}
+.badge-strong{background:var(--color-primary-highlight);color:var(--color-primary)}
+.badge-vision{background:var(--color-blue-dim);color:var(--color-blue)}
+.badge-code{background:var(--color-teal-dim);color:var(--color-teal)}
+.badge-reason{background:var(--color-orange-dim);color:var(--color-orange)}
+.badge-tools{background:var(--color-yellow-dim);color:var(--color-yellow)}
+.badge-nvidia{background:var(--color-green-dim);color:var(--color-green)}
+.badge-paid{background:var(--color-yellow-dim);color:var(--color-yellow)}
+.badge-new{background:var(--color-red-dim);color:var(--color-red)}
+.model-desc{font-size:var(--text-sm);color:var(--color-text-muted);line-height:1.6}
+.sw-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3)}
+.sw-col h4{font-size:var(--text-xs);font-weight:700;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:var(--space-2)}
+.sw-col.strengths h4{color:var(--color-green)}
+.sw-col.weaknesses h4{color:var(--color-red)}
+.sw-list{list-style:none;display:flex;flex-direction:column;gap:var(--space-1)}
+.sw-list li{font-size:var(--text-xs);color:var(--color-text-muted);padding-left:var(--space-3);position:relative;line-height:1.5}
+.sw-list li::before{position:absolute;left:0;top:0.15em}
+.strengths .sw-list li::before{content:'✓';color:var(--color-green)}
+.weaknesses .sw-list li::before{content:'✗';color:var(--color-red)}
+.model-footer{margin-top:auto;padding-top:var(--space-3);border-top:1px solid var(--color-divider);display:flex;align-items:center;justify-content:space-between;gap:var(--space-2)}
+.context-tag{font-size:var(--text-xs);color:var(--color-text-faint);display:flex;align-items:center;gap:var(--space-1)}
+.recommend-tag{font-size:var(--text-xs);font-weight:600;color:var(--color-primary);display:flex;align-items:center;gap:var(--space-1)}
+/* STACK SECTION */
+.stack-table{width:100%;border-collapse:collapse;font-size:var(--text-sm)}
+.stack-table th{text-align:left;padding:var(--space-3) var(--space-4);font-size:var(--text-xs);font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:var(--color-text-faint);border-bottom:1px solid var(--color-divider)}
+.stack-table td{padding:var(--space-4);border-bottom:1px solid var(--color-divider);vertical-align:top}
+.stack-table tr:last-child td{border-bottom:none}
+.stack-table tr:hover td{background:var(--color-surface-2)}
+.stack-role{font-weight:600;color:var(--color-text)}
+.stack-model{color:var(--color-primary);font-weight:600;font-family:var(--font-display)}
+.stack-why{color:var(--color-text-muted);max-width:40ch;line-height:1.5}
+/* PROTOCOL SECTION */
+.protocol-card{background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:var(--space-8);margin-bottom:var(--space-5)}
+.protocol-title{font-family:var(--font-display);font-weight:700;font-size:var(--text-lg);margin-bottom:var(--space-4);display:flex;align-items:center;gap:var(--space-3)}
+.protocol-num{width:32px;height:32px;border-radius:var(--radius-full);background:var(--color-primary-highlight);color:var(--color-primary);display:flex;align-items:center;justify-content:center;font-size:var(--text-sm);font-weight:700;flex-shrink:0}
+.code-block{background:var(--color-surface-offset);border:1px solid var(--color-border);border-radius:var(--radius-md);padding:var(--space-4) var(--space-5);font-family:monospace;font-size:var(--text-xs);color:var(--color-teal);overflow-x:auto;line-height:1.7;white-space:pre}
+.protocol-steps{list-style:none;display:flex;flex-direction:column;gap:var(--space-3);margin-top:var(--space-4)}
+.protocol-steps li{display:flex;gap:var(--space-3);align-items:flex-start;padding:var(--space-3);background:var(--color-surface-2);border-radius:var(--radius-md);font-size:var(--text-sm);color:var(--color-text-muted)}
+.protocol-steps li strong{color:var(--color-text);display:block;margin-bottom:var(--space-1)}
+.step-icon{width:24px;height:24px;border-radius:var(--radius-sm);background:var(--color-primary-highlight);color:var(--color-primary);display:flex;align-items:center;justify-content:center;font-size:var(--text-xs);font-weight:700;flex-shrink:0;margin-top:2px}
+/* WEAKNESS SECTION */
+.gap-card{background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:var(--space-6);display:flex;flex-direction:column;gap:var(--space-3)}
+.gap-title{font-weight:700;font-size:var(--text-base);display:flex;align-items:center;gap:var(--space-2)}
+.gap-badge{font-size:var(--text-xs);padding:2px var(--space-2);border-radius:var(--radius-full);font-weight:600}
+.gap-text{font-size:var(--text-sm);color:var(--color-text-muted);line-height:1.6}
+.gap-fix{background:var(--color-surface-offset);border-radius:var(--radius-md);padding:var(--space-3) var(--space-4);font-size:var(--text-sm)}
+.gap-fix strong{color:var(--color-green);display:block;margin-bottom:var(--space-1)}
+.divider{border:none;border-top:1px solid var(--color-divider);margin:var(--space-8) 0}
+/* FOOTER */
+footer{border-top:1px solid var(--color-divider);padding:var(--space-8) var(--space-6);text-align:center;color:var(--color-text-faint);font-size:var(--text-xs)}
+@media(max-width:640px){.nav-links{display:none}.sw-grid{grid-template-columns:1fr}.hero{padding:var(--space-10) var(--space-4) var(--space-8)}}
+</style>
+</head>
+<body>
+<nav class="nav">
+  <div class="nav-logo">
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-label="AntiGravity">
+      <circle cx="14" cy="14" r="12" stroke="currentColor" stroke-width="2"/>
+      <path d="M14 6 L20 14 L14 11 L8 14 Z" fill="currentColor" opacity="0.8"/>
+      <path d="M14 22 L8 14 L14 17 L20 14 Z" fill="currentColor" opacity="0.4"/>
+      <circle cx="14" cy="14" r="2.5" fill="currentColor"/>
+    </svg>
+    AntiGravity
+  </div>
+  <ul class="nav-links">
+    <li><a href="#free-models">Free Models</a></li>
+    <li><a href="#nvidia">NVIDIA NIM</a></li>
+    <li><a href="#stack">Model Stack</a></li>
+    <li><a href="#protocol">Protocol</a></li>
+    <li><a href="#gaps">Gap Fix</a></li>
+  </ul>
+  <div class="nav-actions">
+    <button class="theme-toggle" data-theme-toggle aria-label="Toggle theme">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
+  </div>
+</nav>
+
+<div class="hero container">
+  <div class="hero-badge">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+    Model Stack Protocol · June 2026
+  </div>
+  <h1>AntiGravity <span>Model Intelligence</span> Protocol</h1>
+  <p>A complete map of your free + paid model stack, NVIDIA NIM additions, strengths/weaknesses analysis, and N8N spawning protocol for Prakhar's Investogram stack.</p>
+</div>
+
+<!-- EXISTING ANCHORED MODELS -->
+<section id="anchored" class="container">
+  <div class="section-label">Already In Stack</div>
+  <div class="section-title">Your Anchor Models (Paid)</div>
+  <p class="section-desc">Anthropic (Claude) and Google Gemini Pro are your two power anchors. These are NOT replaced — everything else is built around filling their gaps.</p>
+  <div class="model-grid">
+    <!-- Claude -->
+    <div class="model-card" style="--card-accent:var(--color-orange)">
+      <div class="model-header">
+        <div class="model-name-wrap">
+          <div class="model-name">Claude Sonnet 4.6 / Opus 4.8</div>
+          <div class="model-provider">Anthropic · Paid Anchor</div>
+        </div>
+        <div class="model-badges">
+          <span class="badge badge-paid">PAID</span>
+          <span class="badge badge-code">CODE</span>
+        </div>
+      </div>
+      <p class="model-desc">Best-in-class for long-form reasoning, code generation, natural prose, and complex multi-step agentic tasks. Powers Cursor and Windsurf.</p>
+      <div class="sw-grid">
+        <div class="sw-col strengths">
+          <h4>Strengths</h4>
+          <ul class="sw-list">
+            <li>Best prose quality, natural output</li>
+            <li>128K output token pass</li>
+            <li>Tool use & agentic workflows</li>
+            <li>Code quality + SWE-bench leader</li>
+            <li>Long instruction following</li>
+            <li>MCP protocol support</li>
+          </ul>
+        </div>
+        <div class="sw-col weaknesses">
+          <h4>Weaknesses</h4>
+          <ul class="sw-list">
+            <li>No real-time web access</li>
+            <li>Cost per token (Opus)</li>
+            <li>No native image generation</li>
+            <li>Context 200K (not 1M+)</li>
+            <li>Rate-limited on free tier</li>
+          </ul>
+        </div>
+      </div>
+      <div class="model-footer">
+        <span class="context-tag">200K context</span>
+        <span class="recommend-tag">★ Primary Reasoning</span>
+      </div>
+    </div>
+    <!-- Gemini Pro -->
+    <div class="model-card" style="--card-accent:var(--color-blue)">
+      <div class="model-header">
+        <div class="model-name-wrap">
+          <div class="model-name">Gemini 2.5 Pro / Flash</div>
+          <div class="model-provider">Google · Paid + Free Tier</div>
+        </div>
+        <div class="model-badges">
+          <span class="badge badge-paid">PAID</span>
+          <span class="badge badge-vision">VISION</span>
+        </div>
+      </div>
+      <p class="model-desc">Strongest on pure reasoning benchmarks, massive 1M context, native multimodal (audio/video/image), grounded web search. Deep research tasks.</p>
+      <div class="sw-grid">
+        <div class="sw-col strengths">
+          <h4>Strengths</h4>
+          <ul class="sw-list">
+            <li>1M context window (unmatched paid)</li>
+            <li>Leads reasoning benchmarks 2026</li>
+            <li>Native audio/video understanding</li>
+            <li>Grounded Google Search access</li>
+            <li>Best for long-doc RAG</li>
+            <li>Gemini Flash = fast + cheap</li>
+          </ul>
+        </div>
+        <div class="sw-col weaknesses">
+          <h4>Weaknesses</h4>
+          <ul class="sw-list">
+            <li>Prose can feel mechanical</li>
+            <li>API rate limits on free tier</li>
+            <li>Tool calling less reliable than Claude</li>
+            <li>Flash trades depth for speed</li>
+            <li>Context window cost at scale</li>
+          </ul>
+        </div>
+      </div>
+      <div class="model-footer">
+        <span class="context-tag">1M context</span>
+        <span class="recommend-tag">★ Research + RAG</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- FREE MODELS -->
+<section id="free-models" class="container">
+  <div class="section-label">OpenRouter Free Tier</div>
+  <div class="section-title">Top Free Models — Strong Ones Only</div>
+  <p class="section-desc">Only high-quality free models (quality score ≥40 or special-purpose strength). Rate limits: 20 req/min, 200 req/day. Use these for routing, extraction, drafts, and overflow.</p>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="tab-general">General</button>
+    <button class="tab-btn" data-tab="tab-code">Coding</button>
+    <button class="tab-btn" data-tab="tab-vision">Vision</button>
+    <button class="tab-btn" data-tab="tab-reasoning">Reasoning</button>
+    <button class="tab-btn" data-tab="tab-nvidia-or">NVIDIA on OR</button>
+  </div>
+
+  <div id="tab-general" class="tab-panel active">
+    <div class="model-grid">
+      <div class="model-card">
+        <div class="model-header">
+          <div class="model-name-wrap">
+            <div class="model-name">Gemma 4 31B</div>
+            <div class="model-provider">Google · openrouter free</div>
+          </div>
+          <div class="model-badges">
+            <span class="badge badge-free">FREE</span>
+            <span class="badge badge-strong">Quality 65</span>
+          </div>
+        </div>
+        <p class="model-desc">Highest quality free model currently on OpenRouter. 262K context, vision + tool calling. Best for general-purpose tasks when Gemini Pro quota is exhausted.</p>
+        <div class="sw-grid">
+          <div class="sw-col strengths"><h4>Strengths</h4>
+            <ul class="sw-list">
+              <li>Highest free quality score (#1)</li>
+              <li>Vision + multimodal inputs</li>
+              <li>262K long context</li>
+              <li>Tool calling support</li>
+              <li>Google lineage reliability</li>
+            </ul>
+          </div>
+          <div class="sw-col weaknesses"><h4>Weaknesses</h4>
+            <ul class="sw-list">
+              <li>No reasoning/thinking mode</li>
+              <li>200 req/day ceiling</li>
+              <li>Not latest frontier model</li>
+              <li>Can be verbose on simple tasks</li>
+            </ul>
+          </div>
+        </div>
+        <div class="model-footer">
+          <span class="context-tag">262K ctx</span>
+          <span class="recommend-tag">★ Best Free General</span>
+        </div>
+      </div>
+
+      <div class="model-card">
+        <div class="model-header">
+          <div class="model-name-wrap">
+            <div class="model-name">Llama 3.3 70B Instruct</div>
+            <div class="model-provider">Meta · openrouter free</div>
+          </div>
+          <div class="model-badges">
+            <span class="badge badge-free">FREE</span>
+            <span class="badge badge-tools">TOOLS</span>
+          </div>
+        </div>
+        <p class="model-desc">Meta's most reliable open model. Well-rounded for instruction following, N8N node extraction, and JSON structured output. The most battle-tested free model.</p>
+        <div class="sw-grid">
+          <div class="sw-col strengths"><h4>Strengths</h4>
+            <ul class="sw-list">
+              <li>Extremely reliable JSON output</li>
+              <li>Best tool calling among free models</li>
+              <li>Large community fine-tuning base</li>
+              <li>Consistent instruction following</li>
+              <li>Great for N8N integrations</li>
+            </ul>
+          </div>
+          <div class="sw-col weaknesses"><h4>Weaknesses</h4>
+            <ul class="sw-list">
+              <li>131K context (not longest)</li>
+              <li>No vision/multimodal</li>
+              <li>Quality 24 (solid not stellar)</li>
+              <li>No thinking/reasoning chain</li>
+            </ul>
+          </div>
+        </div>
+        <div class="model-footer">
+          <span class="context-tag">131K ctx</span>
+          <span class="recommend-tag">★ Best for N8N Nodes</span>
+        </div>
+      </div>
+
+      <div class="model-card">
+        <div class="model-header">
+          <div class="model-name-wrap">
+            <div class="model-name">Kimi K2.6</div>
+            <div class="model-provider">MoonshotAI · openrouter free</div>
+          </div>
+          <div class="model-badges">
+            <span class="badge badge-free">FREE</span>
+            <span class="badge badge-vision">VISION</span>
+            <span class="badge badge-new">NEW</span>
+          </div>
+        </div>
+        <p class="model-desc">Moonshot's latest flagship — strong agentic reasoning, 262K context, vision + tool calling. Emerging top-tier option for complex tasks.</p>
+        <div class="sw-grid">
+          <div class="sw-col strengths"><h4>Strengths</h4>
+            <ul class="sw-list">
+              <li>Multimodal vision + tools</li>
+              <li>262K context window</li>
+              <li>Strong agentic performance</li>
+              <li>Latest-gen architecture</li>
+            </ul>
+          </div>
+          <div class="sw-col weaknesses"><h4>Weaknesses</h4>
+            <ul class="sw-list">
+              <li>No published quality benchmark</li>
+              <li>Newer, less community testing</li>
+              <li>200 req/day limit applies</li>
+            </ul>
+          </div>
+        </div>
+        <div class="model-footer">
+          <span class="context-tag">262K ctx</span>
+          <span class="recommend-tag">↑ Emerging Pick</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-code" class="tab-panel">
+    <div class="model-grid">
+      <div class="model-card">
+        <div class="model-header">
+          <div class="model-name-wrap">
+            <div class="model-name">Qwen3 Coder 480B A35B</div>
+            <div class="model-provider">Alibaba · qwen/qwen3-coder:free</div>
+          </div>
+          <div class="model-badges">
+            <span class="badge badge-free">FREE</span>
+            <span class="badge badge-code">CODE #1</span>
+          </div>
+        </div>
+        <p class="model-desc">Currently the strongest free coding model on OpenRouter. 1M context, MoE architecture at 480B total params. State-of-the-art code generation — rivals paid models.</p>
+        <div class="sw-grid">
+          <div class="sw-col strengths"><h4>Strengths</h4>
+            <ul class="sw-list">
+              <li>Best free coding model (1M ctx)</li>
+              <li>MoE: efficient at 35B active params</li>
+              <li>Tool calling for agentic code</li>
+              <li>Beats DeepSeek R1 on code</li>
+              <li>Apache 2.0 license</li>
+            </ul>
+          </div>
+          <div class="sw-col weaknesses"><h4>Weaknesses</h4>
+            <ul class="sw-list">
+              <li>Specialized for code, less general</li>
+              <li>200 req/day free limit</li>
+              <li>No vision/multimodal</li>
+              <li>Can over-engineer solutions</li>
+            </ul>
+          </div>
+        </div>
+        <div class="model-footer">
+          <span class="context-tag">1M context</span>
+          <span class="recommend-tag">★ Best Free Coder</span>
+        </div>
+      </div>
+
+      <div class="model-card">
+        <div class="model-header">
+          <div class="model-name-wrap">
+            <div class="model-name">gpt-oss-120b</div>
+            <div class="model-provider">OpenAI · openai/gpt-oss-120b:free</div>
+          </div>
+          <div class="model-badges">
+            <span class="badge badge-free">FREE</span>
+            <span class="badge badge-strong">Quality 55</span>
+            <span class="badge badge-new">NEW</span>
+          </div>
+        </div>
+        <p class="model-desc">OpenAI's open-source 120B model, now free on OpenRouter. Strong general + code performance. Quality score 55 — second strongest free model overall.</p>
+        <div class="sw-grid">
+          <div class="sw-col strengths"><h4>Strengths</h4>
+            <ul class="sw-list">
+              <li>OpenAI quality at free tier</li>
+              <li>Quality score 55 (2nd highest free)</li>
+              <li>Tool calling support</li>
+              <li>Reliable instruction following</li>
+            </ul>
+          </div>
+          <div class="sw-col weaknesses"><h4>Weaknesses</h4>
+            <ul class="sw-list">
+              <li>131K context (not 1M)</li>
+              <li>No vision capabilities</li>
+              <li>Open-weight, not proprietary GPT-5</li>
+              <li>200 req/day free limit</li>
+            </ul>
+          </div>
+        </div>
+        <div class="model-footer">
+          <span class="context-tag">131K ctx</span>
+          <span class="recommend-tag">↑ Strong Backup Coder</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-vision" class="tab-panel">
+    <div class="model-grid">
+      <div class="model-card">
+        <div class="model-header">
+          <div class="model-name-wrap">
+            <div class="model-name">Gemma 4 26B A4B (MoE)</div>
+            <div class="model-provider">Google · google/gemma-4-26b-a4b-it:free</div>
+          </div>
+          <div class="model-badges">
+            <span class="badge badge-free">FREE</span>
+            <span class="badge badge-vision">VISION</span>
+          </div>
+        </div>
+        <p class="model-desc">MoE variant with vision + tool calling. 262K context. Efficient at 4B active params despite 26B total. Use for visual data extraction in Investogram stock chart analysis.</p>
+        <div class="sw-grid">
+          <div class="sw-col strengths"><h4>Strengths</h4>
+            <ul class="sw-list">
+              <li>Vision: chart/image analysis</li>
+              <li>MoE efficiency (4B active)</li>
+              <li>262K long context</li>
+              <li>Free with tool calling</li>
+            </ul>
+          </div>
+          <div class="sw-col weaknesses"><h4>Weaknesses</h4>
+            <ul class="sw-list">
+              <li>Quality 52 (good not great)</li>
+              <li>MoE can be inconsistent</li>
+              <li>Limited to 200 req/day</li>
+            </ul>
+          </div>
+        </div>
+        <div class="model-footer">
+          <span class="context-tag">262K ctx</span>
+          <span class="recommend-tag">↑ Stock Chart Vision</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-reasoning" class="tab-panel">
+    <div class="model-grid">
+      <div class="model-card">
+        <div class="model-header">
+          <div class="model-name-wrap">
+            <div class="model-name">DeepSeek R1 (free)</div>
+            <div class="model-provider">DeepSeek · deepseek/deepseek-r1:free</div>
+          </div>
+          <div class="model-badges">
+            <span class="badge badge-free">FREE</span>
+            <span class="badge badge-reason">REASONING</span>
+          </div>
+        </div>
+        <p class="model-desc">671B MoE with exposed chain-of-thought reasoning. OpenAI o1-level math and multi-step logic. Free tier available. Perfect for financial analysis reasoning in Investogram.</p>
+        <div class="sw-grid">
+          <div class="sw-col strengths"><h4>Strengths</h4>
+            <ul class="sw-list">
+              <li>Full reasoning chain exposed</li>
+              <li>OpenAI o1 parity on math</li>
+              <li>671B total (37B active MoE)</li>
+              <li>Best free reasoning model</li>
+              <li>Financial math + multi-step</li>
+            </ul>
+          </div>
+          <div class="sw-col weaknesses"><h4>Weaknesses</h4>
+            <ul class="sw-list">
+              <li>Slow (heavy reasoning tokens)</li>
+              <li>Not for fast/low-latency tasks</li>
+              <li>No vision/multimodal</li>
+              <li>Rate limits hit fast at free tier</li>
+              <li>Chinese company data concerns</li>
+            </ul>
+          </div>
+        </div>
+        <div class="model-footer">
+          <span class="context-tag">64K ctx</span>
+          <span class="recommend-tag">★ Financial Reasoning</span>
+        </div>
+      </div>
+
+      <div class="model-card">
+        <div class="model-header">
+          <div class="model-name-wrap">
+            <div class="model-name">GLM 4.5 Air</div>
+            <div class="model-provider">Z.ai · z-ai/glm-4.5-air:free</div>
+          </div>
+          <div class="model-badges">
+            <span class="badge badge-free">FREE</span>
+            <span class="badge badge-tools">TOOLS</span>
+            <span class="badge badge-new">NEW</span>
+          </div>
+        </div>
+        <p class="model-desc">Z.ai's GLM 4.5 Air (Zhipu AI). Fast reasoning model with tool calling. 131K context. Emerging strong alternative for reasoning tasks.</p>
+        <div class="sw-grid">
+          <div class="sw-col strengths"><h4>Strengths</h4>
+            <ul class="sw-list">
+              <li>Fast reasoning inference speed</li>
+              <li>Tool calling support</li>
+              <li>Strong on structured output</li>
+            </ul>
+          </div>
+          <div class="sw-col weaknesses"><h4>Weaknesses</h4>
+            <ul class="sw-list">
+              <li>Quality 38, not top-tier</li>
+              <li>No multimodal</li>
+              <li>Less western community testing</li>
+            </ul>
+          </div>
+        </div>
+        <div class="model-footer">
+          <span class="context-tag">131K ctx</span>
+          <span class="recommend-tag">↑ Fast Reasoning</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-nvidia-or" class="tab-panel">
+    <div class="model-grid">
+      <div class="model-card">
+        <div class="model-header">
+          <div class="model-name-wrap">
+            <div class="model-name">NVIDIA Nemotron 3 Super 120B</div>
+            <div class="model-provider">NVIDIA · nvidia/nemotron-3-super-120b-a12b:free</div>
+          </div>
+          <div class="model-badges">
+            <span class="badge badge-nvidia">NVIDIA</span>
+            <span class="badge badge-free">FREE</span>
+            <span class="badge badge-strong">Quality 60</span>
+          </div>
+        </div>
+        <p class="model-desc">Hybrid Mamba-Transformer MoE. 1M context, agentic reasoning, coding, planning, tool calling. Quality 60 — 2nd highest free model overall. A powerhouse hidden in free tier.</p>
+        <div class="sw-grid">
+          <div class="sw-col strengths"><h4>Strengths</h4>
+            <ul class="sw-list">
+              <li>1M context (rare at free tier)</li>
+              <li>Quality 60 — very strong</li>
+              <li>Agentic reasoning + planning</li>
+              <li>Tool calling for N8N</li>
+              <li>Hybrid Mamba efficiency</li>
+            </ul>
+          </div>
+          <div class="sw-col weaknesses"><h4>Weaknesses</h4>
+            <ul class="sw-list">
+              <li>No vision/multimodal</li>
+              <li>200 req/day free limit</li>
+              <li>Less fine-tuned community support</li>
+            </ul>
+          </div>
+        </div>
+        <div class="model-footer">
+          <span class="context-tag">1M context</span>
+          <span class="recommend-tag">★ Best NVIDIA Free</span>
+        </div>
+      </div>
+
+      <div class="model-card">
+        <div class="model-header">
+          <div class="model-name-wrap">
+            <div class="model-name">NVIDIA Nemotron 3 Ultra 550B</div>
+            <div class="model-provider">NVIDIA · nvidia/nemotron-3-ultra-550b-a55b:free</div>
+          </div>
+          <div class="model-badges">
+            <span class="badge badge-nvidia">NVIDIA</span>
+            <span class="badge badge-free">FREE</span>
+            <span class="badge badge-strong">550B</span>
+          </div>
+        </div>
+        <p class="model-desc">The largest NVIDIA model available free. Hybrid Mamba-Transformer, 1M context, excels at agentic workflows, planning, and tool use. Use for your most complex free-tier tasks.</p>
+        <div class="sw-grid">
+          <div class="sw-col strengths"><h4>Strengths</h4>
+            <ul class="sw-list">
+              <li>Largest free model (550B params)</li>
+              <li>1M context window</li>
+              <li>Excellent agentic planning</li>
+              <li>Tool use + structured output</li>
+              <li>Enterprise-grade architecture</li>
+            </ul>
+          </div>
+          <div class="sw-col weaknesses"><h4>Weaknesses</h4>
+            <ul class="sw-list">
+              <li>No quality benchmark score yet</li>
+              <li>Slower inference at 550B</li>
+              <li>No vision capabilities</li>
+              <li>200 req/day cap</li>
+            </ul>
+          </div>
+        </div>
+        <div class="model-footer">
+          <span class="context-tag">1M context</span>
+          <span class="recommend-tag">↑ Heavy Agentic Work</span>
+        </div>
+      </div>
+
+      <div class="model-card">
+        <div class="model-header">
+          <div class="model-name-wrap">
+            <div class="model-name">NVIDIA Nemotron Nano Omni 30B</div>
+            <div class="model-provider">NVIDIA · nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free</div>
+          </div>
+          <div class="model-badges">
+            <span class="badge badge-nvidia">NVIDIA</span>
+            <span class="badge badge-free">FREE</span>
+            <span class="badge badge-vision">OMNI</span>
+          </div>
+        </div>
+        <p class="model-desc">NVIDIA's omni-modal model: text, image, video, and speech understanding in one model. Free on OpenRouter. Unique multi-modal capability not available elsewhere for free.</p>
+        <div class="sw-grid">
+          <div class="sw-col strengths"><h4>Strengths</h4>
+            <ul class="sw-list">
+              <li>Omni-modal: image/video/speech/text</li>
+              <li>Only free omni-modal model</li>
+              <li>Reasoning mode built-in</li>
+              <li>256K context</li>
+            </ul>
+          </div>
+          <div class="sw-col weaknesses"><h4>Weaknesses</h4>
+            <ul class="sw-list">
+              <li>Quality 36 (lower for general text)</li>
+              <li>3B active params (MoE limitation)</li>
+              <li>Best for media parsing, not reasoning</li>
+            </ul>
+          </div>
+        </div>
+        <div class="model-footer">
+          <span class="context-tag">256K ctx</span>
+          <span class="recommend-tag">↑ Audio/Video Analysis</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- NVIDIA NIM DIRECT -->
+<section id="nvidia" class="container">
+  <div class="section-label">NVIDIA build.nvidia.com</div>
+  <div class="section-title">NVIDIA NIM — Add These to Your Stack</div>
+  <p class="section-desc">These are NVIDIA-exclusive models you should add via build.nvidia.com API key. They are NOT available on OpenRouter or Gemini/Anthropic. Use the OpenAI-compatible API endpoint with your NIM key.</p>
+  <div class="model-grid">
+
+    <div class="model-card" style="--card-accent:var(--color-green)">
+      <div class="model-header">
+        <div class="model-name-wrap">
+          <div class="model-name">Llama 3.3 Nemotron Super 49B v1.5</div>
+          <div class="model-provider">NVIDIA NIM · llama-3.3-nemotron-super-49b-v1.5</div>
+        </div>
+        <div class="model-badges">
+          <span class="badge badge-nvidia">NVIDIA NIM</span>
+          <span class="badge badge-strong">FLAGSHIP</span>
+        </div>
+      </div>
+      <p class="model-desc">NVIDIA's most recent flagship NIM LLM. Leading accuracy for reasoning, tool calling, chat, and instruction following. 3.18M API calls — highly popular. B200 optimized.</p>
+      <div class="sw-grid">
+        <div class="sw-col strengths"><h4>Strengths</h4>
+          <ul class="sw-list">
+            <li>NVIDIA's best reasoning model</li>
+            <li>Optimized for B200/H100 GPUs</li>
+            <li>Excellent tool calling accuracy</li>
+            <li>Latest v1.5 — improved over v1</li>
+            <li>Enterprise-grade NIM deployment</li>
+          </ul>
+        </div>
+        <div class="sw-col weaknesses"><h4>Weaknesses</h4>
+          <ul class="sw-list">
+            <li>No free tier (credits used)</li>
+            <li>49B params — not ultrafast</li>
+            <li>No multimodal vision</li>
+          </ul>
+        </div>
+      </div>
+      <div class="model-footer">
+        <span class="context-tag">NIM API</span>
+        <span class="recommend-tag">★ Top NIM Add</span>
+      </div>
+    </div>
+
+    <div class="model-card" style="--card-accent:var(--color-teal)">
+      <div class="model-header">
+        <div class="model-name-wrap">
+          <div class="model-name">Llama 3.1 Nemotron Nano VL 8B</div>
+          <div class="model-provider">NVIDIA NIM · llama-3.1-nemotron-nano-vl-8b-v1</div>
+        </div>
+        <div class="model-badges">
+          <span class="badge badge-nvidia">NVIDIA NIM</span>
+          <span class="badge badge-vision">VISION</span>
+        </div>
+      </div>
+      <p class="model-desc">Multi-modal VLM (vision-language) from NVIDIA. Understands text + images. Perfect for parsing stock charts, financial PDFs, and document images in Investogram. 9.38M calls.</p>
+      <div class="sw-grid">
+        <div class="sw-col strengths"><h4>Strengths</h4>
+          <ul class="sw-list">
+            <li>Vision + text multimodal</li>
+            <li>Compact 8B — fast inference</li>
+            <li>Doc intelligence & OCR-level</li>
+            <li>Free endpoint available</li>
+            <li>Great for chart/PDF parsing</li>
+          </ul>
+        </div>
+        <div class="sw-col weaknesses"><h4>Weaknesses</h4>
+          <ul class="sw-list">
+            <li>8B limits complex reasoning</li>
+            <li>Not for long reasoning chains</li>
+            <li>Vision quality below GPT-4V</li>
+          </ul>
+        </div>
+      </div>
+      <div class="model-footer">
+        <span class="context-tag">Free Endpoint</span>
+        <span class="recommend-tag">★ Stock Chart Parser</span>
+      </div>
+    </div>
+
+    <div class="model-card" style="--card-accent:var(--color-primary)">
+      <div class="model-header">
+        <div class="model-name-wrap">
+          <div class="model-name">Nemotron Nano 9B v2</div>
+          <div class="model-provider">NVIDIA NIM · nvidia-nemotron-nano-9b-v2</div>
+        </div>
+        <div class="model-badges">
+          <span class="badge badge-nvidia">NVIDIA NIM</span>
+          <span class="badge badge-reason">THINKING</span>
+          <span class="badge badge-free">FREE EP</span>
+        </div>
+      </div>
+      <p class="model-desc">Hybrid Transformer-Mamba design with thinking budget control. Excels at reasoning + agentic tasks. 1M context. Free endpoint. Unique thinking budget makes it cost-efficient.</p>
+      <div class="sw-grid">
+        <div class="sw-col strengths"><h4>Strengths</h4>
+          <ul class="sw-list">
+            <li>Thinking budget control</li>
+            <li>1M context at 9B size</li>
+            <li>Free endpoint on NIM</li>
+            <li>Fast Mamba architecture</li>
+            <li>Agentic reasoning optimized</li>
+          </ul>
+        </div>
+        <div class="sw-col weaknesses"><h4>Weaknesses</h4>
+          <ul class="sw-list">
+            <li>9B params limits depth</li>
+            <li>Thinking mode = slower</li>
+            <li>No vision</li>
+          </ul>
+        </div>
+      </div>
+      <div class="model-footer">
+        <span class="context-tag">1M ctx · Free EP</span>
+        <span class="recommend-tag">↑ Budget Reasoning</span>
+      </div>
+    </div>
+
+    <div class="model-card">
+      <div class="model-header">
+        <div class="model-name-wrap">
+          <div class="model-name">Nemotron OCR v1</div>
+          <div class="model-provider">NVIDIA NIM · nemotron-ocr-v1</div>
+        </div>
+        <div class="model-badges">
+          <span class="badge badge-nvidia">NVIDIA NIM</span>
+          <span class="badge badge-code">SPECIALIZED</span>
+        </div>
+      </div>
+      <p class="model-desc">Purpose-built OCR model for extracting text from real-world images, financial documents, tables, and structured layouts. Perfect for Investogram's PDF annual reports + earnings data.</p>
+      <div class="sw-grid">
+        <div class="sw-col strengths"><h4>Strengths</h4>
+          <ul class="sw-list">
+            <li>Best-in-class document OCR</li>
+            <li>Table + structure extraction</li>
+            <li>Annual reports, earnings PDFs</li>
+            <li>Fast, specialized pipeline</li>
+          </ul>
+        </div>
+        <div class="sw-col weaknesses"><h4>Weaknesses</h4>
+          <ul class="sw-list">
+            <li>OCR only — no conversation</li>
+            <li>Specialized, not general LLM</li>
+          </ul>
+        </div>
+      </div>
+      <div class="model-footer">
+        <span class="context-tag">Document AI</span>
+        <span class="recommend-tag">★ Financial Doc Parser</span>
+      </div>
+    </div>
+
+    <div class="model-card">
+      <div class="model-header">
+        <div class="model-name-wrap">
+          <div class="model-name">Nemotron 3 Voicechat</div>
+          <div class="model-provider">NVIDIA NIM · nemotron-voicechat</div>
+        </div>
+        <div class="model-badges">
+          <span class="badge badge-nvidia">NVIDIA NIM</span>
+          <span class="badge badge-tools">AUDIO</span>
+          <span class="badge badge-free">FREE EP</span>
+        </div>
+      </div>
+      <p class="model-desc">Real-time voice chat model. Enables speech-based interaction on top of Nemotron. Unique capability not available in Claude/Gemini stack. For voice-driven N8N triggers.</p>
+      <div class="sw-grid">
+        <div class="sw-col strengths"><h4>Strengths</h4>
+          <ul class="sw-list">
+            <li>Real-time voice interaction</li>
+            <li>Free endpoint on NIM</li>
+            <li>OpenAI-compatible API</li>
+            <li>Unique in your current stack</li>
+          </ul>
+        </div>
+        <div class="sw-col weaknesses"><h4>Weaknesses</h4>
+          <ul class="sw-list">
+            <li>Limited general intelligence</li>
+            <li>Specialized use only</li>
+          </ul>
+        </div>
+      </div>
+      <div class="model-footer">
+        <span class="context-tag">Free Endpoint</span>
+        <span class="recommend-tag">↑ Voice Trigger</span>
+      </div>
+    </div>
+
+    <div class="model-card">
+      <div class="model-header">
+        <div class="model-name-wrap">
+          <div class="model-name">NV-EmbedQA E5 v5</div>
+          <div class="model-provider">NVIDIA NIM · nv-embedqa-e5-v5</div>
+        </div>
+        <div class="model-badges">
+          <span class="badge badge-nvidia">NVIDIA NIM</span>
+          <span class="badge badge-tools">EMBED</span>
+          <span class="badge badge-free">FREE EP</span>
+        </div>
+      </div>
+      <p class="model-desc">23M API calls — most used NVIDIA embedding model. For question-answer retrieval in Supabase pgvector. Pairs perfectly with your RAG pipeline for Investogram stock Q&A.</p>
+      <div class="sw-grid">
+        <div class="sw-col strengths"><h4>Strengths</h4>
+          <ul class="sw-list">
+            <li>23M calls — battle tested</li>
+            <li>Optimized for QA retrieval</li>
+            <li>Free endpoint (no cost)</li>
+            <li>Works with Supabase pgvector</li>
+            <li>Most popular NIM embed model</li>
+          </ul>
+        </div>
+        <div class="sw-col weaknesses"><h4>Weaknesses</h4>
+          <ul class="sw-list">
+            <li>English only</li>
+            <li>No code-specific embeddings</li>
+          </ul>
+        </div>
+      </div>
+      <div class="model-footer">
+        <span class="context-tag">Free Endpoint</span>
+        <span class="recommend-tag">★ Add to RAG Stack</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- MODEL STACK TABLE -->
+<section id="stack" class="container">
+  <div class="section-label">Complete Stack Map</div>
+  <div class="section-title">Your Optimized Model Stack by Role</div>
+  <p class="section-desc">This is your complete 2026 model routing table — which model does what, and why.</p>
+  <div style="overflow-x:auto;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl)">
+    <table class="stack-table">
+      <thead>
+        <tr>
+          <th>Role</th>
+          <th>Model</th>
+          <th>Source</th>
+          <th>Why</th>
+          <th>Cost</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="stack-role">Primary Reasoning</span></td>
+          <td><span class="stack-model">Claude Sonnet 4.6</span></td>
+          <td>Anthropic API</td>
+          <td class="stack-why">Best prose, tool use, MCP, agentic code</td>
+          <td><span class="badge badge-paid">PAID</span></td>
+        </tr>
+        <tr>
+          <td><span class="stack-role">Long-context RAG</span></td>
+          <td><span class="stack-model">Gemini 2.5 Pro</span></td>
+          <td>Google API</td>
+          <td class="stack-why">1M ctx, grounded search, deep research</td>
+          <td><span class="badge badge-paid">PAID</span></td>
+        </tr>
+        <tr>
+          <td><span class="stack-role">Free General</span></td>
+          <td><span class="stack-model">Gemma 4 31B</span></td>
+          <td>OpenRouter</td>
+          <td class="stack-why">Highest quality free model (score 65)</td>
+          <td><span class="badge badge-free">FREE</span></td>
+        </tr>
+        <tr>
+          <td><span class="stack-role">Free Coding</span></td>
+          <td><span class="stack-model">Qwen3 Coder 480B</span></td>
+          <td>OpenRouter</td>
+          <td class="stack-why">Best free coding, 1M ctx, tool calling</td>
+          <td><span class="badge badge-free">FREE</span></td>
+        </tr>
+        <tr>
+          <td><span class="stack-role">Free Agentic (1M)</span></td>
+          <td><span class="stack-model">Nemotron 3 Super 120B</span></td>
+          <td>OpenRouter</td>
+          <td class="stack-why">Quality 60, 1M ctx, NVIDIA-tuned agentic</td>
+          <td><span class="badge badge-free">FREE</span></td>
+        </tr>
+        <tr>
+          <td><span class="stack-role">Financial Reasoning</span></td>
+          <td><span class="stack-model">DeepSeek R1</span></td>
+          <td>OpenRouter</td>
+          <td class="stack-why">CoT reasoning, math-grade logic, o1 parity</td>
+          <td><span class="badge badge-free">FREE</span></td>
+        </tr>
+        <tr>
+          <td><span class="stack-role">N8N Tool Calling</span></td>
+          <td><span class="stack-model">Llama 3.3 70B</span></td>
+          <td>OpenRouter</td>
+          <td class="stack-why">Most reliable JSON/tool-use for N8N nodes</td>
+          <td><span class="badge badge-free">FREE</span></td>
+        </tr>
+        <tr>
+          <td><span class="stack-role">NIM Flagship LLM</span></td>
+          <td><span class="stack-model">Nemotron Super 49B v1.5</span></td>
+          <td>NVIDIA NIM</td>
+          <td class="stack-why">NVIDIA's best, enterprise reasoning + tools</td>
+          <td><span class="badge badge-nvidia">NIM CREDITS</span></td>
+        </tr>
+        <tr>
+          <td><span class="stack-role">Stock Chart Vision</span></td>
+          <td><span class="stack-model">Nemotron Nano VL 8B</span></td>
+          <td>NVIDIA NIM</td>
+          <td class="stack-why">Vision-language for chart/doc parsing</td>
+          <td><span class="badge badge-free">NIM FREE EP</span></td>
+        </tr>
+        <tr>
+          <td><span class="stack-role">Financial Doc OCR</span></td>
+          <td><span class="stack-model">Nemotron OCR v1</span></td>
+          <td>NVIDIA NIM</td>
+          <td class="stack-why">Table+layout extraction from PDFs/reports</td>
+          <td><span class="badge badge-free">NIM FREE EP</span></td>
+        </tr>
+        <tr>
+          <td><span class="stack-role">RAG Embeddings</span></td>
+          <td><span class="stack-model">NV-EmbedQA E5 v5</span></td>
+          <td>NVIDIA NIM</td>
+          <td class="stack-why">23M calls tested, Supabase pgvector ready</td>
+          <td><span class="badge badge-free">NIM FREE EP</span></td>
+        </tr>
+        <tr>
+          <td><span class="stack-role">Omni-modal Media</span></td>
+          <td><span class="stack-model">Nemotron Nano Omni 30B</span></td>
+          <td>OpenRouter / NIM</td>
+          <td class="stack-why">Only free omni: image/video/speech/text</td>
+          <td><span class="badge badge-free">FREE</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- GAP ANALYSIS -->
+<section id="gaps" class="container">
+  <div class="section-label">Gap Analysis</div>
+  <div class="section-title">Weaknesses in Your Stack → How to Spawn</div>
+  <p class="section-desc">These are the coverage gaps in your current model stack (excluding Claude + Gemini) and exactly how to fix each one with the right free/NIM model.</p>
+  <div class="model-grid">
+
+    <div class="gap-card">
+      <div class="gap-title">
+        <span style="color:var(--color-red)">⚠</span> No Free Vision for Charts
+        <span class="gap-badge badge-red" style="background:var(--color-red-dim);color:var(--color-red)">GAP</span>
+      </div>
+      <p class="gap-text">OpenRouter free models mostly lack reliable vision. Your free tier is text-only for stock analysis.</p>
+      <div class="gap-fix">
+        <strong>✓ Fix: Spawn NIM Nemotron VL 8B</strong>
+        Use <code>llama-3.1-nemotron-nano-vl-8b-v1</code> from build.nvidia.com — free endpoint, vision-language for chart image analysis.
+      </div>
+    </div>
+
+    <div class="gap-card">
+      <div class="gap-title">
+        <span style="color:var(--color-red)">⚠</span> No Free Document OCR
+        <span class="gap-badge" style="background:var(--color-red-dim);color:var(--color-red)">GAP</span>
+      </div>
+      <p class="gap-text">Annual reports, earnings PDFs, financial tables require structure-aware OCR — not available in base LLMs.</p>
+      <div class="gap-fix">
+        <strong>✓ Fix: Spawn NIM Nemotron OCR v1</strong>
+        Add <code>nemotron-ocr-v1</code> from NIM. Table structure + layout extraction purpose-built for documents like BSE filings and annual reports.
+      </div>
+    </div>
+
+    <div class="gap-card">
+      <div class="gap-title">
+        <span style="color:var(--color-red)">⚠</span> No Free 1M Context Reasoning
+        <span class="gap-badge" style="background:var(--color-red-dim);color:var(--color-red)">GAP</span>
+      </div>
+      <p class="gap-text">DeepSeek R1 has 64K context. Your free reasoning tier can't process ultra-long financial reports in a single pass.</p>
+      <div class="gap-fix">
+        <strong>✓ Fix: Spawn Nemotron 3 Super 120B (OR)</strong>
+        <code>nvidia/nemotron-3-super-120b-a12b:free</code> — Quality 60, 1M context, free. Route long-doc reasoning here instead of DeepSeek.
+      </div>
+    </div>
+
+    <div class="gap-card">
+      <div class="gap-title">
+        <span style="color:var(--color-red)">⚠</span> No RAG Embedding Layer
+        <span class="gap-badge" style="background:var(--color-red-dim);color:var(--color-red)">GAP</span>
+      </div>
+      <p class="gap-text">Claude + Gemini don't provide embeddings. Without a dedicated embedding model, your Supabase pgvector RAG is either absent or using OpenAI paid embeddings.</p>
+      <div class="gap-fix">
+        <strong>✓ Fix: Spawn NV-EmbedQA E5 v5</strong>
+        Free NIM endpoint <code>nv-embedqa-e5-v5</code>. Replace OpenAI embeddings — OpenAI-compatible API, drop-in for N8N RAG nodes.
+      </div>
+    </div>
+
+    <div class="gap-card">
+      <div class="gap-title">
+        <span style="color:var(--color-yellow)">~</span> Free Tier Rate Limit Overflow
+        <span class="gap-badge" style="background:var(--color-yellow-dim);color:var(--color-yellow)">RISK</span>
+      </div>
+      <p class="gap-text">200 req/day per model. Under heavy Investogram load, you'll hit limits on key free models.</p>
+      <div class="gap-fix">
+        <strong>✓ Fix: Rotation Protocol in N8N</strong>
+        Build a model rotation node: try Gemma 4 31B → fallback Nemotron 3 Super → fallback gpt-oss-120b. Distributes load across 3 free models = 600 req/day effective capacity.
+      </div>
+    </div>
+
+    <div class="gap-card">
+      <div class="gap-title">
+        <span style="color:var(--color-yellow)">~</span> No Audio/Speech Input
+        <span class="gap-badge" style="background:var(--color-yellow-dim);color:var(--color-yellow)">MISSING</span>
+      </div>
+      <p class="gap-text">Neither Claude nor Gemini Flash handles real-time voice input in N8N workflows.</p>
+      <div class="gap-fix">
+        <strong>✓ Fix: Spawn Nemotron Voicechat (NIM)</strong>
+        <code>nemotron-voicechat</code> on NIM — free endpoint. Use as a voice-to-intent layer that routes into your main N8N workflow trigger.
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- SPAWNING PROTOCOL -->
+<section id="protocol" class="container">
+  <div class="section-label">Implementation Plan</div>
+  <div class="section-title">N8N Spawning Protocol</div>
+  <p class="section-desc">How to wire all these models into your existing N8N + Supabase + Claude stack.</p>
+
+  <div class="protocol-card">
+    <div class="protocol-title"><div class="protocol-num">1</div> NVIDIA NIM API Setup</div>
+    <p style="color:var(--color-text-muted);font-size:var(--text-sm);margin-bottom:var(--space-4)">Go to build.nvidia.com → API Keys → Generate key. OpenAI-compatible — add as HTTP Header Credential in N8N.</p>
+    <div class="code-block">// N8N HTTP Request Node — NVIDIA NIM
+Base URL: https://integrate.api.nvidia.com/v1
+Headers:
+  Authorization: Bearer {{$credentials.nvidia_api_key}}
+  Content-Type: application/json
+
+// Compatible with OpenAI node (set Custom API Endpoint)
+Model examples:
+  nvidia/llama-3.3-nemotron-super-49b-v1.5
+  nvidia/nemotron-nano-9b-v2
+  nvidia/nv-embedqa-e5-v5</div>
+  </div>
+
+  <div class="protocol-card">
+    <div class="protocol-title"><div class="protocol-num">2</div> OpenRouter Free Model Rotation Node</div>
+    <p style="color:var(--color-text-muted);font-size:var(--text-sm);margin-bottom:var(--space-4)">Build a "Model Router" N8N sub-workflow that distributes load across free models to avoid the 200 req/day cap.</p>
+    <div class="code-block">// N8N Function Node — Free Model Rotator
+const models = [
+  "google/gemma-4-31b-it:free",       // Quality 65
+  "nvidia/nemotron-3-super-120b-a12b:free", // Quality 60, 1M ctx
+  "openai/gpt-oss-120b:free",          // Quality 55
+  "qwen/qwen3-coder:free",             // Best code
+  "meta-llama/llama-3.3-70b-instruct:free" // Best tools
+];
+// Round-robin based on hour of day to spread rate limits
+const modelIndex = Math.floor(Date.now() / 3600000) % models.length;
+return { model: models[modelIndex] };</div>
+  </div>
+
+  <div class="protocol-card">
+    <div class="protocol-title"><div class="protocol-num">3</div> Investogram Model Routing Logic</div>
+    <ul class="protocol-steps">
+      <li><div class="step-icon">A</div><div><strong>User Query Arrives</strong> Classify intent: reasoning / code / vision / document / embedding / voice</div></li>
+      <li><div class="step-icon">B</div><div><strong>Route by Type</strong> Reasoning → DeepSeek R1 (free) or Claude (paid). Code → Qwen3 Coder (free) or Claude (paid). Vision → Nemotron VL 8B (NIM free). Document → Nemotron OCR v1 (NIM). Long-ctx → Nemotron 3 Super 120B (free, 1M).</div></li>
+      <li><div class="step-icon">C</div><div><strong>Check Rate Limits</strong> If primary free model at limit → rotate to backup. If all free exhausted → escalate to Gemini Flash (cheap paid).</div></li>
+      <li><div class="step-icon">D</div><div><strong>Embed + Store</strong> Use NV-EmbedQA E5 v5 (NIM free) → Supabase pgvector. Zero cost embedding layer.</div></li>
+      <li><div class="step-icon">E</div><div><strong>Final Synthesis</strong> High-stakes output (stock picks, analysis reports) → always route to Claude Sonnet 4.6 for final quality pass.</div></li>
+    </ul>
+  </div>
+
+  <div class="protocol-card">
+    <div class="protocol-title"><div class="protocol-num">4</div> Priority Order Summary</div>
+    <div class="code-block">TASK ROUTING PRIORITY (Investogram)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Stock Analysis Reasoning  → DeepSeek R1 (free) → Claude (paid)
+Code Generation           → Qwen3 Coder (free) → Claude (paid)  
+Chart/Image Parsing       → Nemotron VL 8B (NIM free)
+Annual Report OCR         → Nemotron OCR v1 (NIM)
+Long Doc RAG              → Nemotron 3 Super 120B (free 1M ctx)
+Embeddings / pgvector     → NV-EmbedQA E5 v5 (NIM free)
+General Q&A (free)        → Gemma 4 31B (OR) → gpt-oss-120b
+Agentic Planning          → Nemotron Super 49B v1.5 (NIM)
+Overflow / Heavy Work     → Gemini 2.5 Pro (paid)
+Final Output Quality      → Claude Sonnet 4.6 (paid)
+Voice Triggers            → Nemotron Voicechat (NIM free)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</div>
+  </div>
+</section>
+
+<footer>
+  <p>AntiGravity Model Stack Protocol · Built for Prakhar · June 2026 · Data: OpenRouter, NVIDIA build.nvidia.com, Costgoat</p>
+</footer>
+
+<script>
+// Theme toggle
+(function(){
+  const t=document.querySelector('[data-theme-toggle]');
+  const r=document.documentElement;
+  let d='dark';
+  t&&t.addEventListener('click',()=>{
+    d=d==='dark'?'light':'dark';
+    r.setAttribute('data-theme',d);
+    t.innerHTML=d==='dark'
+      ?'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>'
+      :'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>';
+  });
+})();
+
+// Tabs
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const target=btn.dataset.tab;
+    btn.closest('section').querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    btn.closest('section').querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(target).classList.add('active');
+  });
+});
+</script>
+</body>
+</html>
