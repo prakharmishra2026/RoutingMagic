@@ -202,6 +202,8 @@ cc-route() {
 co() { python3 "${HOME}/Projects/RoutingMagic/openai_wrapper.py" "$@"; }  # OpenAI generic wrapper (python fallback)
 chat() { python3 "${HOME}/Projects/RoutingMagic/openai_wrapper.py" "${1:-openai/gpt-4o}" "${@:2}"; }
 ask() { python3 "${HOME}/Projects/RoutingMagic/openai_wrapper.py" smart "$@"; }
+save() { python3 "${HOME}/Projects/RoutingMagic/save_handler.py" "$@"; }
+
 
 # Smart macOS open override
 open() {
