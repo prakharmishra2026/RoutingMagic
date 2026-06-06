@@ -362,6 +362,21 @@ def chat_oneshot(model, prompt, use_deep_context=False):
         else:
             sys.exit(1)
 
+def handle_exit(messages):
+    print("\nExiting.")
+    ans = input("Session ended. Do you want to keep the memory file for next time? (y/N): ")
+    if ans.lower() == 'y':
+        folder_name = generate_folder_name(messages)
+        os.makedirs(os.path.join(SESSION_DIR, folder_name), exist_ok=True)
+        dest_path = os.path.join(SESSION_DIR, folder_name, "memory.md")
+        if os.path.exists(TEMP_MEM_FILE):
+            shutil.move(TEMP_MEM_FILE, dest_path)
+        print(f"\033[92mSession saved to {dest_path}\033[0m")
+    else:
+        if os.path.exists(TEMP_MEM_FILE):
+            os.remove(TEMP_MEM_FILE)
+        print("Temporary session discarded.")
+
 def repl(model, use_deep_context=False):
     if model != "smart":
         client, target_model = get_client_and_model(model)
@@ -394,23 +409,15 @@ def repl(model, use_deep_context=False):
         try:
             line = input(">>> ")
         except (EOFError, KeyboardInterrupt):
-            print("\nExiting.")
-            ans = input("Session ended. Do you want to keep the memory file for next time? (y/N): ")
-            if ans.lower() == 'y':
-                folder_name = generate_folder_name(messages)
-                os.makedirs(os.path.join(SESSION_DIR, folder_name), exist_ok=True)
-                dest_path = os.path.join(SESSION_DIR, folder_name, "memory.md")
-                if os.path.exists(TEMP_MEM_FILE):
-                    shutil.move(TEMP_MEM_FILE, dest_path)
-                print(f"\033[92mSession saved to {dest_path}\033[0m")
-            else:
-                if os.path.exists(TEMP_MEM_FILE):
-                    os.remove(TEMP_MEM_FILE)
-                print("Temporary session discarded.")
+            handle_exit(messages)
             break
             
         if not line.strip():
             continue
+            
+        if line.strip().lower() in ["exit", "quit", "/exit", "/quit"]:
+            handle_exit(messages)
+            break
             
         if model == "smart" and client is None:
             target_model, task_type = smart_route(line)
