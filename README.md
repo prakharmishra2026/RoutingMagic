@@ -19,13 +19,15 @@ graph TD
     
     B -->|OpenAI Models| C[Official OpenAI API]
     B -->|NVIDIA Models| D["NVIDIA NIM API (Flagship/Vision/OCR)"]
-    B -->|Other Models| E["OpenRouter API (Free Tier)"]
+    B -->|Other Models| E["9router Local Engine"]
     
-    D & E -->|If 404/429| F[6-Tier Fallback Rotation]
+    E -->|If Offline| F["OpenRouter API (Free Tier)"]
     
-    C & D & F --> G[REPL Chat Interface]
-    G --> H[Run Code / Intercept Errors]
-    G --> I[Git Snapshot Undo Failsafes]
+    D & F -->|If 404/429| G[6-Tier Fallback Rotation]
+    
+    C & D & F & G --> H[REPL Chat Interface]
+    H --> I[Run Code / Intercept Errors]
+    H --> J[Git Snapshot Undo Failsafes]
 ```
 
 ---
