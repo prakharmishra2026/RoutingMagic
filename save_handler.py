@@ -120,7 +120,7 @@ def main():
     print("\033[94m[Save] Analyzing changes and generating plain English diff...\033[0m")
     
     # Select LLM fallback chain
-    fallback_chain = ["nvidia/z-ai/glm-5.1", "google/gemma-3-27b-it:free", "qwen/qwen3-235b-a22b:free"]
+    fallback_chain = ["nvidia/z-ai/glm-5.1", "google/gemma-4-31b-it:free", "qwen/qwen3-coder:free"]
     
     prompt = f"""You are an expert project chronicler and developer helper.
 Your job is to update the four status files tracking the project '{project_name}' based on the recent changes.

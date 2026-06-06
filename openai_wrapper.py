@@ -460,9 +460,9 @@ def repl(model, use_deep_context=False):
                 ("smart", "Auto (Smart Router)"),
                 ("nvidia/z-ai/glm-5.1", "GLM-5.1 · NVIDIA (Fast, All-Rounder)"),
                 ("deepseek-ai/deepseek-v4-flash", "DeepSeek-V4 · NVIDIA (Fast Coding)"),
-                ("google/gemma-3-27b-it:free", "Gemma-3 27B · OpenRouter (Free)"),
-                ("qwen/qwen3-235b-a22b:free", "Qwen3-235B · OpenRouter (Free, Large)"),
-                ("meta-llama/llama-4-maverick:free", "Llama-4 Maverick · OpenRouter (Free)"),
+                ("google/gemma-4-31b-it:free", "Gemma-4 31B · OpenRouter (Free)"),
+                ("qwen/qwen3-coder:free", "Qwen3 Coder · OpenRouter (Free, Large)"),
+                ("meta-llama/llama-3.3-70b-instruct:free", "Llama-3.3 70B · OpenRouter (Free)"),
                 ("openai/o3-mini", "o3-mini · OpenAI (Paid Fallback)")
             ]
             
@@ -525,7 +525,7 @@ def repl(model, use_deep_context=False):
         
         # Priority Fallback Chain
         # OpenRouter model IDs must NOT have an "openrouter/" prefix — use vendor/model:free format directly
-        fallback_chain = [target_model, "google/gemma-3-27b-it:free", "meta-llama/llama-4-maverick:free", "qwen/qwen3-235b-a22b:free", "openai/o3-mini"]
+        fallback_chain = [target_model, "google/gemma-4-31b-it:free", "meta-llama/llama-3.3-70b-instruct:free", "qwen/qwen3-coder:free", "openai/o3-mini"]
         # Remove duplicates while preserving order
         seen = set()
         fallback_chain = [x for x in fallback_chain if not (x in seen or seen.add(x))]
