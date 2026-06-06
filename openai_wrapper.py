@@ -111,7 +111,7 @@ def get_deep_context():
     
     for model in summarizer_models:
         try:
-            client, target = get_client_and_model(model)
+            client, target = get_client_and_model(model, is_summarizer=True)
             kwargs = {
                 "model": target,
                 "messages": [{"role": "user", "content": prompt}],
@@ -175,8 +175,11 @@ def smart_route(prompt):
     # Default: General Chat
     return "nvidia/z-ai/glm-5.1", "default_general"
 
-def get_client_and_model(model_name):
+def get_client_and_model(model_name, is_summarizer=False):
     clean_model = model_name
+    
+    # Use shorter timeout for summarizers to fail fast, longer for main response
+    req_timeout = 10 if is_summarizer else 45
     
     # 1. NVIDIA NIM Models
     if model_name in NVIDIA_API_MAP or "nvidia" in model_name or "glm" in model_name or "deepseek" in model_name or "kimi" in model_name or "mistral" in model_name or "minimax" in model_name or "gemma" in model_name:
@@ -188,14 +191,14 @@ def get_client_and_model(model_name):
         key_env_var = NVIDIA_API_MAP.get(model_name, "NVAPI_KEY")
         api_key = os.getenv(key_env_var) or os.getenv("NVAPI_KEY") or os.getenv("NVIDIA_API_KEY")
         base_url = "https://integrate.api.nvidia.com/v1"
-        return OpenAI(api_key=api_key, base_url=base_url, timeout=15), clean_model
+        return OpenAI(api_key=api_key, base_url=base_url, timeout=req_timeout), clean_model
         
     # 2. OpenAI
     if model_name.startswith("openai/") or model_name.startswith("gpt-") or model_name.startswith("o1-") or model_name.startswith("o3-"):
         if model_name.startswith("openai/"):
             clean_model = model_name.replace("openai/", "")
         api_key = os.getenv("OPENAI_API_KEY")
-        return OpenAI(api_key=api_key, timeout=15), clean_model
+        return OpenAI(api_key=api_key, timeout=req_timeout), clean_model
 
     # 3. Fallback to OpenRouter / 9Router
     if is_port_open("127.0.0.1", 20128):
@@ -205,7 +208,7 @@ def get_client_and_model(model_name):
         base_url = "https://openrouter.ai/api/v1"
         api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("9ROUTER_API_KEY")
         
-    return OpenAI(api_key=api_key, base_url=base_url, timeout=15), model_name
+    return OpenAI(api_key=api_key, base_url=base_url, timeout=req_timeout), model_name
 
 def chat_oneshot(model, prompt, use_deep_context=False):
     if model == "smart":
@@ -258,12 +261,13 @@ def chat_oneshot(model, prompt, use_deep_context=False):
                 print(delta.content, end="", flush=True)
         print()
     except Exception as e:
-        sys.stderr.write(f"Request failed: {e}\n")
+        sys.stderr.write(f"\nRequest failed: {e}\n")
         
         # Fallback handling
         if model == "smart":
-            print(f"\033[91m[Smart Router] Request failed. Falling back to glm-5.1...\033[0m")
-            chat_oneshot("nvidia/z-ai/glm-5.1", prompt, use_deep_context)
+            print(f"\033[91m[Smart Router] Primary request failed. Falling back to glm-5.1 with INSTANT context to prevent loops...\033[0m")
+            # CRITICAL FIX: Pass use_deep_context=False so we NEVER repeat the deep summarizer scan during a fallback
+            chat_oneshot("nvidia/z-ai/glm-5.1", prompt, use_deep_context=False)
         else:
             sys.exit(1)
 
