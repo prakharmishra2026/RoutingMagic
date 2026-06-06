@@ -347,8 +347,15 @@ def chat_oneshot(model, prompt, use_deep_context=False):
             if reasoning:
                 print(f"\033[90m{reasoning}\033[0m", end="", flush=True)
                 
-            if getattr(delta, "content", None):
-                print(delta.content, end="", flush=True)
+            content = getattr(delta, "content", None)
+            if content:
+                if len(content) > 30:
+                    for char in content:
+                        sys.stdout.write(char)
+                        sys.stdout.flush()
+                        time.sleep(0.002)
+                else:
+                    print(content, end="", flush=True)
         print()
     except Exception as e:
         sys.stderr.write(f"\nRequest failed: {e}\n")
@@ -589,9 +596,16 @@ def repl(model, use_deep_context=False):
                     if reasoning:
                         print(f"\033[90m{reasoning}\033[0m", end="", flush=True)
                         
-                    if getattr(delta, "content", None):
-                        print(delta.content, end="", flush=True)
-                        assistant_reply += delta.content
+                    content = getattr(delta, "content", None)
+                    if content:
+                        if len(content) > 30:
+                            for char in content:
+                                sys.stdout.write(char)
+                                sys.stdout.flush()
+                                time.sleep(0.002)
+                        else:
+                            print(content, end="", flush=True)
+                        assistant_reply += content
                 print()
                 
                 if is_paid:

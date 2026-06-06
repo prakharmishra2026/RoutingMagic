@@ -16,12 +16,14 @@ Imagine you're building a massive application. You need an AI assistant, but pas
 ```mermaid
 graph TD
     A[You Type 'ask' in Terminal] --> B{RoutingMagic}
-    B -->|Checks Port 20128| C[9router Local Engine]
-    C -->|If Offline / Fail| D[NVIDIA Free APIs]
-    D -->|If Rate Limited| E[OpenRouter Free Models]
-    E -->|If All Free Fails| F[Paid Fallback o3-mini]
     
-    B --> G[REPL Chat Interface]
+    B -->|OpenAI Models| C[Official OpenAI API]
+    B -->|NVIDIA Models| D[NVIDIA NIM API]
+    B -->|Other Models| E[9router Local Engine]
+    
+    E -->|If Offline / Fail| F[OpenRouter Fallback]
+    
+    C & D & F --> G[REPL Chat Interface]
     G --> H[Run Code / Intercept Errors]
     G --> I[Git Snapshot Undo Failsafes]
 ```
