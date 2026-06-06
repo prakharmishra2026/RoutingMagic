@@ -58,9 +58,23 @@ TEMPLATES = {
 - (Add lessons learned here as you encounter bugs or architectural shifts)
 
 ## Best Practices
-- (Document patterns that work well for this specific codebase)
+- (Document codebase rules and architecture constraints here)
 """
 }
+
+import re
+
+def parse_llm_json(output: str):
+    """Safely parse JSON from LLM output that might contain markdown blocks."""
+    output = output.strip()
+    match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', output, re.DOTALL)
+    if match:
+        output = match.group(1)
+        
+    try:
+        return json.loads(output)
+    except json.JSONDecodeError:
+        return None
 
 def get_git_info():
     """Gathers status, recent commits, and diff from the workspace."""
@@ -185,16 +199,11 @@ You must output ONLY a valid JSON object. Do not wrap in markdown quotes. The JS
             print("\033[91m[Save] All fallback models failed to generate a diff.\033[0m")
             return
         
-        # Clean markdown code block wraps if LLM added them
-        if output.startswith("```"):
-            lines = output.splitlines()
-            if lines[0].startswith("```json") or lines[0].startswith("```"):
-                lines = lines[1:]
-            if lines[-1].startswith("```"):
-                lines = lines[:-1]
-            output = "\n".join(lines).strip()
-            
-        data = json.loads(output)
+        # Clean markdown if model wrapped the JSON
+        data = parse_llm_json(output)
+        if not data:
+            print("\033[91m[Save] Failed to parse LLM response into JSON. Aborting.\033[0m")
+            return
         
         # Interactive Grill Me
         if not is_auto and "diff_summary" in data:

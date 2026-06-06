@@ -202,7 +202,7 @@ def get_client_and_model(model_name, is_summarizer=False):
     # NVIDIA NIM models — identified by presence in map, or by common vendor prefixes
     nvidia_vendors = ("nvidia/", "deepseek-ai/", "moonshotai/", "mistralai/", "google/gemma",
                       "minimaxai/", "stepfun-ai/", "glm")
-    if model_name in NVIDIA_API_MAP or any(model_name.startswith(v) for v in nvidia_vendors) or "glm" in model_name:
+    if (model_name in NVIDIA_API_MAP or any(model_name.startswith(v) for v in nvidia_vendors) or "glm" in model_name) and not model_name.endswith(":free"):
         # Strip the top-level "nvidia/" org prefix if present (e.g. nvidia/z-ai/glm-5.1 → z-ai/glm-5.1)
         if model_name.startswith("nvidia/") and model_name.count("/") >= 2:
             # e.g. "nvidia/z-ai/glm-5.1" → "z-ai/glm-5.1"
@@ -270,25 +270,34 @@ def compress_context(messages):
     middle_msgs = messages[1:-3]
     hist = json.dumps(middle_msgs)
     
-    client, target = get_client_and_model("nvidia/z-ai/glm-5.1", is_summarizer=True)
     prompt = f"Summarize the key technical decisions, bugs fixed, and current goal of this chat history. Be concise.\n\n{hist}"
     
-    try:
-        print("\n\033[93m[Smart Router] Compressing chat history to save tokens...\033[0m")
-        resp = client.chat.completions.create(
-            model=target,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3
-        )
-        summary = resp.choices[0].message.content.strip()
-        print("\033[92m[Smart Router] Context compressed.\033[0m")
-        
-        return [
-            sys_msg,
-            {"role": "assistant", "content": f"[SYSTEM: Previous context summary]\n{summary}"}
-        ] + recent_msgs
-    except:
+    print("\n\033[93m[Smart Router] Compressing chat history to save tokens...\033[0m")
+    
+    fallback_chain = ["nvidia/z-ai/glm-5.1", "google/gemma-4-31b-it:free", "qwen/qwen3-coder:free"]
+    summary = None
+    
+    for target_model in fallback_chain:
+        try:
+            client, target = get_client_and_model(target_model, is_summarizer=True)
+            resp = client.chat.completions.create(
+                model=target,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.3
+            )
+            summary = resp.choices[0].message.content.strip()
+            print(f"\033[92m[Smart Router] Context compressed via {target_model}.\033[0m")
+            break
+        except Exception as e:
+            continue
+            
+    if not summary:
         return messages
+        
+    return [
+        sys_msg,
+        {"role": "assistant", "content": f"[SYSTEM: Previous context summary]\n{summary}"}
+    ] + recent_msgs
 
 def chat_oneshot(model, prompt, use_deep_context=False):
     if model == "smart":
@@ -304,53 +313,65 @@ def chat_oneshot(model, prompt, use_deep_context=False):
 
     system_message = {"role": "system", "content": f"You are a highly capable AI assistant helping a developer. Always incorporate the following project context into your answers to be as specific and useful as possible.\n\n{context_str}"}
 
-    client, final_model_id = get_client_and_model(target_model)
-    
-    extra_body = {}
-    if "nemotron-3-ultra" in final_model_id:
-        extra_body = {"chat_template_kwargs":{"enable_thinking":True},"reasoning_budget":4096}
-    elif "deepseek-v4-flash" in final_model_id:
-        extra_body = {"chat_template_kwargs":{"thinking":True,"reasoning_effort":"high"}}
-    
-    kwargs = {
-        "model": final_model_id,
-        "messages": [system_message, {"role": "user", "content": prompt}],
-        "temperature": 0.7,
-        "stream": True
-    }
-    
-    if extra_body:
-        kwargs["extra_body"] = extra_body
+    fallback_chain = [target_model, "google/gemma-4-31b-it:free", "meta-llama/llama-3.3-70b-instruct:free", "qwen/qwen3-coder:free", "openai/o3-mini"]
+    seen = set()
+    fallback_chain = [x for x in fallback_chain if not (x in seen or seen.add(x))]
 
-    try:
-        print(f"\n\033[96m🤖 assistant ({final_model_id}):\033[0m\n", end="", flush=True)
-        resp = client.chat.completions.create(**kwargs)
-        was_reasoning = False
-        for chunk in resp:
-            if not getattr(chunk, "choices", None) or len(chunk.choices) == 0:
-                continue
-                
-            delta = chunk.choices[0].delta
-            reasoning = getattr(delta, "reasoning_content", None)
-            if reasoning:
-                was_reasoning = True
-                print(f"\033[90m{reasoning}\033[0m", end="", flush=True)
-                
-            content = getattr(delta, "content", None)
-            if content:
-                if was_reasoning:
-                    print("\n\n", end="")
-                    was_reasoning = False
+    success = False
+    for attempt_model in fallback_chain:
+        try:
+            temp_client, final_model_id = get_client_and_model(attempt_model)
+            
+            extra_body = {}
+            if "nemotron-3-ultra" in final_model_id:
+                extra_body = {"chat_template_kwargs":{"enable_thinking":True},"reasoning_budget":4096}
+            elif "deepseek-v4-flash" in final_model_id:
+                extra_body = {"chat_template_kwargs":{"thinking":True,"reasoning_effort":"high"}}
+            
+            base_model_id = final_model_id.split("/")[-1].split(":")[0]
+            supports_temperature = base_model_id not in NO_TEMPERATURE_MODELS
+            
+            kwargs = {
+                "model": final_model_id,
+                "messages": [system_message, {"role": "user", "content": prompt}],
+                "stream": True
+            }
+            if supports_temperature:
+                kwargs["temperature"] = 0.7
+            if extra_body:
+                kwargs["extra_body"] = extra_body
+
+            print(f"\n\033[96m🤖 assistant ({final_model_id}):\033[0m\n", end="", flush=True)
+            resp = temp_client.chat.completions.create(**kwargs)
+            was_reasoning = False
+            for chunk in resp:
+                if not getattr(chunk, "choices", None) or len(chunk.choices) == 0:
+                    continue
                     
-                print(content, end="", flush=True)
-        print()
-    except Exception as e:
-        sys.stderr.write(f"\nRequest failed: {e}\n")
-        if model == "smart":
-            print(f"\033[91m[Smart Router] Primary request failed. Falling back to glm-5.1...\033[0m")
-            chat_oneshot("nvidia/z-ai/glm-5.1", prompt, use_deep_context=False)
-        else:
-            sys.exit(1)
+                delta = chunk.choices[0].delta
+                reasoning = getattr(delta, "reasoning_content", None)
+                if reasoning:
+                    was_reasoning = True
+                    print(f"\033[90m{reasoning}\033[0m", end="", flush=True)
+                    
+                content = getattr(delta, "content", None)
+                if content:
+                    if was_reasoning:
+                        print("\n\n", end="")
+                        was_reasoning = False
+                        
+                    print(content, end="", flush=True)
+            print()
+            success = True
+            break
+        except Exception as e:
+            print(f"\n\033[91m[Error with {attempt_model}] {e}\033[0m")
+            if attempt_model != fallback_chain[-1]:
+                print("\033[93mTrying fallback model...\033[0m")
+            continue
+            
+    if not success:
+        sys.exit(1)
 
 def handle_exit(messages):
     print(f"\n\033[92mConversation saved to {TEMP_MEM_FILE}. Exiting.\033[0m")
