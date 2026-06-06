@@ -196,8 +196,8 @@ NO_TEMPERATURE_MODELS = {"o3-mini", "o1", "o1-mini", "o1-preview", "o3"}
 
 def get_client_and_model(model_name, is_summarizer=False):
     clean_model = model_name
-    # NVIDIA can be slow — give it a longer timeout
-    req_timeout = 15 if is_summarizer else 90
+    # Ensure timeout is snappy so the user doesn't wait forever before failover
+    req_timeout = 15 if is_summarizer else 25
     
     # NVIDIA NIM models — identified by presence in map, or by common vendor prefixes
     nvidia_vendors = ("nvidia/", "deepseek-ai/", "moonshotai/", "mistralai/", "google/gemma",
@@ -356,13 +356,7 @@ def chat_oneshot(model, prompt, use_deep_context=False):
                     print("\n\n", end="")
                     was_reasoning = False
                     
-                if len(content) > 30:
-                    for char in content:
-                        sys.stdout.write(char)
-                        sys.stdout.flush()
-                        time.sleep(0.002)
-                else:
-                    print(content, end="", flush=True)
+                print(content, end="", flush=True)
         print()
     except Exception as e:
         sys.stderr.write(f"\nRequest failed: {e}\n")
@@ -531,10 +525,9 @@ def repl(model, use_deep_context=False):
                 continue
 
         # Generate LLM response
-        if model == "smart" and client is None:
+        if model == "smart":
             target_model, task_type = smart_route(line)
             print(f"\033[94m[Smart Router] Selected '{target_model}' for task type: {task_type}\033[0m")
-            client, target_model = get_client_and_model(target_model)
             
         messages.append({"role": "user", "content": line})
         
@@ -602,13 +595,7 @@ def repl(model, use_deep_context=False):
                             print("\n\n", end="")
                             was_reasoning = False
                             
-                        if len(content) > 30:
-                            for char in content:
-                                sys.stdout.write(char)
-                                sys.stdout.flush()
-                                time.sleep(0.002)
-                        else:
-                            print(content, end="", flush=True)
+                        print(content, end="", flush=True)
                         assistant_reply += content
                 print()
                 
