@@ -191,13 +191,25 @@ def smart_route(prompt):
         
     return "nvidia/z-ai/glm-5.1", "default_general"
 
+# Models that do NOT accept a temperature parameter
+NO_TEMPERATURE_MODELS = {"o3-mini", "o1", "o1-mini", "o1-preview", "o3"}
+
 def get_client_and_model(model_name, is_summarizer=False):
     clean_model = model_name
-    req_timeout = 10 if is_summarizer else 45
+    # NVIDIA can be slow — give it a longer timeout
+    req_timeout = 15 if is_summarizer else 90
     
-    if model_name in NVIDIA_API_MAP or "nvidia" in model_name or "glm" in model_name or "deepseek" in model_name or "kimi" in model_name or "mistral" in model_name or "minimax" in model_name or "gemma" in model_name:
-        if model_name.startswith("nvidia/"):
-            clean_model = model_name.replace("nvidia/", "")
+    # NVIDIA NIM models — identified by presence in map, or by common vendor prefixes
+    nvidia_vendors = ("nvidia/", "deepseek-ai/", "moonshotai/", "mistralai/", "google/gemma",
+                      "minimaxai/", "stepfun-ai/", "glm")
+    if model_name in NVIDIA_API_MAP or any(model_name.startswith(v) for v in nvidia_vendors) or "glm" in model_name:
+        # Strip the top-level "nvidia/" org prefix if present (e.g. nvidia/z-ai/glm-5.1 → z-ai/glm-5.1)
+        if model_name.startswith("nvidia/") and model_name.count("/") >= 2:
+            # e.g. "nvidia/z-ai/glm-5.1" → "z-ai/glm-5.1"
+            clean_model = model_name[len("nvidia/"):]
+        elif model_name.startswith("nvidia/") and model_name.count("/") == 1:
+            # e.g. "nvidia/nemotron-..." — keep as is, NVIDIA API accepts the full ID
+            clean_model = model_name
         else:
             clean_model = model_name
             
@@ -205,12 +217,22 @@ def get_client_and_model(model_name, is_summarizer=False):
         api_key = os.getenv(key_env_var) or os.getenv("NVAPI_KEY") or os.getenv("NVIDIA_API_KEY")
         base_url = "https://integrate.api.nvidia.com/v1"
         return OpenAI(api_key=api_key, base_url=base_url, timeout=req_timeout), clean_model
-        
-    if model_name.startswith("openai/") or model_name.startswith("gpt-") or model_name.startswith("o1-") or model_name.startswith("o3-"):
+    
+    # OpenAI direct models (o3-mini, gpt-*, o1-*)
+    if model_name.startswith("openai/") or model_name.startswith("gpt-") or model_name.startswith("o1") or model_name.startswith("o3"):
         if model_name.startswith("openai/"):
-            clean_model = model_name.replace("openai/", "")
+            clean_model = model_name[len("openai/"):]
+        else:
+            clean_model = model_name
         api_key = os.getenv("OPENAI_API_KEY")
         return OpenAI(api_key=api_key, timeout=req_timeout), clean_model
+
+    # OpenRouter / 9router — model IDs must NOT have an 'openrouter/' prefix
+    # Strip it if accidentally present (e.g. "openrouter/google/gemma..." → "google/gemma...")
+    if model_name.startswith("openrouter/"):
+        clean_model = model_name[len("openrouter/"):]
+    else:
+        clean_model = model_name
 
     if is_port_open("127.0.0.1", 20128):
         base_url = "http://127.0.0.1:20128/v1"
@@ -219,7 +241,7 @@ def get_client_and_model(model_name, is_summarizer=False):
         base_url = "https://openrouter.ai/api/v1"
         api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("9ROUTER_API_KEY")
         
-    return OpenAI(api_key=api_key, base_url=base_url, timeout=req_timeout), model_name
+    return OpenAI(api_key=api_key, base_url=base_url, timeout=req_timeout), clean_model
 
 def save_temp_memory(messages):
     try:
@@ -445,11 +467,12 @@ def repl(model, use_deep_context=False):
             
             models_list = [
                 ("smart", "Auto (Smart Router)"),
-                ("nvidia/z-ai/glm-5.1", "GLM-5.1 (Fast, All-Rounder)"),
-                ("deepseek-ai/deepseek-v4-flash", "DeepSeek-V4 (Fast Coding)"),
-                ("openrouter/openai/gpt-oss-120b:free", "GPT-OSS-120B (Reasoning)"),
-                ("openrouter/qwen/qwen3-coder:free", "Qwen3-Coder (UI / Frontend)"),
-                ("openai/o3-mini", "o3-mini (Paid Fallback)")
+                ("nvidia/z-ai/glm-5.1", "GLM-5.1 · NVIDIA (Fast, All-Rounder)"),
+                ("deepseek-ai/deepseek-v4-flash", "DeepSeek-V4 · NVIDIA (Fast Coding)"),
+                ("google/gemma-3-27b-it:free", "Gemma-3 27B · OpenRouter (Free)"),
+                ("qwen/qwen3-235b-a22b:free", "Qwen3-235B · OpenRouter (Free, Large)"),
+                ("meta-llama/llama-4-maverick:free", "Llama-4 Maverick · OpenRouter (Free)"),
+                ("openai/o3-mini", "o3-mini · OpenAI (Paid Fallback)")
             ]
             
             print("\n\033[96mInteractive Model Switcher\033[0m")
@@ -511,7 +534,8 @@ def repl(model, use_deep_context=False):
         messages.append({"role": "user", "content": line})
         
         # Priority Fallback Chain
-        fallback_chain = [target_model, "openrouter/google/gemma-4-31b-it:free", "openrouter/qwen/qwen3-coder:free", "openai/o3-mini"]
+        # OpenRouter model IDs must NOT have an "openrouter/" prefix — use vendor/model:free format directly
+        fallback_chain = [target_model, "google/gemma-3-27b-it:free", "meta-llama/llama-4-maverick:free", "qwen/qwen3-235b-a22b:free", "openai/o3-mini"]
         # Remove duplicates while preserving order
         seen = set()
         fallback_chain = [x for x in fallback_chain if not (x in seen or seen.add(x))]
@@ -537,12 +561,16 @@ def repl(model, use_deep_context=False):
 
                 full_messages = PINNED_CONTEXT + messages
 
+                # o3-mini and o1 family do NOT accept a temperature param — omit it for those
+                base_model_id = temp_target.split("/")[-1].split(":")[0]  # e.g. "o3-mini"
+                supports_temperature = base_model_id not in NO_TEMPERATURE_MODELS
                 kwargs = {
                     "model": temp_target,
                     "messages": full_messages,
-                    "temperature": 0.7,
                     "stream": True
                 }
+                if supports_temperature:
+                    kwargs["temperature"] = 0.7
                 if extra_body:
                     kwargs["extra_body"] = extra_body
 
