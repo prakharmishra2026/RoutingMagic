@@ -465,7 +465,14 @@ def repl(model, use_deep_context=False):
             print("\033[92mRestored successfully.\033[0m")
             continue
             
-        # 3. Token Rate Limits & Cost Tracker
+        # 3. Global /save Hook
+        if line_stripped == "/save":
+            print("\033[93m[Global Hook] Triggering save_handler.py to update project memory...\033[0m")
+            save_script = os.path.expanduser("~/Projects/RoutingMagic/save_handler.py")
+            subprocess.run(f"python3 {save_script}", shell=True)
+            continue
+            
+        # 4. Token Rate Limits & Cost Tracker
         if line_stripped == "/cost":
             rpm = len(request_timestamps)
             print(f"\033[96mSession Cost (Paid): \033[0m ${SESSION_COST:.4f} / ${MAX_BUDGET:.2f} max")
