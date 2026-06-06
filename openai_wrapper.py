@@ -19,12 +19,16 @@ import socket
 import re
 import json
 import subprocess
+import shutil
 from openai import OpenAI
 from dotenv import load_dotenv
 
 # Load the env file to ensure all keys are accessible
 load_dotenv(os.path.expanduser("~/Projects/investogram/.env"))
 load_dotenv(os.path.expanduser("~/global.env"))
+
+TEMP_MEM_FILE = ".rm_session.tmp"
+SESSION_DIR = os.path.expanduser("~/Projects/RoutingMagic/sessions")
 
 # Mapping of NVIDIA NIM models to their specific API keys
 NVIDIA_API_MAP = {
@@ -210,6 +214,71 @@ def get_client_and_model(model_name, is_summarizer=False):
         
     return OpenAI(api_key=api_key, base_url=base_url, timeout=req_timeout), model_name
 
+def save_temp_memory(messages):
+    try:
+        with open(TEMP_MEM_FILE, "w") as f:
+            json.dump(messages, f)
+    except Exception:
+        pass
+
+def load_temp_memory():
+    if os.path.exists(TEMP_MEM_FILE):
+        try:
+            with open(TEMP_MEM_FILE, "r") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return None
+
+def generate_folder_name(messages):
+    client, target = get_client_and_model("nvidia/z-ai/glm-5.1", is_summarizer=True)
+    hist = json.dumps(messages[-6:])
+    prompt = f"Based on this chat history, generate a short 2-4 word hyphenated folder name (like 'mutual-funds-refactor' or 'supabase-auth-fix'). Only output the folder name, nothing else.\\n\\n{hist}"
+    try:
+        resp = client.chat.completions.create(
+            model=target,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2
+        )
+        name = resp.choices[0].message.content.strip()
+        name = re.sub(r'[^a-zA-Z0-9\-]', '', name.replace(' ', '-').lower())
+        return name if name else "saved-session"
+    except:
+        return "saved-session"
+
+def compress_context(messages):
+    if len(messages) <= 6:
+        return messages
+    
+    # Keep system prompt
+    sys_msg = messages[0]
+    # Keep last 3 messages
+    recent_msgs = messages[-3:]
+    
+    # Summarize the middle
+    middle_msgs = messages[1:-3]
+    hist = json.dumps(middle_msgs)
+    
+    client, target = get_client_and_model("nvidia/z-ai/glm-5.1", is_summarizer=True)
+    prompt = f"Summarize the key technical decisions, bugs fixed, and current goal of this chat history. Be concise.\\n\\n{hist}"
+    
+    try:
+        print("\\n\\033[93m[Smart Router] Compressing chat history to save tokens...\\033[0m")
+        resp = client.chat.completions.create(
+            model=target,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3
+        )
+        summary = resp.choices[0].message.content.strip()
+        print("\\033[92m[Smart Router] Context compressed.\\033[0m")
+        
+        return [
+            sys_msg,
+            {"role": "assistant", "content": f"[SYSTEM: Previous context summary]\\n{summary}"}
+        ] + recent_msgs
+    except:
+        return messages
+
 def chat_oneshot(model, prompt, use_deep_context=False):
     if model == "smart":
         target_model, task_type = smart_route(prompt)
@@ -279,26 +348,51 @@ def repl(model, use_deep_context=False):
         client, target_model = None, None
         print(f"🧠 Smart Router REPL")
         
-    print("Type your message. Exit with Ctrl-D or empty line.\n")
+    print("Type your message. Exit with Ctrl-D or empty line.\\n")
     
-    if use_deep_context:
-        context_str = get_deep_context()
-    else:
-        context_str = get_instant_context()
+    messages = load_temp_memory()
+    if messages:
+        ans = input("Found an interrupted session memory. Do you want to resume from it? [Y/n]: ")
+        if ans.lower() != 'n':
+            print("Resumed session.")
+            if model == "smart":
+                target_model, task_type = smart_route(messages[-1]["content"] if len(messages)>1 else "resume")
+                client, target_model = get_client_and_model(target_model)
+        else:
+            messages = None
+            
+    if not messages:
+        if use_deep_context:
+            context_str = get_deep_context()
+        else:
+            context_str = get_instant_context()
+        messages = [{"role": "system", "content": f"You are a helpful assistant. Context:\\n{context_str}"}]
         
-    messages = [{"role": "system", "content": f"You are a helpful assistant. Context:\n{context_str}"}]
     while True:
         try:
             line = input(">>> ")
         except (EOFError, KeyboardInterrupt):
-            print("\nExiting.")
+            print("\\nExiting.")
+            ans = input("Session ended. Do you want to keep the memory file for next time? (y/N): ")
+            if ans.lower() == 'y':
+                folder_name = generate_folder_name(messages)
+                os.makedirs(os.path.join(SESSION_DIR, folder_name), exist_ok=True)
+                dest_path = os.path.join(SESSION_DIR, folder_name, "memory.md")
+                if os.path.exists(TEMP_MEM_FILE):
+                    shutil.move(TEMP_MEM_FILE, dest_path)
+                print(f"\\033[92mSession saved to {dest_path}\\033[0m")
+            else:
+                if os.path.exists(TEMP_MEM_FILE):
+                    os.remove(TEMP_MEM_FILE)
+                print("Temporary session discarded.")
             break
+            
         if not line.strip():
             continue
             
         if model == "smart" and client is None:
             target_model, task_type = smart_route(line)
-            print(f"\033[94m[Smart Router] Selected '{target_model}' for task type: {task_type}\033[0m")
+            print(f"\\033[94m[Smart Router] Selected '{target_model}' for task type: {task_type}\\033[0m")
             client, target_model = get_client_and_model(target_model)
             
         messages.append({"role": "user", "content": line})
@@ -323,9 +417,14 @@ def repl(model, use_deep_context=False):
             print()
             
             messages.append({"role": "assistant", "content": assistant_reply})
+            save_temp_memory(messages)
             
+            if len(messages) > 8:
+                messages = compress_context(messages)
+                save_temp_memory(messages)
+                
         except Exception as e:
-            sys.stderr.write(f"\nRequest failed: {e}\n")
+            sys.stderr.write(f"\\nRequest failed: {e}\\n")
             messages.pop()
 
 def main():
@@ -340,6 +439,30 @@ def main():
     if "--deep" in args:
         use_deep = True
         args.remove("--deep")
+        
+    if "--resume" in args:
+        if not os.path.exists(SESSION_DIR):
+            print("No saved sessions found.")
+            sys.exit(0)
+        sessions = [d for d in os.listdir(SESSION_DIR) if os.path.isdir(os.path.join(SESSION_DIR, d))]
+        if not sessions:
+            print("No saved sessions found.")
+            sys.exit(0)
+            
+        print("Available Sessions:")
+        for i, s in enumerate(sessions):
+            print(f"[{i}] {s}")
+        
+        try:
+            choice = int(input("Select session to resume: "))
+            sel = sessions[choice]
+            mem_path = os.path.join(SESSION_DIR, sel, "memory.md")
+            shutil.copy(mem_path, TEMP_MEM_FILE)
+            print(f"Loaded session {sel}.")
+            repl(model_id, use_deep_context=use_deep)
+        except Exception as e:
+            print("Invalid selection.")
+        sys.exit(0)
         
     if len(args) == 0:
         repl(model_id, use_deep_context=use_deep)
