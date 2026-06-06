@@ -271,12 +271,22 @@ def chat_oneshot(model, prompt, use_deep_context=False):
         else:
             sys.exit(1)
 
-def repl(model):
-    client, target_model = get_client_and_model(model)
-    print(f"🦾 Universal Chat REPL — model: {model} (Target: {target_model})")
+def repl(model, use_deep_context=False):
+    if model != "smart":
+        client, target_model = get_client_and_model(model)
+        print(f"🦾 Universal Chat REPL — model: {model} (Target: {target_model})")
+    else:
+        client, target_model = None, None
+        print(f"🧠 Smart Router REPL")
+        
     print("Type your message. Exit with Ctrl-D or empty line.\n")
     
-    messages = [{"role": "system", "content": f"You are a helpful assistant. Context:\n{get_instant_context()}"}]
+    if use_deep_context:
+        context_str = get_deep_context()
+    else:
+        context_str = get_instant_context()
+        
+    messages = [{"role": "system", "content": f"You are a helpful assistant. Context:\n{context_str}"}]
     while True:
         try:
             line = input(">>> ")
@@ -285,6 +295,11 @@ def repl(model):
             break
         if not line.strip():
             continue
+            
+        if model == "smart" and client is None:
+            target_model, task_type = smart_route(line)
+            print(f"\033[94m[Smart Router] Selected '{target_model}' for task type: {task_type}\033[0m")
+            client, target_model = get_client_and_model(target_model)
             
         messages.append({"role": "user", "content": line})
         
@@ -326,12 +341,9 @@ def main():
         use_deep = True
         args.remove("--deep")
         
-    if len(args) == 0 and model_id != "smart":
-        repl(model_id)
+    if len(args) == 0:
+        repl(model_id, use_deep_context=use_deep)
     else:
-        if model_id == "smart" and len(args) == 0:
-            sys.stderr.write("Usage: ask [--deep] \"your prompt\"\n")
-            sys.exit(1)
         prompt = " ".join(args)
         chat_oneshot(model_id, prompt, use_deep_context=use_deep)
 
