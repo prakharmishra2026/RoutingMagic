@@ -255,7 +255,7 @@ def load_temp_memory():
 def generate_folder_name(messages):
     client, target = get_client_and_model("nvidia/z-ai/glm-5.1", is_summarizer=True)
     hist = json.dumps(messages[-6:])
-    prompt = f"Based on this chat history, generate a short 2-4 word hyphenated folder name (like 'mutual-funds-refactor' or 'supabase-auth-fix'). Only output the folder name, nothing else.\\n\\n{hist}"
+    prompt = f"Based on this chat history, generate a short 2-4 word hyphenated folder name (like 'mutual-funds-refactor' or 'supabase-auth-fix'). Only output the folder name, nothing else.\n\n{hist}"
     try:
         resp = client.chat.completions.create(
             model=target,
@@ -282,21 +282,21 @@ def compress_context(messages):
     hist = json.dumps(middle_msgs)
     
     client, target = get_client_and_model("nvidia/z-ai/glm-5.1", is_summarizer=True)
-    prompt = f"Summarize the key technical decisions, bugs fixed, and current goal of this chat history. Be concise.\\n\\n{hist}"
+    prompt = f"Summarize the key technical decisions, bugs fixed, and current goal of this chat history. Be concise.\n\n{hist}"
     
     try:
-        print("\\n\\033[93m[Smart Router] Compressing chat history to save tokens...\\033[0m")
+        print("\n\033[93m[Smart Router] Compressing chat history to save tokens...\033[0m")
         resp = client.chat.completions.create(
             model=target,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3
         )
         summary = resp.choices[0].message.content.strip()
-        print("\\033[92m[Smart Router] Context compressed.\\033[0m")
+        print("\033[92m[Smart Router] Context compressed.\033[0m")
         
         return [
             sys_msg,
-            {"role": "assistant", "content": f"[SYSTEM: Previous context summary]\\n{summary}"}
+            {"role": "assistant", "content": f"[SYSTEM: Previous context summary]\n{summary}"}
         ] + recent_msgs
     except:
         return messages
@@ -370,7 +370,7 @@ def repl(model, use_deep_context=False):
         client, target_model = None, None
         print(f"🧠 Smart Router REPL")
         
-    print("Type your message. Exit with Ctrl-D or empty line.\\n")
+    print("Type your message. Exit with Ctrl-D or empty line.\n")
     
     messages = load_temp_memory()
     if messages:
@@ -388,13 +388,13 @@ def repl(model, use_deep_context=False):
             context_str = get_deep_context()
         else:
             context_str = get_instant_context()
-        messages = [{"role": "system", "content": f"You are a helpful assistant. Context:\\n{context_str}"}]
+        messages = [{"role": "system", "content": f"You are a helpful assistant. Context:\n{context_str}"}]
         
     while True:
         try:
             line = input(">>> ")
         except (EOFError, KeyboardInterrupt):
-            print("\\nExiting.")
+            print("\nExiting.")
             ans = input("Session ended. Do you want to keep the memory file for next time? (y/N): ")
             if ans.lower() == 'y':
                 folder_name = generate_folder_name(messages)
@@ -402,7 +402,7 @@ def repl(model, use_deep_context=False):
                 dest_path = os.path.join(SESSION_DIR, folder_name, "memory.md")
                 if os.path.exists(TEMP_MEM_FILE):
                     shutil.move(TEMP_MEM_FILE, dest_path)
-                print(f"\\033[92mSession saved to {dest_path}\\033[0m")
+                print(f"\033[92mSession saved to {dest_path}\033[0m")
             else:
                 if os.path.exists(TEMP_MEM_FILE):
                     os.remove(TEMP_MEM_FILE)
@@ -414,25 +414,43 @@ def repl(model, use_deep_context=False):
             
         if model == "smart" and client is None:
             target_model, task_type = smart_route(line)
-            print(f"\\033[94m[Smart Router] Selected '{target_model}' for task type: {task_type}\\033[0m")
+            print(f"\033[94m[Smart Router] Selected '{target_model}' for task type: {task_type}\033[0m")
             client, target_model = get_client_and_model(target_model)
             
         messages.append({"role": "user", "content": line})
         
         try:
-            resp = client.chat.completions.create(
-                model=target_model,
-                messages=messages,
-                temperature=0.7,
-                stream=True
-            )
-            
+            extra_body = {}
+            if "nemotron-3-ultra" in target_model:
+                extra_body = {"chat_template_kwargs": {"enable_thinking": True}, "reasoning_budget": 4096}
+            elif "deepseek-v4-flash" in target_model:
+                extra_body = {"chat_template_kwargs": {"thinking": True, "reasoning_effort": "high"}}
+
+            # Print assistant prefix instantly so user knows a response is loading
             print("assistant: ", end="", flush=True)
+
+            kwargs = {
+                "model": target_model,
+                "messages": messages,
+                "temperature": 0.7,
+                "stream": True
+            }
+            if extra_body:
+                kwargs["extra_body"] = extra_body
+
+            resp = client.chat.completions.create(**kwargs)
+            
             assistant_reply = ""
             for chunk in resp:
                 if not getattr(chunk, "choices", None) or len(chunk.choices) == 0:
                     continue
                 delta = chunk.choices[0].delta
+                
+                # Stream reasoning / thinking content in gray if available
+                reasoning = getattr(delta, "reasoning_content", None)
+                if reasoning:
+                    print(f"\033[90m{reasoning}\033[0m", end="", flush=True)
+                    
                 if getattr(delta, "content", None):
                     print(delta.content, end="", flush=True)
                     assistant_reply += delta.content
@@ -446,7 +464,7 @@ def repl(model, use_deep_context=False):
                 save_temp_memory(messages)
                 
         except Exception as e:
-            sys.stderr.write(f"\\nRequest failed: {e}\\n")
+            sys.stderr.write(f"\nRequest failed: {e}\n")
             messages.pop()
 
 def main():
