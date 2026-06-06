@@ -25,7 +25,7 @@ load_dotenv(os.path.expanduser("~/Projects/investogram/.env"))
 load_dotenv(os.path.expanduser("~/global.env"))
 
 WORKSPACE = "default"
-TEMP_MEM_FILE = f".rm_session_{WORKSPACE}.tmp"
+TEMP_MEM_FILE = f".rm_session_{WORKSPACE}.json"
 SESSION_DIR = os.path.expanduser("~/Projects/RoutingMagic/sessions")
 
 SESSION_COST = 0.0
@@ -373,19 +373,7 @@ def chat_oneshot(model, prompt, use_deep_context=False):
             sys.exit(1)
 
 def handle_exit(messages):
-    print("\nExiting.")
-    ans = input("Session ended. Do you want to keep the memory file for next time? (y/N): ")
-    if ans.lower() == 'y':
-        folder_name = generate_folder_name(messages)
-        os.makedirs(os.path.join(SESSION_DIR, folder_name), exist_ok=True)
-        dest_path = os.path.join(SESSION_DIR, folder_name, "memory.md")
-        if os.path.exists(TEMP_MEM_FILE):
-            shutil.move(TEMP_MEM_FILE, dest_path)
-        print(f"\033[92mSession saved to {dest_path}\033[0m")
-    else:
-        if os.path.exists(TEMP_MEM_FILE):
-            os.remove(TEMP_MEM_FILE)
-        print("Temporary session discarded.")
+    print(f"\n\033[92mConversation saved to {TEMP_MEM_FILE}. Exiting.\033[0m")
 
 def repl(model, use_deep_context=False):
     global WORKSPACE, TEMP_MEM_FILE, SESSION_COST, daily_requests, request_timestamps
@@ -401,14 +389,10 @@ def repl(model, use_deep_context=False):
     
     messages = load_temp_memory()
     if messages:
-        ans = input("Found an interrupted session memory. Do you want to resume from it? [Y/n]: ")
-        if ans.lower() != 'n':
-            print("Resumed session.")
-            if model == "smart":
-                target_model, task_type = smart_route(messages[-1]["content"] if len(messages)>1 else "resume")
-                client, target_model = get_client_and_model(target_model)
-        else:
-            messages = None
+        print("\033[90m[Loaded previous session history. Type /clear to start fresh.]\033[0m")
+        if model == "smart":
+            target_model, task_type = smart_route(messages[-1]["content"] if len(messages)>1 else "resume")
+            client, target_model = get_client_and_model(target_model)
             
     if not messages:
         if use_deep_context:
@@ -433,10 +417,17 @@ def repl(model, use_deep_context=False):
             handle_exit(messages)
             break
             
+        if line_stripped == "/clear":
+            if os.path.exists(TEMP_MEM_FILE):
+                os.remove(TEMP_MEM_FILE)
+            messages = [{"role": "system", "content": f"You are a helpful assistant. Context:\n{get_instant_context()}"}]
+            print("\033[93mConversation history cleared.\033[0m")
+            continue
+            
         # 1. Context Pinning & Agent Workspaces
         if line_stripped.startswith("/workspace "):
             WORKSPACE = line.split(" ", 1)[1].strip()
-            TEMP_MEM_FILE = f".rm_session_{WORKSPACE}.tmp"
+            TEMP_MEM_FILE = f".rm_session_{WORKSPACE}.json"
             messages = load_temp_memory() or [{"role": "system", "content": f"You are a helpful assistant. Context:\n{get_instant_context()}"}]
             print(f"\033[92mSwitched to workspace: {WORKSPACE}\033[0m")
             continue
