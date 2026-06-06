@@ -119,8 +119,8 @@ def main():
 
     print("\033[94m[Save] Analyzing changes and generating plain English diff...\033[0m")
     
-    # Select LLM
-    client, target_model = get_client_and_model("nvidia/z-ai/glm-5.1")
+    # Select LLM fallback chain
+    fallback_chain = ["nvidia/z-ai/glm-5.1", "google/gemma-3-27b-it:free", "qwen/qwen3-235b-a22b:free"]
     
     prompt = f"""You are an expert project chronicler and developer helper.
 Your job is to update the four status files tracking the project '{project_name}' based on the recent changes.
@@ -164,13 +164,26 @@ You must output ONLY a valid JSON object. Do not wrap in markdown quotes. The JS
 """
 
     try:
-        resp = client.chat.completions.create(
-            model=target_model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-            response_format={"type": "json_object"} if "glm-5.1" not in target_model else None
-        )
-        output = resp.choices[0].message.content.strip()
+        output = None
+        for target_model in fallback_chain:
+            try:
+                client, model_id = get_client_and_model(target_model)
+                resp = client.chat.completions.create(
+                    model=model_id,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.3,
+                    response_format={"type": "json_object"} if "glm-5.1" not in model_id else None
+                )
+                output = resp.choices[0].message.content.strip()
+                print(f"\033[92m[Save] Successfully generated diff using {target_model}.\033[0m")
+                break
+            except Exception as e:
+                print(f"\033[93m[Save] Model {target_model} failed: {e}. Trying fallback...\033[0m")
+                continue
+                
+        if not output:
+            print("\033[91m[Save] All fallback models failed to generate a diff.\033[0m")
+            return
         
         # Clean markdown code block wraps if LLM added them
         if output.startswith("```"):

@@ -259,21 +259,7 @@ def load_temp_memory():
             pass
     return None
 
-def generate_folder_name(messages):
-    client, target = get_client_and_model("nvidia/z-ai/glm-5.1", is_summarizer=True)
-    hist = json.dumps(messages[-6:])
-    prompt = f"Based on this chat history, generate a short 2-4 word hyphenated folder name (like 'mutual-funds-refactor' or 'supabase-auth-fix'). Only output the folder name, nothing else.\n\n{hist}"
-    try:
-        resp = client.chat.completions.create(
-            model=target,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.2
-        )
-        name = resp.choices[0].message.content.strip()
-        name = re.sub(r'[^a-zA-Z0-9\-]', '', name.replace(' ', '-').lower())
-        return name if name else "saved-session"
-    except:
-        return "saved-session"
+
 
 def compress_context(messages):
     if len(messages) <= 6:
@@ -419,22 +405,30 @@ def repl(model, use_deep_context=False):
             continue
             
         # 1. Context Pinning & Agent Workspaces
-        if line_stripped.startswith("/workspace "):
-            WORKSPACE = line.split(" ", 1)[1].strip()
-            TEMP_MEM_FILE = f".rm_session_{WORKSPACE}.json"
-            messages = load_temp_memory() or [{"role": "system", "content": f"You are a helpful assistant. Context:\n{get_instant_context()}"}]
-            print(f"\033[92mSwitched to workspace: {WORKSPACE}\033[0m")
+        if line_stripped.startswith("/workspace"):
+            parts = line.split(" ", 1)
+            if len(parts) > 1 and parts[1].strip():
+                WORKSPACE = parts[1].strip()
+                TEMP_MEM_FILE = f".rm_session_{WORKSPACE}.json"
+                messages = load_temp_memory() or [{"role": "system", "content": f"You are a helpful assistant. Context:\n{get_instant_context()}"}]
+                print(f"\033[92mSwitched to workspace: {WORKSPACE}\033[0m")
+            else:
+                print("\033[91mUsage: /workspace <name>\033[0m")
             continue
             
-        if line_stripped.startswith("/pin "):
-            filepath = line.split(" ", 1)[1].strip()
-            if os.path.exists(filepath):
-                with open(filepath, "r") as f:
-                    content = f.read()
-                PINNED_CONTEXT.append({"role": "system", "content": f"[PINNED FILE: {filepath}]\\n{content}"})
-                print(f"\033[92mPinned {filepath} to context permanently.\033[0m")
+        if line_stripped.startswith("/pin"):
+            parts = line.split(" ", 1)
+            if len(parts) > 1 and parts[1].strip():
+                filepath = parts[1].strip()
+                if os.path.exists(filepath):
+                    with open(filepath, "r") as f:
+                        content = f.read()
+                    PINNED_CONTEXT.append({"role": "system", "content": f"[PINNED FILE: {filepath}]\\n{content}"})
+                    print(f"\033[92mPinned {filepath} to context permanently.\033[0m")
+                else:
+                    print(f"\033[91mFile not found: {filepath}\033[0m")
             else:
-                print(f"\033[91mFile not found: {filepath}\033[0m")
+                print("\033[91mUsage: /pin <filepath>\033[0m")
             continue
             
         # 2. Auto-Commit & Failsafe Restore
@@ -452,8 +446,6 @@ def repl(model, use_deep_context=False):
             
         # 3. Token Rate Limits & Cost Tracker
         if line_stripped == "/cost":
-            now = time.time()
-            request_timestamps = [t for t in request_timestamps if now - t < 60]
             rpm = len(request_timestamps)
             print(f"\033[96mSession Cost (Paid): \033[0m ${SESSION_COST:.4f} / ${MAX_BUDGET:.2f} max")
             print(f"\033[96mRate Limits (Free): \033[0m {rpm} RPM (Limit: ~40), {daily_requests} Requests today.")
@@ -575,6 +567,7 @@ def repl(model, use_deep_context=False):
                 resp = temp_client.chat.completions.create(**kwargs)
                 
                 now = time.time()
+                request_timestamps = [t for t in request_timestamps if now - t < 60]
                 request_timestamps.append(now)
                 daily_requests += 1
                 
