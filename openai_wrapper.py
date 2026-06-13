@@ -18,8 +18,21 @@ import subprocess
 import shutil
 import time
 import select
+from pathlib import Path
 from openai import OpenAI
 from dotenv import load_dotenv
+
+# --- Shell command security helpers ---
+# Characters that enable subshell execution or command chaining
+_SHELL_DANGEROUS = re.compile(r'[;|&`$<>]|\$\(')
+
+def _sanitize_cmd(cmd: str) -> tuple[bool, str]:
+    """Return (is_safe, reason). Blocks shell metacharacters."""
+    if _SHELL_DANGEROUS.search(cmd):
+        return False, f"Blocked: command contains unsafe shell characters: {_SHELL_DANGEROUS.search(cmd).group()!r}"
+    return True, ""
+
+_SAFE_COMMIT_SHA: str | None = None
 
 # Load the env file to ensure all keys are accessible
 load_dotenv(os.path.expanduser("~/Projects/investogram/.env"))
@@ -394,7 +407,8 @@ def chat_oneshot(model, prompt, use_deep_context=False):
             continue
             
     if not success:
-        sys.exit(1)
+        raise RuntimeError("All models in the fallback chain failed for chat_oneshot.")
+
 
 def handle_exit(messages):
     print(f"\n\033[92mConversation saved to {TEMP_MEM_FILE}. Exiting.\033[0m")
@@ -488,8 +502,14 @@ def repl(model, use_deep_context=False):
             parts = line.split(" ", 1)
             if len(parts) > 1 and parts[1].strip():
                 filepath = parts[1].strip()
-                if os.path.exists(filepath):
-                    with open(filepath, "r") as f:
+                # BUG-02 FIX: Restrict to files within the current working directory
+                cwd = Path(os.getcwd()).resolve()
+                resolved = (cwd / filepath).resolve()
+                if not str(resolved).startswith(str(cwd)):
+                    print(f"\033[91mBlocked: /pin only allows files inside the current project directory.\033[0m")
+                    continue
+                if resolved.exists():
+                    with open(resolved, "r") as f:
                         content = f.read()
                     PINNED_CONTEXT.append({"role": "system", "content": f"[PINNED FILE: {filepath}]\\n{content}"})
                     print(f"\033[92mPinned {filepath} to context permanently.\033[0m")
@@ -503,12 +523,23 @@ def repl(model, use_deep_context=False):
         if line_stripped == "/safe":
             print("\033[93mCreating failsafe snapshot...\033[0m")
             subprocess.run("git add . && git commit -m 'Auto-backup before AI changes'", shell=True)
-            print("\033[92mSnapshot created! Type /restore to undo future changes.\033[0m")
+            # Record the exact SHA so /restore can be precise
+            try:
+                global _SAFE_COMMIT_SHA
+                _SAFE_COMMIT_SHA = subprocess.check_output(
+                    ["git", "rev-parse", "HEAD"], text=True
+                ).strip()
+                print(f"\033[92mSnapshot created! SHA: {_SAFE_COMMIT_SHA[:8]}. Type /restore to undo future changes.\033[0m")
+            except Exception:
+                print("\033[92mSnapshot created! Type /restore to undo future changes.\033[0m")
             continue
             
         if line_stripped == "/restore":
-            print("\033[91mRestoring to last snapshot...\033[0m")
-            subprocess.run("git reset --hard HEAD~1", shell=True)
+            if not _SAFE_COMMIT_SHA:
+                print("\033[91mNo /safe snapshot found in this session. Run /safe first.\033[0m")
+                continue
+            print(f"\033[91mRestoring to /safe snapshot ({_SAFE_COMMIT_SHA[:8]})...\033[0m")
+            subprocess.run(["git", "reset", "--hard", _SAFE_COMMIT_SHA])
             print("\033[92mRestored successfully.\033[0m")
             continue
             
@@ -570,8 +601,15 @@ def repl(model, use_deep_context=False):
             is_test = line.startswith("/test ")
             cmd = line[6:].strip() if is_test else (line[5:].strip() if line.startswith("/run ") else line[1:].strip())
             
+            # BUG-01 FIX: Block shell injection metacharacters
+            safe, reason = _sanitize_cmd(cmd)
+            if not safe:
+                print(f"\033[91m{reason}\033[0m")
+                continue
+
             print(f"\033[93mRunning: {cmd}\033[0m")
-            res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            # Use list form (shell=False) to prevent injection
+            res = subprocess.run(cmd, shell=False, capture_output=True, text=True)
             if res.stdout:
                 print(res.stdout)
                 
@@ -600,6 +638,10 @@ def repl(model, use_deep_context=False):
             
         messages.append({"role": "user", "content": line})
         
+        # BUG-04 FIX: Only update target_model when the smart-routed model itself succeeds
+        # Track the originally smart-routed model to avoid stale fallback bleeding
+        smart_routed_model = target_model if model == "smart" else None
+
         # Priority Fallback Chain
         # OpenRouter model IDs must NOT have an "openrouter/" prefix — use vendor/model:free format directly
         fallback_chain = [target_model, "google/gemma-4-31b-it:free", "nvidia/nemotron-3-super-120b-a12b:free", "openai/gpt-oss-120b:free", "qwen/qwen3-coder:free", "meta-llama/llama-3.3-70b-instruct:free", "gemini-2.5-pro"]
@@ -670,10 +712,16 @@ def repl(model, use_deep_context=False):
                 print()
                 
                 if is_paid:
-                    SESSION_COST += len(assistant_reply) * 0.00001
+                    # Approximate tokens (1 token ≈ 4 chars) then apply per-model rate
+                    approx_tokens = len(assistant_reply) / 4
+                    SESSION_COST += approx_tokens * 0.00001  # ~$10/M tokens
                     
                 success = True
-                target_model = temp_target # update for future context
+                # BUG-04 FIX: Only update target_model if this was the originally intended model
+                if model == "smart" and smart_routed_model and attempt_model == smart_routed_model:
+                    target_model = temp_target
+                elif model != "smart":
+                    target_model = temp_target
                 break 
                 
             except Exception as e:
@@ -722,13 +770,24 @@ def main():
         
         try:
             choice = int(input("Select session to resume: "))
+            if choice < 0 or choice >= len(sessions):
+                raise IndexError("out of range")
             sel = sessions[choice]
             mem_path = os.path.join(SESSION_DIR, sel, "memory.md")
-            shutil.copy(mem_path, TEMP_MEM_FILE)
+            # Convert the markdown file into a proper JSON messages array
+            with open(mem_path, "r") as mf:
+                md_content = mf.read()
+            session_messages = [
+                {"role": "system", "content": f"Resumed session context:\n{md_content}"}
+            ]
+            with open(TEMP_MEM_FILE, "w") as jf:
+                json.dump(session_messages, jf)
             print(f"Loaded session {sel}.")
             repl(model_id, use_deep_context=use_deep)
-        except Exception as e:
+        except (IndexError, ValueError):
             print("Invalid selection.")
+        except Exception as e:
+            print(f"Session load error: {e}")
         sys.exit(0)
         
     if len(args) == 0:

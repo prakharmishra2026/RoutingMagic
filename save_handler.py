@@ -84,12 +84,36 @@ def get_git_info():
     try:
         status = subprocess.check_output(["git", "status", "-s"], stderr=subprocess.DEVNULL, text=True).strip()
         log = subprocess.check_output(["git", "log", "-n", "5", "--oneline"], stderr=subprocess.DEVNULL, text=True).strip()
+        
+        # BUG-06 FIX: Check BOTH uncommitted changes AND committed-but-undocumented changes.
+        # git diff HEAD only catches uncommitted work. If user already committed,
+        # we compare against HEAD~1 to capture recent commit content.
         diff = subprocess.check_output(["git", "diff", "HEAD"], stderr=subprocess.DEVNULL, text=True)
-        # Limit diff size to prevent token blowups
+        if not diff.strip():
+            # No uncommitted changes — check if latest commit is newer than the docs
+            try:
+                last_commit_ts = int(subprocess.check_output(
+                    ["git", "log", "-1", "--format=%ct"], stderr=subprocess.DEVNULL, text=True
+                ).strip())
+                doc_files = ["memory.md", "progress.md", "scratchpad.md", "lessons.md"]
+                docs_mtime = max(
+                    (os.path.getmtime(f) for f in doc_files if os.path.exists(f)),
+                    default=0
+                )
+                if last_commit_ts > docs_mtime:
+                    # Docs are stale — get the diff from the last commit
+                    diff = subprocess.check_output(
+                        ["git", "diff", "HEAD~1", "HEAD"], stderr=subprocess.DEVNULL, text=True
+                    )
+                    print("\033[93m[Save] Detected committed changes not yet reflected in docs. Updating...\033[0m")
+            except Exception:
+                pass
+
         diff_str = diff[:8000].strip()
         return status, log, diff_str
     except Exception:
         return None, None, None
+
 
 def initialize_files(project_name):
     initialized = []
