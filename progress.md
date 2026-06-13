@@ -11,6 +11,10 @@
   * Improved paste collector with rolling-window (200ms) and used shlex.split for shell=False safety (f2e9b5d).
   * Fixed socket leak in is_port_open and sanitize_cmd regex false-positives in systematic-debugging skill (085b24e).
   * Injected Charlie Munger mental models (inversion, first principles) into system prompt for highly rigorous output (6b2fd49).
+- **2025-10-05:**
+  * Fixed REPL: added support for hybrid typed+pasted prompts in bracketed paste mode (baba84b).
+  * Updated project progress and lessons-learned (f216a10).
+  * Saved full progress for phases 5-8, including all 11 bugs, lessons, and systematic-debugging skill (8f32634).
 
 ## Backlog / Next Steps
 - [ ] Push latest changes to GitHub repository.
