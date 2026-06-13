@@ -449,8 +449,11 @@ def read_prompt():
         raise
 
     # Check if the terminal sent the start code of a bracketed paste
-    if first_line.startswith("\x1b[200~"):
-        lines = [first_line[6:]]
+    if "\x1b[200~" in first_line:
+        parts = first_line.split("\x1b[200~", 1)
+        prefix = parts[0]
+        paste_start = parts[1]
+        lines = [prefix + paste_start]
         
         # Check if the end code is already present in the first line
         if "\x1b[201~" in lines[0]:

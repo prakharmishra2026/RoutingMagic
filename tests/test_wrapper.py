@@ -75,3 +75,17 @@ def test_read_prompt_fallback_piped(mocker):
     res = read_prompt()
     assert res == "line1\nline2"
 
+def test_read_prompt_bracketed_hybrid(mocker):
+    from openai_wrapper import read_prompt
+    
+    # Mock input to return typed prefix and bracketed paste start
+    mocker.patch("builtins.input", return_value="Prefix \x1b[200~hello")
+    
+    # Mock sys.stdin.readline
+    readline_mock = mocker.patch("sys.stdin.readline", side_effect=["world\n", "end\x1b[201~\n"])
+    
+    res = read_prompt()
+    assert res == "Prefix hello\nworld\nend"
+    assert readline_mock.call_count == 2
+
+
