@@ -18,6 +18,7 @@ import subprocess
 import shutil
 import time
 import select
+import shlex
 from pathlib import Path
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -441,26 +442,31 @@ def repl(model, use_deep_context=False):
         
     def read_prompt():
         """Read a prompt from stdin, collecting all lines from a multi-line paste
-        into a single string before returning it. This prevents each pasted paragraph
-        from being submitted as a separate prompt."""
+        into a single string before returning it.
+
+        Uses a ROLLING window: the 200ms timeout resets after every received line,
+        so even enormous pastes (thousands of chars) are fully buffered before
+        the prompt is submitted. Normal keypresses see zero delay because stdin
+        has nothing buffered after the single Enter.
+        """
         try:
             first_line = input("\n\033[92m>>> \033[0m")
         except (EOFError, KeyboardInterrupt):
             raise
-        
-        # After receiving the first line, check if stdin has more data buffered
-        # immediately (i.e. the user pasted a block of text). Drain all of it.
+
         lines = [first_line]
         while True:
-            # select with timeout=0 checks if stdin is readable RIGHT NOW (non-blocking)
-            ready, _, _ = select.select([sys.stdin], [], [], 0.05)
+            # 200ms rolling window: resets after every line received.
+            # This handles pastes that arrive in bursts (large clipboard contents)
+            # without adding any perceptible delay for normal interactive typing.
+            ready, _, _ = select.select([sys.stdin], [], [], 0.2)
             if not ready:
-                break  # No more data immediately available — this is a normal keypress
+                break  # No data within 200ms — paste is complete (or just typing)
             next_line = sys.stdin.readline()
             if not next_line:
                 break  # EOF
             lines.append(next_line.rstrip("\n"))
-        
+
         return "\n".join(lines)
 
     while True:
@@ -608,8 +614,14 @@ def repl(model, use_deep_context=False):
                 continue
 
             print(f"\033[93mRunning: {cmd}\033[0m")
-            # Use list form (shell=False) to prevent injection
-            res = subprocess.run(cmd, shell=False, capture_output=True, text=True)
+            # shlex.split parses the command string into a proper argv list
+            # so shell=False works correctly with multi-word commands like "npm start"
+            try:
+                cmd_list = shlex.split(cmd)
+            except ValueError as e:
+                print(f"\033[91mInvalid command syntax: {e}\033[0m")
+                continue
+            res = subprocess.run(cmd_list, shell=False, capture_output=True, text=True)
             if res.stdout:
                 print(res.stdout)
                 
