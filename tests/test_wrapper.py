@@ -31,10 +31,14 @@ def test_no_temperature_models():
 def test_read_prompt_normal(mocker):
     from openai_wrapper import read_prompt
     
-    # Mock input to return a single line
-    mocker.patch("builtins.input", return_value="hello")
-    # Mock select.select to indicate no additional data
-    mocker.patch("select.select", return_value=((), (), ()))
+    mocker.patch("os.isatty", return_value=True)
+    mocker.patch("sys.stdin.fileno", return_value=0)
+    mocker.patch("termios.tcgetattr", return_value=[0, 0, 0, 0, 0, 0, 0])
+    mocker.patch("termios.tcsetattr")
+    mocker.patch("tty.setcbreak")
+    
+    # Mock sys.stdin.read to return character by character
+    mocker.patch("sys.stdin.read", side_effect=["h", "e", "l", "l", "o", "\n"])
     
     res = read_prompt()
     assert res == "hello"
@@ -42,8 +46,16 @@ def test_read_prompt_normal(mocker):
 def test_read_prompt_bracketed_single_line(mocker):
     from openai_wrapper import read_prompt
     
-    # Mock input to return single line bracketed paste
-    mocker.patch("builtins.input", return_value="\x1b[200~hello\x1b[201~")
+    mocker.patch("os.isatty", return_value=True)
+    mocker.patch("sys.stdin.fileno", return_value=0)
+    mocker.patch("termios.tcgetattr", return_value=[0, 0, 0, 0, 0, 0, 0])
+    mocker.patch("termios.tcsetattr")
+    mocker.patch("tty.setcbreak")
+    
+    # Mock sys.stdin.read to return bracketed paste sequence
+    chars = ["\x1b", "[", "2", "0", "0", "~", "h", "e", "l", "l", "o", "\x1b", "[", "2", "0", "1", "~", "\n"]
+    read_mock = mocker.patch("sys.stdin.read", side_effect=chars)
+    mocker.patch("select.select", return_value=(([sys.stdin], [], [])))
     
     res = read_prompt()
     assert res == "hello"
@@ -51,26 +63,27 @@ def test_read_prompt_bracketed_single_line(mocker):
 def test_read_prompt_bracketed_multiline(mocker):
     from openai_wrapper import read_prompt
     
-    # Mock input to return start of bracketed paste
-    mocker.patch("builtins.input", return_value="\x1b[200~hello")
+    mocker.patch("os.isatty", return_value=True)
+    mocker.patch("sys.stdin.fileno", return_value=0)
+    mocker.patch("termios.tcgetattr", return_value=[0, 0, 0, 0, 0, 0, 0])
+    mocker.patch("termios.tcsetattr")
+    mocker.patch("tty.setcbreak")
     
-    # Mock sys.stdin.readline to simulate subsequent lines arriving
-    readline_mock = mocker.patch("sys.stdin.readline", side_effect=["world\n", "end\x1b[201~\n"])
+    # Mock sys.stdin.read to simulate the lines of a bracketed paste
+    chars = ["\x1b", "[", "2", "0", "0", "~", "h", "e", "l", "l", "o", "\n", "w", "o", "r", "l", "d", "\n", "e", "n", "d", "\x1b", "[", "2", "0", "1", "~", "\n"]
+    mocker.patch("sys.stdin.read", side_effect=chars)
+    mocker.patch("select.select", return_value=(([sys.stdin], [], [])))
     
     res = read_prompt()
     assert res == "hello\nworld\nend"
-    assert readline_mock.call_count == 2
 
 def test_read_prompt_fallback_piped(mocker):
     from openai_wrapper import read_prompt
     
-    mocker.patch("builtins.input", return_value="line1")
-    
-    # Mock select.select: ready on first check, not ready on second check
-    mocker.patch("select.select", side_effect=[(([sys.stdin], [], [])), (([], [], ()))])
-    
-    # Mock sys.stdin.readline
-    mocker.patch("sys.stdin.readline", return_value="line2\n")
+    # Mock os.isatty to False (piped input)
+    mocker.patch("os.isatty", return_value=False)
+    mocker.patch("sys.stdin.fileno", return_value=0)
+    mocker.patch("sys.stdin.read", return_value="line1\nline2")
     
     res = read_prompt()
     assert res == "line1\nline2"
@@ -78,14 +91,17 @@ def test_read_prompt_fallback_piped(mocker):
 def test_read_prompt_bracketed_hybrid(mocker):
     from openai_wrapper import read_prompt
     
-    # Mock input to return typed prefix and bracketed paste start
-    mocker.patch("builtins.input", return_value="Prefix \x1b[200~hello")
+    mocker.patch("os.isatty", return_value=True)
+    mocker.patch("sys.stdin.fileno", return_value=0)
+    mocker.patch("termios.tcgetattr", return_value=[0, 0, 0, 0, 0, 0, 0])
+    mocker.patch("termios.tcsetattr")
+    mocker.patch("tty.setcbreak")
     
-    # Mock sys.stdin.readline
-    readline_mock = mocker.patch("sys.stdin.readline", side_effect=["world\n", "end\x1b[201~\n"])
+    # Mock sys.stdin.read to return a typed prefix followed by paste start, then the rest
+    chars = ["P", "r", "e", "f", "i", "x", " ", "\x1b", "[", "2", "0", "0", "~", "h", "e", "l", "l", "o", "\n", "w", "o", "r", "l", "d", "\n", "e", "n", "d", "\x1b", "[", "2", "0", "1", "~", "\n"]
+    mocker.patch("sys.stdin.read", side_effect=chars)
+    mocker.patch("select.select", return_value=(([sys.stdin], [], [])))
     
     res = read_prompt()
     assert res == "Prefix hello\nworld\nend"
-    assert readline_mock.call_count == 2
-
 

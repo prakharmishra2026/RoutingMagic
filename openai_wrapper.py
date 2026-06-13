@@ -20,6 +20,8 @@ import time
 import select
 import shlex
 import atexit
+import tty
+import termios
 from pathlib import Path
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -434,67 +436,122 @@ def cleanup_terminal():
 atexit.register(cleanup_terminal)
 
 def read_prompt():
-    """Read a prompt from stdin. Supports bracketed paste mode to capture
-    multi-line pastes atomically, and falls back to a short timeout select
-    for piped or non-bracketed paste inputs.
+    """Read a prompt from stdin using cbreak mode to prevent terminal freezes
+    and handle large bracketed pastes of any size on macOS/Linux.
     """
-    # Enable bracketed paste mode
+    # Enable bracketed paste mode in terminal
     sys.stdout.write("\033[?2004h")
     sys.stdout.flush()
-    
-    try:
-        first_line = input("\n\033[92m>>> \033[0m")
-    except (EOFError, KeyboardInterrupt):
-        cleanup_terminal()
-        raise
 
-    # Check if the terminal sent the start code of a bracketed paste
-    if "\x1b[200~" in first_line:
-        parts = first_line.split("\x1b[200~", 1)
-        prefix = parts[0]
-        paste_start = parts[1]
-        lines = [prefix + paste_start]
+    fd = sys.stdin.fileno()
+    
+    # If not a TTY (piped input), read all of stdin
+    if not os.isatty(fd):
+        content = sys.stdin.read()
+        cleanup_terminal()
+        if not content:
+            raise EOFError()
+        return content.rstrip("\r\n")
+
+    # Display prompt
+    sys.stdout.write("\n\033[92m>>> \033[0m")
+    sys.stdout.flush()
+
+    old_settings = termios.tcgetattr(fd)
+    try:
+        # Set to cbreak mode, and disable ECHO
+        tty.setcbreak(fd)
+        new_settings = termios.tcgetattr(fd)
+        new_settings[3] = new_settings[3] & ~termios.ECHO
+        termios.tcsetattr(fd, termios.TCSADRAIN, new_settings)
         
-        # Check if the end code is already present in the first line
-        if "\x1b[201~" in lines[0]:
-            lines[0] = lines[0].replace("\x1b[201~", "")
-            cleanup_terminal()
-            return lines[0]
-            
-        # Read subsequent lines until the end bracket sequence is encountered
+        buffer = []
+        
         while True:
-            try:
-                next_line = sys.stdin.readline()
-            except (KeyboardInterrupt, EOFError):
-                cleanup_terminal()
-                raise
-            except Exception:
-                break
-            if not next_line:
-                break
-            if "\x1b[201~" in next_line:
-                clean_line = next_line.replace("\x1b[201~", "").rstrip("\r\n")
-                lines.append(clean_line)
-                break
-            lines.append(next_line.rstrip("\r\n"))
+            # Read 1 character
+            char = sys.stdin.read(1)
+            if not char:
+                raise EOFError()
+                
+            # Handle Escape sequences (like arrow keys, bracketed paste)
+            if char == "\x1b":
+                # Check if more characters are available immediately
+                seq = [char]
+                while True:
+                    # Sniff if more characters are available immediately
+                    r, _, _ = select.select([sys.stdin], [], [], 0.05)
+                    if not r:
+                        break
+                    next_c = sys.stdin.read(1)
+                    seq.append(next_c)
+                    seq_str = "".join(seq)
+                    if seq_str == "\x1b[200~" or seq_str == "\x1b[201~":
+                        break
+                    if len(seq) >= 8:
+                        break
+                        
+                seq_str = "".join(seq)
+                if seq_str == "\x1b[200~":
+                    # Paste start detected! Read until we see the paste end sequence \x1b[201~
+                    paste_chars = []
+                    while True:
+                        c = sys.stdin.read(1)
+                        if not c:
+                            break
+                        paste_chars.append(c)
+                        if "".join(paste_chars[-6:]) == "\x1b[201~":
+                            paste_chars = paste_chars[:-6]
+                            break
+                    pasted_text = "".join(paste_chars)
+                    buffer.extend(list(pasted_text))
+                    sys.stdout.write(pasted_text)
+                    sys.stdout.flush()
+                    
+                    # If the paste had a trailing newline, we automatically submit the prompt
+                    if pasted_text.endswith(("\n", "\r")):
+                        break
+                    continue
+                elif seq_str == "\x1b[201~":
+                    # Ignore stray paste end codes
+                    continue
+                else:
+                    # Ignore other escape sequences (like arrow keys)
+                    continue
             
-        cleanup_terminal()
-        return "\n".join(lines)
-    else:
-        # Fallback for piped inputs or terminals that don't support bracketed paste.
-        # Reads fast-arriving inputs with a short, snappy 50ms timeout.
-        lines = [first_line]
-        while True:
-            ready, _, _ = select.select([sys.stdin], [], [], 0.05)
-            if not ready:
+            # Handle Ctrl-D (EOF)
+            if char == "\x04":
+                if not buffer:
+                    raise EOFError()
+                continue
+                
+            # Handle Backspace / Delete
+            if char in ("\x7f", "\b"):
+                if buffer:
+                    popped = buffer.pop()
+                    if popped in ("\n", "\r"):
+                        sys.stdout.write("\033[A")
+                    else:
+                        sys.stdout.write("\b \b")
+                    sys.stdout.flush()
+                continue
+                
+            # Handle Enter (Newline)
+            if char in ("\n", "\r"):
+                sys.stdout.write("\n")
+                sys.stdout.flush()
                 break
-            next_line = sys.stdin.readline()
-            if not next_line:
-                break
-            lines.append(next_line.rstrip("\r\n"))
+                
+            # Normal character
+            buffer.append(char)
+            sys.stdout.write(char)
+            sys.stdout.flush()
             
+    finally:
+        # Restore terminal settings
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
         cleanup_terminal()
-        return "\n".join(lines)
+        
+    return "".join(buffer)
 
 def handle_exit(messages):
     print(f"\n\033[92mConversation saved to {TEMP_MEM_FILE}. Exiting.\033[0m")
@@ -659,7 +716,9 @@ def repl(model, use_deep_context=False):
                 if m_id == "smart": prefix = "   "
                 print(f"{prefix}[{i}] {desc}")
                 
-            choice = input("Select model (0-5): ").strip()
+            sys.stdout.write("Select model (0-5): ")
+            sys.stdout.flush()
+            choice = sys.stdin.readline().strip()
             try:
                 idx = int(choice)
                 if 0 <= idx < len(models_list):
@@ -705,7 +764,9 @@ def repl(model, use_deep_context=False):
                     print("\033[93mAuto-correcting test failure...\033[0m")
                     line = f"The test `{cmd}` failed with this error:\\n```\\n{err[:2000]}\\n```\\nPlease explain the error and provide the corrected code."
                 else:
-                    ans = input("Would you like me to explain and fix this error? (y/N): ")
+                    sys.stdout.write("Would you like me to explain and fix this error? (y/N): ")
+                    sys.stdout.flush()
+                    ans = sys.stdin.readline().strip()
                     if ans.lower() == 'y':
                         line = f"I ran `{cmd}` and it failed with this error:\\n```\\n{err[:2000]}\\n```\\nPlease explain why and how to fix it."
                     else:
@@ -853,7 +914,9 @@ def main():
             print(f"[{i}] {s}")
         
         try:
-            choice = int(input("Select session to resume: "))
+            sys.stdout.write("Select session to resume: ")
+            sys.stdout.flush()
+            choice = int(sys.stdin.readline().strip())
             if choice < 0 or choice >= len(sessions):
                 raise IndexError("out of range")
             sel = sessions[choice]
