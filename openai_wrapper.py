@@ -24,11 +24,18 @@ from openai import OpenAI
 from dotenv import load_dotenv
 
 # --- Shell command security helpers ---
-# Characters that enable subshell execution or command chaining
-_SHELL_DANGEROUS = re.compile(r'[;|&`$<>]|\$\(')
+# Characters that enable subshell execution or command chaining.
+# Deliberately narrow: blocks ; | & ` and $( ${ variable expansions and redirects < >
+# Does NOT block bare $ (e.g. inside quoted strings like python3 -c "...$var...")
+# because shell=False+shlex means the shell never interprets them.
+_SHELL_DANGEROUS = re.compile(r'[;|&`<>]|\$[({]')
 
 def _sanitize_cmd(cmd: str) -> tuple[bool, str]:
-    """Return (is_safe, reason). Blocks shell metacharacters."""
+    """Return (is_safe, reason). Blocks shell metacharacters that enable injection.
+    
+    Allows: ls -la, npm start, python3 -c "...", VAR=x prog (shlex handles these safely)
+    Blocks: rm -rf; echo, $(whoami), `id`, cat x | grep y, echo x > file
+    """
     if _SHELL_DANGEROUS.search(cmd):
         return False, f"Blocked: command contains unsafe shell characters: {_SHELL_DANGEROUS.search(cmd).group()!r}"
     return True, ""
@@ -182,14 +189,14 @@ def get_deep_context():
     return get_instant_context()
 
 def is_port_open(ip, port):
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.settimeout(0.2)
-    try:
-        s.connect((ip, int(port)))
-        s.close()
-        return True
-    except:
-        return False
+    """Check if a TCP port is open. Uses context manager to ensure socket is always closed."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.2)
+        try:
+            s.connect((ip, int(port)))
+            return True
+        except Exception:
+            return False
 
 def smart_route(prompt):
     """Intelligently routes the prompt to the best available free model."""
