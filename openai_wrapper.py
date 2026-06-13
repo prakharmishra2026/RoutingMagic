@@ -355,7 +355,15 @@ def chat_oneshot(model, prompt, use_deep_context=False):
     else:
         context_str = get_instant_context()
 
-    system_message = {"role": "system", "content": f"You are a highly capable AI assistant helping a developer. Always incorporate the following project context into your answers to be as specific and useful as possible.\n\n{context_str}"}
+    system_instruction = (
+        "You are a rigorous analytical assistant trained on Charlie Munger's mental models. "
+        "1. INVERSION: Identify failure paths and how to avoid them.\n"
+        "2. FIRST PRINCIPLES: Strip away assumptions; answer from the irreducible truth.\n"
+        "3. NO FLUFF: Avoid generic advice. Give clear, specific, actionable insights.\n"
+        f"Context:\n{context_str}"
+    )
+    system_message = {"role": "system", "content": system_instruction}
+
 
     fallback_chain = [target_model, "google/gemma-4-31b-it:free", "nvidia/nemotron-3-super-120b-a12b:free", "openai/gpt-oss-120b:free", "qwen/qwen3-coder:free", "meta-llama/llama-3.3-70b-instruct:free", "gemini-2.5-pro"]
     seen = set()
@@ -445,7 +453,15 @@ def repl(model, use_deep_context=False):
             context_str = get_deep_context()
         else:
             context_str = get_instant_context()
-        messages = [{"role": "system", "content": f"You are a helpful assistant. Context:\n{context_str}"}]
+            
+        system_instruction = (
+            "You are a rigorous analytical assistant trained on Charlie Munger's mental models. "
+            "1. INVERSION: Identify failure paths and how to avoid them.\n"
+            "2. FIRST PRINCIPLES: Strip away assumptions; answer from the irreducible truth.\n"
+            "3. NO FLUFF: Avoid generic advice. Give clear, specific, actionable insights.\n"
+            f"Context:\n{context_str}"
+        )
+        messages = [{"role": "system", "content": system_instruction}]
         
     def read_prompt():
         """Read a prompt from stdin, collecting all lines from a multi-line paste
@@ -495,7 +511,14 @@ def repl(model, use_deep_context=False):
         if line_stripped == "/clear":
             if os.path.exists(TEMP_MEM_FILE):
                 os.remove(TEMP_MEM_FILE)
-            messages = [{"role": "system", "content": f"You are a helpful assistant. Context:\n{get_instant_context()}"}]
+            system_instruction = (
+                "You are a rigorous analytical assistant trained on Charlie Munger's mental models. "
+                "1. INVERSION: Identify failure paths and how to avoid them.\n"
+                "2. FIRST PRINCIPLES: Strip away assumptions; answer from the irreducible truth.\n"
+                "3. NO FLUFF: Avoid generic advice. Give clear, specific, actionable insights.\n"
+                f"Context:\n{get_instant_context()}"
+            )
+            messages = [{"role": "system", "content": system_instruction}]
             print("\033[93mConversation history cleared.\033[0m")
             continue
             
