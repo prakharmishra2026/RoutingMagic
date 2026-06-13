@@ -19,6 +19,7 @@ import shutil
 import time
 import select
 import shlex
+import atexit
 from pathlib import Path
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -426,8 +427,75 @@ def chat_oneshot(model, prompt, use_deep_context=False):
         raise RuntimeError("All models in the fallback chain failed for chat_oneshot.")
 
 
+def cleanup_terminal():
+    sys.stdout.write("\033[?2004l")
+    sys.stdout.flush()
+
+atexit.register(cleanup_terminal)
+
+def read_prompt():
+    """Read a prompt from stdin. Supports bracketed paste mode to capture
+    multi-line pastes atomically, and falls back to a short timeout select
+    for piped or non-bracketed paste inputs.
+    """
+    # Enable bracketed paste mode
+    sys.stdout.write("\033[?2004h")
+    sys.stdout.flush()
+    
+    try:
+        first_line = input("\n\033[92m>>> \033[0m")
+    except (EOFError, KeyboardInterrupt):
+        cleanup_terminal()
+        raise
+
+    # Check if the terminal sent the start code of a bracketed paste
+    if first_line.startswith("\x1b[200~"):
+        lines = [first_line[6:]]
+        
+        # Check if the end code is already present in the first line
+        if "\x1b[201~" in lines[0]:
+            lines[0] = lines[0].replace("\x1b[201~", "")
+            cleanup_terminal()
+            return lines[0]
+            
+        # Read subsequent lines until the end bracket sequence is encountered
+        while True:
+            try:
+                next_line = sys.stdin.readline()
+            except (KeyboardInterrupt, EOFError):
+                cleanup_terminal()
+                raise
+            except Exception:
+                break
+            if not next_line:
+                break
+            if "\x1b[201~" in next_line:
+                clean_line = next_line.replace("\x1b[201~", "").rstrip("\r\n")
+                lines.append(clean_line)
+                break
+            lines.append(next_line.rstrip("\r\n"))
+            
+        cleanup_terminal()
+        return "\n".join(lines)
+    else:
+        # Fallback for piped inputs or terminals that don't support bracketed paste.
+        # Reads fast-arriving inputs with a short, snappy 50ms timeout.
+        lines = [first_line]
+        while True:
+            ready, _, _ = select.select([sys.stdin], [], [], 0.05)
+            if not ready:
+                break
+            next_line = sys.stdin.readline()
+            if not next_line:
+                break
+            lines.append(next_line.rstrip("\r\n"))
+            
+        cleanup_terminal()
+        return "\n".join(lines)
+
 def handle_exit(messages):
     print(f"\n\033[92mConversation saved to {TEMP_MEM_FILE}. Exiting.\033[0m")
+    cleanup_terminal()
 
 def repl(model, use_deep_context=False):
     global WORKSPACE, TEMP_MEM_FILE, SESSION_COST, daily_requests, request_timestamps
@@ -462,35 +530,6 @@ def repl(model, use_deep_context=False):
             f"Context:\n{context_str}"
         )
         messages = [{"role": "system", "content": system_instruction}]
-        
-    def read_prompt():
-        """Read a prompt from stdin, collecting all lines from a multi-line paste
-        into a single string before returning it.
-
-        Uses a ROLLING window: the 200ms timeout resets after every received line,
-        so even enormous pastes (thousands of chars) are fully buffered before
-        the prompt is submitted. Normal keypresses see zero delay because stdin
-        has nothing buffered after the single Enter.
-        """
-        try:
-            first_line = input("\n\033[92m>>> \033[0m")
-        except (EOFError, KeyboardInterrupt):
-            raise
-
-        lines = [first_line]
-        while True:
-            # 200ms rolling window: resets after every line received.
-            # This handles pastes that arrive in bursts (large clipboard contents)
-            # without adding any perceptible delay for normal interactive typing.
-            ready, _, _ = select.select([sys.stdin], [], [], 0.2)
-            if not ready:
-                break  # No data within 200ms — paste is complete (or just typing)
-            next_line = sys.stdin.readline()
-            if not next_line:
-                break  # EOF
-            lines.append(next_line.rstrip("\n"))
-
-        return "\n".join(lines)
 
     while True:
         try:

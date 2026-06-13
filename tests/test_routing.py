@@ -9,24 +9,24 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from openai_wrapper import smart_route, get_instant_context
 
 def test_smart_route_logic():
-    # Test planning/reasoning regex
-    model, task = smart_route("Please reason deeply about this architecture plan")
-    assert "nemotron-3-ultra" in model
-    assert task == "deep_reasoning_planning"
+    # Test financial/math reasoning logic
+    model, task = smart_route("Please reason deeply about this math problem")
+    assert "deepseek-r1" in model
+    assert task == "financial_math_reasoning"
+    
+    # Test long context / planning
+    model, task = smart_route("Here is a large repo codebase architecture plan")
+    assert "nemotron-3-super-120b" in model
+    assert task == "long_context_agentic"
     
     # Test coding regex
     model, task = smart_route("Can you fix this bug in the React code?")
-    assert "deepseek-v4-flash" in model
+    assert "qwen3-coder" in model
     assert task == "fast_coding"
-    
-    # Test long horizon coding regex
-    model, task = smart_route("Here is a large repo we need to restructure over a long workflow")
-    assert "kimi-k2.6" in model
-    assert task == "long_horizon_agentic_coding"
     
     # Test default fallback
     model, task = smart_route("Hello how are you?")
-    assert "glm-5.1" in model
+    assert "gemma-4-31b-it" in model
     assert task == "default_general"
 
 def test_get_instant_context(mocker):

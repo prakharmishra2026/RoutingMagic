@@ -27,5 +27,51 @@ def test_no_temperature_models():
     assert "o3-mini" in NO_TEMPERATURE_MODELS
     assert "o1" in NO_TEMPERATURE_MODELS
     assert "o1-mini" in NO_TEMPERATURE_MODELS
+
+def test_read_prompt_normal(mocker):
+    from openai_wrapper import read_prompt
     
-    # Just asserting it exists to prevent regressions where someone re-adds temp to these
+    # Mock input to return a single line
+    mocker.patch("builtins.input", return_value="hello")
+    # Mock select.select to indicate no additional data
+    mocker.patch("select.select", return_value=((), (), ()))
+    
+    res = read_prompt()
+    assert res == "hello"
+
+def test_read_prompt_bracketed_single_line(mocker):
+    from openai_wrapper import read_prompt
+    
+    # Mock input to return single line bracketed paste
+    mocker.patch("builtins.input", return_value="\x1b[200~hello\x1b[201~")
+    
+    res = read_prompt()
+    assert res == "hello"
+
+def test_read_prompt_bracketed_multiline(mocker):
+    from openai_wrapper import read_prompt
+    
+    # Mock input to return start of bracketed paste
+    mocker.patch("builtins.input", return_value="\x1b[200~hello")
+    
+    # Mock sys.stdin.readline to simulate subsequent lines arriving
+    readline_mock = mocker.patch("sys.stdin.readline", side_effect=["world\n", "end\x1b[201~\n"])
+    
+    res = read_prompt()
+    assert res == "hello\nworld\nend"
+    assert readline_mock.call_count == 2
+
+def test_read_prompt_fallback_piped(mocker):
+    from openai_wrapper import read_prompt
+    
+    mocker.patch("builtins.input", return_value="line1")
+    
+    # Mock select.select: ready on first check, not ready on second check
+    mocker.patch("select.select", side_effect=[(([sys.stdin], [], [])), (([], [], ()))])
+    
+    # Mock sys.stdin.readline
+    mocker.patch("sys.stdin.readline", return_value="line2\n")
+    
+    res = read_prompt()
+    assert res == "line1\nline2"
+
