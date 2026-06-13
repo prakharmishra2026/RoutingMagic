@@ -207,7 +207,7 @@ def smart_route(prompt):
     
     # 1. Financial/Math Reasoning & Deep Logic -> DeepSeek R1 (free)
     if re.search(r'\b(math|financial analysis|deep reasoning|o1|complex logic|tradeoffs|step-by-step|chain of thought|deep analysis)\b', prompt_lower):
-        return "deepseek/deepseek-r1:free", "financial_math_reasoning"
+        return "nvidia/nemotron-3-super-120b-a12b:free", "financial_math_reasoning"
         
     # 2. Long Document RAG & Heavy Agentic Planning -> Nemotron 3 Super 120B
     if re.search(r'\b(large repo|long doc|architecture|strategy|plan|tool orchestration|codebase reasoning|massive context|rag|planning)\b', prompt_lower):
@@ -701,8 +701,8 @@ def repl(model, use_deep_context=False):
                 ("smart", "Auto (Smart Router)"),
                 ("google/gemma-4-31b-it:free", "Gemma-4 31B · OpenRouter (Best Free General)"),
                 ("qwen/qwen3-coder:free", "Qwen3 Coder 480B · OpenRouter (Best Free Code)"),
-                ("nvidia/nemotron-3-super-120b-a12b:free", "Nemotron 3 Super 120B · OpenRouter (1M Context)"),
-                ("deepseek/deepseek-r1:free", "DeepSeek R1 · OpenRouter (Math/Reasoning)"),
+                ("nvidia/nemotron-3-super-120b-a12b:free", "Nemotron 3 Super 120B · OpenRouter (Reasoning & 1M Context)"),
+                ("deepseek/deepseek-r1", "DeepSeek R1 · OpenRouter (Paid Reasoning Anchor)"),
                 ("meta-llama/llama-3.3-70b-instruct:free", "Llama-3.3 70B · OpenRouter (Tools/JSON)"),
                 ("nvidia/llama-3.3-nemotron-super-49b-v1.5", "Nemotron Super 49B · NIM (Flagship)"),
                 ("gemini-2.5-pro", "Gemini 2.5 Pro · Google (Paid Anchor)"),

@@ -10,16 +10,16 @@ import openai_wrapper
 from openai_wrapper import smart_route, get_client_and_model
 
 class TestRoutingMagic(unittest.TestCase):
-    # 1. Exact keyword 'math' -> deepseek-r1
+    # 1. Exact keyword 'math' -> nemotron-3-super-120b
     def test_smart_route_math(self):
         model, role = smart_route("Help me solve this math problem")
-        self.assertEqual(model, "deepseek/deepseek-r1:free")
+        self.assertEqual(model, "nvidia/nemotron-3-super-120b-a12b:free")
         self.assertEqual(role, "financial_math_reasoning")
 
-    # 2. Phrasing 'financial analysis' -> deepseek-r1
+    # 2. Phrasing 'financial analysis' -> nemotron-3-super-120b
     def test_smart_route_financial_analysis(self):
         model, role = smart_route("Can you do a financial analysis?")
-        self.assertEqual(model, "deepseek/deepseek-r1:free")
+        self.assertEqual(model, "nvidia/nemotron-3-super-120b-a12b:free")
 
     # 3. Planning 'large repo' -> nemotron-3-super-120b
     def test_smart_route_large_repo(self):
@@ -66,7 +66,7 @@ class TestRoutingMagic(unittest.TestCase):
         model, role = smart_route("can you parse this PDF please?")
         self.assertEqual(model, "nvidia/nemotron-ocr-v1")
         model2, role2 = smart_route("MATH tradeoffs")
-        self.assertEqual(model2, "deepseek/deepseek-r1:free")
+        self.assertEqual(model2, "nvidia/nemotron-3-super-120b-a12b:free")
 
     # 12. Context missing package.json
     @patch('openai_wrapper.os.path.exists')
@@ -164,10 +164,10 @@ class TestRoutingMagic(unittest.TestCase):
     @patch('openai_wrapper.get_instant_context')
     def test_chat_oneshot_smart(self, mock_gic, mock_get_client, mock_smart_route):
         mock_gic.return_value = ""
-        mock_smart_route.return_value = ("deepseek/deepseek-r1:free", "role")
+        mock_smart_route.return_value = ("nvidia/nemotron-3-super-120b-a12b:free", "role")
         mock_client = MagicMock()
         mock_client.chat.completions.create.return_value.choices = [MagicMock(message=MagicMock(content="smart routed!"))]
-        mock_get_client.return_value = (mock_client, "deepseek/deepseek-r1:free")
+        mock_get_client.return_value = (mock_client, "nvidia/nemotron-3-super-120b-a12b:free")
         
         openai_wrapper.chat_oneshot("smart", "math")
         self.assertTrue(mock_client.chat.completions.create.called)

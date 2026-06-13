@@ -11,3 +11,7 @@
 - Keep `.zshrc` aliases decoupled from Python logic so the terminal commands `ask`, `chat`, and `save` inject cleanly into any workspace.
 - Rely on local `git reset --hard` for the `undo/restore` functionality rather than trying to track specific LLM file modifications manually.
 - **Systematic Debugging:** Implementing a structured debugging process (like the systematic-debugging skill) helps prevent shortcuts and ensures root cause resolution, reducing recurring issues.
+- **Live Model Refresh:** Statically defined model lists rot immediately (e.g., `deepseek-r1:free` vanished from OpenRouter). Live querying from the OpenRouter model registry `/api/v1/models` is necessary to prevent outages and auto-discover new cost-optimal free models.
+- **Deterministic Floor/Safety Gates:** Never trust an LLM "Judge" or "Committee" to enforce final safety limits (e.g. margin of safety, leverage limits). During tests, the LLM Judge correctly computed breaches but still output a `BUY` recommendation. Safety must be enforced by a hardcoded Python gate that can downgrade but never upgrade a verdict.
+- **Latency vs. Reasoning:** Reasoning models introduce significant latency (~32s p95). Non-reasoning models must be utilized for time-sensitive interactive flows, reserving reasoning models only for asynchronous advisory audits and explanations.
+
