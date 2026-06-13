@@ -6,7 +6,7 @@
  - **Phase 3:** Converted to an advanced IDE-like Terminal Protocol with auto-commit failsafes, cost/rate-limit tracking, model fallback chains, workspace context isolation, and smart `stderr` error interception.
  - **Phase 4:** Built `save_handler.py` to automate maintaining project state via Git diff analysis and LLM summarization.
  - **2025-10-03:** Added systematic-debugging skill to agent's toolkit (.agents/skills/systematic-debugging) to improve root cause analysis during development. This includes CREATION-LOG.md and SKILL.md files.
- - **2025-10-04:** 
+ - **2025-10-04:**
    * Fixed REPL: added support for bracketed paste mode and prevented terminal deadlocks on macOS (fc9226c).
    * Improved paste collector with rolling-window (200ms) and used shlex.split for shell=False safety (f2e9b5d).
    * Fixed socket leak in is_port_open and sanitize_cmd regex false-positives in systematic-debugging skill (085b24e).
@@ -18,6 +18,8 @@
  - **2025-10-06:**
    * Fixed REPL: use non-canonical cbreak mode to prevent terminal freezes on large pastes (562640b)
    * Docs: save progress for hybrid paste fix (cc46ada)
+ - **2025-10-07:**
+   * Fixed router: replaced vanished deepseek-r1:free with nemotron-3-super and documented learnings from live routing experiment (0a2bf46)
 
 ## Backlog / Next Steps
  - [ ] Push latest changes to GitHub repository.
