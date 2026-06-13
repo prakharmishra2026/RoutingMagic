@@ -17,6 +17,7 @@ import json
 import subprocess
 import shutil
 import time
+import select
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -424,9 +425,33 @@ def repl(model, use_deep_context=False):
             context_str = get_instant_context()
         messages = [{"role": "system", "content": f"You are a helpful assistant. Context:\n{context_str}"}]
         
+    def read_prompt():
+        """Read a prompt from stdin, collecting all lines from a multi-line paste
+        into a single string before returning it. This prevents each pasted paragraph
+        from being submitted as a separate prompt."""
+        try:
+            first_line = input("\n\033[92m>>> \033[0m")
+        except (EOFError, KeyboardInterrupt):
+            raise
+        
+        # After receiving the first line, check if stdin has more data buffered
+        # immediately (i.e. the user pasted a block of text). Drain all of it.
+        lines = [first_line]
+        while True:
+            # select with timeout=0 checks if stdin is readable RIGHT NOW (non-blocking)
+            ready, _, _ = select.select([sys.stdin], [], [], 0.05)
+            if not ready:
+                break  # No more data immediately available — this is a normal keypress
+            next_line = sys.stdin.readline()
+            if not next_line:
+                break  # EOF
+            lines.append(next_line.rstrip("\n"))
+        
+        return "\n".join(lines)
+
     while True:
         try:
-            line = input("\n\033[92m>>> \033[0m")
+            line = read_prompt()
         except (EOFError, KeyboardInterrupt):
             handle_exit(messages)
             break
