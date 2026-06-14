@@ -27,6 +27,10 @@
    * Updated `README.md` and `lessons.md` to document the council feature and parallel execution latency mitigation.
  - **2026-06-15:**
    * Fixed paste auto-submission, handled empty choices NoneType error, added backup free fallback pool, and implemented in-place reasoning display (dde51fa).
+ - **2026-06-16:**
+   * Added chpwd directory hook to auto-place `save_handler.py` at repository roots when changing directories (7acf324).
+   * Updated README.md with documentation for multi-step pastes and in-place reasoning features (f46b443).
+   * Enhanced the LLM Council to use a dynamic 3-model configuration and added REPL aliases (`/council`, `/MC`, `/mc`) and global shell aliases for quick access (ba9f050).
 
 ## Backlog / Next Steps
  - [x] Implement LLM Council multi-agent deliberation.
