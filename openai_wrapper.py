@@ -1304,9 +1304,38 @@ def read_prompt():
                             paste_chars = paste_chars[:-6]
                             break
                     pasted_text = "".join(paste_chars)
-                    buffer.extend(list(pasted_text))
-                    sys.stdout.write(pasted_text)
-                    sys.stdout.flush()
+                    if (pasted_text == "" or pasted_text.isspace()) and check_clipboard_has_image():
+                        sys.stdout.write("\n\033[92m[Paste] Detected image in macOS clipboard. Saving...\033[0m\n")
+                        sys.stdout.flush()
+                        dest = os.path.abspath(".rm_pasted_image.png")
+                        ext = extract_clipboard_image(dest)
+                        if ext:
+                            sys.stdout.write(f"\033[92m[Paste] Image saved to {dest}.\033[0m\n")
+                            sys.stdout.write("\033[93mEnter prompt for image (default: 'Describe this image in detail'): \033[0m")
+                            sys.stdout.flush()
+                            
+                            # Temporarily restore settings to read a whole line for prompt
+                            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                            try:
+                                user_prompt = sys.stdin.readline().strip()
+                            finally:
+                                # Re-enable cbreak mode
+                                tty.setcbreak(fd)
+                                new_settings = termios.tcgetattr(fd)
+                                new_settings[3] = new_settings[3] & ~termios.ECHO
+                                termios.tcsetattr(fd, termios.TCSADRAIN, new_settings)
+                                
+                            if not user_prompt:
+                                user_prompt = "Describe this image in detail and summarize the key information shown."
+                                
+                            return f"/paste {user_prompt}"
+                        else:
+                            sys.stdout.write("\033[91m[Paste] Error extracting image from clipboard.\033[0m\n>>> ")
+                            sys.stdout.flush()
+                    else:
+                        buffer.extend(list(pasted_text))
+                        sys.stdout.write(pasted_text)
+                        sys.stdout.flush()
                     continue
                 elif seq_str == "\x1b[201~":
                     # Ignore stray paste end codes
@@ -1402,7 +1431,8 @@ def repl(model, use_deep_context=False):
         client, target_model = None, None
         print(f"🧠 Smart Router REPL")
         
-    print("Type your message. Exit with Ctrl-D or empty line.\n")
+    print("Type your message. Exit with Ctrl-D or empty line.")
+    print("\033[90m[Vision] Paste clipboard images directly with Ctrl+V (or Cmd+V if supported), or type /paste\033[0m\n")
     
     messages = load_temp_memory()
     if messages:
