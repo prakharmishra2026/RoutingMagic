@@ -633,52 +633,132 @@ def run_council(prompt, use_deep_context=False):
     except Exception as e:
         print(f"\033[93m[LLM Council] Warning: Live registry fetch failed ({e}). Using hardcoded model defaults.\033[0m")
 
-    # Dynamically select 4 council models
+    # Classify prompt for specialty prioritizing
+    prompt_lower = prompt.lower()
+    if re.search(r'\b(math|logic|proof|prove|algorithm|complex logic|equation|derivation|reason|step-by-step|step by step|chain of thought|deep reasoning|o1|critically audit|audit)\b', prompt_lower):
+        category = "reasoning"
+    elif re.search(r'\b(code|coding|frontend|backend|fastapi|react|tailwind|html|css|javascript|python|java|c\+\+|bug|exception|compile|syntax|refactor|endpoint|api|database|sql)\b', prompt_lower):
+        category = "coding"
+    elif re.search(r'\b(agent|mcp|tool|function|json|xml|yaml|parse|schema|structure|pipeline|webhook|automate|integration)\b', prompt_lower):
+        category = "agentic"
+    else:
+        category = "general"
+
+    def select_coder(models, excluded_set):
+        for m in models:
+            m_id = m.get("id", "").lower()
+            if m_id in excluded_set:
+                continue
+            if "coder" in m_id or "code" in m_id:
+                if avg_price_per_m(m) == 0.0:
+                    return m["id"]
+        filtered = [m for m in models if m.get("id") not in excluded_set]
+        return get_dynamic_model(filtered, free=True, required_params=["structured_outputs"], fallback_default="qwen/qwen3-coder:free")
+
+    def select_reasoning(models, excluded_set):
+        for m in models:
+            m_id = m.get("id", "").lower()
+            if m_id in excluded_set:
+                continue
+            sp = set(m.get("supported_parameters", []) or [])
+            if "reasoning" in sp:
+                if avg_price_per_m(m) == 0.0:
+                    return m["id"]
+        filtered = [m for m in models if m.get("id") not in excluded_set]
+        return get_dynamic_model(filtered, free=True, required_params=["reasoning"], fallback_default="nvidia/nemotron-3-super-120b-a12b:free")
+
+    def select_agentic(models, excluded_set):
+        for m in models:
+            m_id = m.get("id", "").lower()
+            if m_id in excluded_set:
+                continue
+            sp = set(m.get("supported_parameters", []) or [])
+            if "structured_outputs" in sp or "tools" in sp:
+                if avg_price_per_m(m) == 0.0:
+                    return m["id"]
+        filtered = [m for m in models if m.get("id") not in excluded_set]
+        return get_dynamic_model(filtered, free=True, fallback_default="meta-llama/llama-3.3-70b-instruct:free")
+
+    def select_general(models, excluded_set):
+        for m in models:
+            m_id = m.get("id", "").lower()
+            if m_id in excluded_set:
+                continue
+            if "gemma" in m_id or "llama" in m_id:
+                if avg_price_per_m(m) == 0.0:
+                    return m["id"]
+        filtered = [m for m in models if m.get("id") not in excluded_set]
+        return get_dynamic_model(filtered, free=True, fallback_default="google/gemma-4-31b-it:free")
+
+    # Dynamically select 3 distinct council models
     council_models = []
+    excluded = set()
     if models_list:
         try:
-            # 1. Coding Specialist (free, coder/code in ID, prefers structured outputs)
-            c_model = get_dynamic_model(models_list, free=True, fallback_default="qwen/qwen3-coder:free", 
-                                        min_context=128000, required_params=["structured_outputs"])
-            council_models.append(c_model)
-            
-            # 2. Reasoning/Context Specialist (free, supports reasoning)
-            r_model = get_dynamic_model(models_list, free=True, fallback_default="nvidia/nemotron-3-super-120b-a12b:free",
-                                        min_context=128000, required_params=["reasoning"])
-            if r_model not in council_models:
-                council_models.append(r_model)
+            if category == "coding":
+                m1 = select_coder(models_list, excluded)
+                council_models.append(m1)
+                excluded.add(m1)
+                m2 = select_reasoning(models_list, excluded)
+                council_models.append(m2)
+                excluded.add(m2)
+                m3 = select_general(models_list, excluded)
+                council_models.append(m3)
+                excluded.add(m3)
+            elif category == "reasoning":
+                m1 = select_reasoning(models_list, excluded)
+                council_models.append(m1)
+                excluded.add(m1)
+                m2 = select_general(models_list, excluded)
+                council_models.append(m2)
+                excluded.add(m2)
+                m3 = select_coder(models_list, excluded)
+                council_models.append(m3)
+                excluded.add(m3)
+            elif category == "agentic":
+                m1 = select_agentic(models_list, excluded)
+                council_models.append(m1)
+                excluded.add(m1)
+                m2 = select_coder(models_list, excluded)
+                council_models.append(m2)
+                excluded.add(m2)
+                m3 = select_reasoning(models_list, excluded)
+                council_models.append(m3)
+                excluded.add(m3)
+            else:
+                m1 = select_general(models_list, excluded)
+                council_models.append(m1)
+                excluded.add(m1)
+                m2 = select_reasoning(models_list, excluded)
+                council_models.append(m2)
+                excluded.add(m2)
+                m3 = select_coder(models_list, excluded)
+                council_models.append(m3)
+                excluded.add(m3)
                 
-            # 3. Instruction/Agentic Specialist (free, general context)
-            i_model = get_dynamic_model(models_list, free=True, fallback_default="meta-llama/llama-3.3-70b-instruct:free",
-                                        min_context=128000)
-            if i_model not in council_models:
-                council_models.append(i_model)
-                
-            # 4. General Flagship (free, general context)
-            g_model = get_dynamic_model(models_list, free=True, fallback_default="google/gemma-4-31b-it:free",
-                                        min_context=128000)
-            if g_model not in council_models:
-                council_models.append(g_model)
-                
-            # Fill up to 4 unique if duplicates occurred
-            for fallback in ["google/gemma-4-31b-it:free", "qwen/qwen3-coder:free", "meta-llama/llama-3.3-70b-instruct:free", "nvidia/nemotron-3-super-120b-a12b:free"]:
-                if len(council_models) >= 4:
+            fallback_options = [
+                "google/gemma-4-31b-it:free",
+                "qwen/qwen3-coder:free",
+                "nvidia/nemotron-3-super-120b-a12b:free",
+                "meta-llama/llama-3.3-70b-instruct:free",
+                "google/gemma-2-9b-it:free"
+            ]
+            for fb in fallback_options:
+                if len(council_models) >= 3:
                     break
-                if fallback not in council_models:
-                    council_models.append(fallback)
+                if fb not in council_models:
+                    council_models.append(fb)
         except Exception as e:
             print(f"\033[93m[LLM Council] Error selecting dynamic council models: {e}. Using defaults.\033[0m")
             council_models = [
                 "google/gemma-4-31b-it:free",
                 "qwen/qwen3-coder:free",
-                "meta-llama/llama-3.3-70b-instruct:free",
                 "nvidia/nemotron-3-super-120b-a12b:free"
             ]
     else:
         council_models = [
             "google/gemma-4-31b-it:free",
             "qwen/qwen3-coder:free",
-            "meta-llama/llama-3.3-70b-instruct:free",
             "nvidia/nemotron-3-super-120b-a12b:free"
         ]
 
@@ -1186,7 +1266,7 @@ def repl(model, use_deep_context=False):
             continue
             
         # Council Deliberation Command
-        if line_stripped.startswith("/council "):
+        if line_stripped.startswith(("/council ", "/mc ")) or line_stripped in ("/council", "/mc"):
             parts = line.split(" ", 1)
             if len(parts) > 1 and parts[1].strip():
                 council_prompt = parts[1].strip()
@@ -1195,7 +1275,7 @@ def repl(model, use_deep_context=False):
                 messages.append({"role": "assistant", "content": reply})
                 save_temp_memory(messages)
             else:
-                print("\033[91mUsage: /council <prompt>\033[0m")
+                print("\033[91mUsage: /council <prompt> or /MC <prompt>\033[0m")
             continue
             
         # 1. Context Pinning & Agent Workspaces

@@ -262,13 +262,13 @@ class TestRoutingMagic(unittest.TestCase):
         mock_client.chat.completions.create.return_value = [mock_chunk]
         
         mock_query_model.side_effect = [
-            "Opinion 1", "Opinion 2", "Opinion 3", "Opinion 4",
-            "Review 1", "Review 2", "Review 3", "Review 4"
+            "Opinion 1", "Opinion 2", "Opinion 3",
+            "Review 1", "Review 2", "Review 3"
         ]
         
         reply = openai_wrapper.run_council("Deliberate on microservices tradeoffs")
         self.assertEqual(reply, "Synthesized Answer")
-        self.assertEqual(mock_query_model.call_count, 8)
+        self.assertEqual(mock_query_model.call_count, 6)
 
     # 33. run_council selects reasoning Chairman for complex logic (offline fallback test)
     @patch('urllib.request.urlopen')
@@ -283,8 +283,8 @@ class TestRoutingMagic(unittest.TestCase):
         mock_client.chat.completions.create.return_value = [mock_chunk]
         
         mock_query_model.side_effect = [
-            "Opinion 1", "Opinion 2", "Opinion 3", "Opinion 4",
-            "Review 1", "Review 2", "Review 3", "Review 4"
+            "Opinion 1", "Opinion 2", "Opinion 3",
+            "Review 1", "Review 2", "Review 3"
         ]
         
         reply = openai_wrapper.run_council("Step-by-step math proof for 2+2=4")
@@ -326,8 +326,8 @@ class TestRoutingMagic(unittest.TestCase):
         mock_client.chat.completions.create.return_value = [mock_chunk]
 
         mock_query_model.side_effect = [
-            "Opinion 1", "Opinion 2", "Opinion 3", "Opinion 4",
-            "Review 1", "Review 2", "Review 3", "Review 4"
+            "Opinion 1", "Opinion 2", "Opinion 3",
+            "Review 1", "Review 2", "Review 3"
         ]
 
         reply = openai_wrapper.run_council("Step-by-step math proof for 2+2=4")

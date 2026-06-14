@@ -204,6 +204,14 @@ chat() { python3 "${HOME}/Projects/RoutingMagic/openai_wrapper.py" "${1:-openai/
 ask() { python3 "${HOME}/Projects/RoutingMagic/openai_wrapper.py" smart "$@"; }
 save() { python3 "${HOME}/Projects/RoutingMagic/save_handler.py" "$@"; }
 
+# Global Model Council aliases & functions
+"/council"() { python3 "${HOME}/Projects/RoutingMagic/openai_wrapper.py" council "$@"; }
+"/MC"() { python3 "${HOME}/Projects/RoutingMagic/openai_wrapper.py" council "$@"; }
+"/mc"() { python3 "${HOME}/Projects/RoutingMagic/openai_wrapper.py" council "$@"; }
+mc() { python3 "${HOME}/Projects/RoutingMagic/openai_wrapper.py" council "$@"; }
+MC() { python3 "${HOME}/Projects/RoutingMagic/openai_wrapper.py" council "$@"; }
+
+
 
 # Smart macOS open override
 open() {
