@@ -334,5 +334,53 @@ class TestRoutingMagic(unittest.TestCase):
         self.assertEqual(reply, "Dynamic Synthesized Answer")
         mock_get_client.assert_called_with("qwen/qwen3-max-thinking")
 
+    # 29. Test _query_model robust None checks
+    @patch('openai_wrapper.get_client_and_model')
+    def test_query_model_none_checks(self, mock_get_client):
+        mock_client = MagicMock()
+        mock_get_client.return_value = (mock_client, "some-model")
+        
+        # Test resp is None
+        mock_client.chat.completions.create.return_value = None
+        with self.assertRaises(RuntimeError) as ctx:
+            openai_wrapper._query_model("some-model", [{"role": "user", "content": "hi"}])
+        self.assertIn("OpenRouter returned None response.", str(ctx.exception))
+        
+        # Test choices is None
+        mock_resp = MagicMock()
+        mock_resp.choices = None
+        mock_client.chat.completions.create.return_value = mock_resp
+        with self.assertRaises(RuntimeError) as ctx:
+            openai_wrapper._query_model("some-model", [{"role": "user", "content": "hi"}])
+        self.assertIn("OpenRouter response choices field is None.", str(ctx.exception))
+        
+        # Test choices list is empty
+        mock_resp.choices = []
+        with self.assertRaises(RuntimeError) as ctx:
+            openai_wrapper._query_model("some-model", [{"role": "user", "content": "hi"}])
+        self.assertIn("OpenRouter response choices list is empty.", str(ctx.exception))
+
+    # 30. Test _query_model_with_fallback_and_timing
+    @patch('openai_wrapper._query_model')
+    def test_query_model_with_fallback_and_timing(self, mock_query):
+        # First query fails, second succeeds
+        mock_query.side_effect = [Exception("Rate limit 429"), "Fallback Success Content"]
+        
+        attempted_model = "primary-model"
+        messages = [{"role": "user", "content": "hi"}]
+        excluded = {"primary-model"}
+        
+        succeeded_model, content, err, elapsed, failed_attempts = openai_wrapper._query_model_with_fallback_and_timing(
+            attempted_model, messages, excluded_models=excluded
+        )
+        
+        # Succeeded model should be the first one in the standard fallback pool
+        self.assertEqual(succeeded_model, "google/gemma-4-31b-it:free")
+        self.assertEqual(content, "Fallback Success Content")
+        self.assertIsNone(err)
+        self.assertEqual(len(failed_attempts), 1)
+        self.assertEqual(failed_attempts[0][0], "primary-model")
+        self.assertIn("Rate limit 429", failed_attempts[0][1])
+
 if __name__ == '__main__':
     unittest.main()

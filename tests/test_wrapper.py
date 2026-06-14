@@ -105,3 +105,22 @@ def test_read_prompt_bracketed_hybrid(mocker):
     res = read_prompt()
     assert res == "Prefix hello\nworld\nend"
 
+def test_read_prompt_bracketed_paste_no_autosubmit(mocker):
+    from openai_wrapper import read_prompt
+    
+    mocker.patch("os.isatty", return_value=True)
+    mocker.patch("sys.stdin.fileno", return_value=0)
+    mocker.patch("termios.tcgetattr", return_value=[0, 0, 0, 0, 0, 0, 0])
+    mocker.patch("termios.tcsetattr")
+    mocker.patch("tty.setcbreak")
+    
+    # Paste ends with a newline: "hello\n"
+    # It should NOT submit immediately, but wait for the next character (e.g. typing "world" then "\n")
+    chars = ["\x1b", "[", "2", "0", "0", "~", "h", "e", "l", "l", "o", "\n", "\x1b", "[", "2", "0", "1", "~", "w", "o", "r", "l", "d", "\n"]
+    mocker.patch("sys.stdin.read", side_effect=chars)
+    mocker.patch("select.select", return_value=(([sys.stdin], [], [])))
+    
+    res = read_prompt()
+    assert res == "hello\nworld"
+
+

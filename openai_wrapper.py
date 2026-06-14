@@ -416,6 +416,8 @@ def chat_oneshot(model, prompt, use_deep_context=False):
             print(f"\n\033[96m🤖 assistant ({final_model_id}):\033[0m\n", end="", flush=True)
             resp = temp_client.chat.completions.create(**kwargs)
             was_reasoning = False
+            reasoning_start_time = None
+            accumulated_reasoning = ""
             for chunk in resp:
                 if not getattr(chunk, "choices", None) or len(chunk.choices) == 0:
                     continue
@@ -423,16 +425,29 @@ def chat_oneshot(model, prompt, use_deep_context=False):
                 delta = chunk.choices[0].delta
                 reasoning = getattr(delta, "reasoning_content", None)
                 if reasoning:
-                    was_reasoning = True
-                    print(f"\033[90m{reasoning}\033[0m", end="", flush=True)
+                    if not was_reasoning:
+                        was_reasoning = True
+                        reasoning_start_time = time.time()
+                        accumulated_reasoning = ""
+                    accumulated_reasoning += reasoning
+                    elapsed = time.time() - reasoning_start_time
+                    snippet = accumulated_reasoning.replace("\n", " ").replace("\r", " ")
+                    if len(snippet) > 60:
+                        snippet = "..." + snippet[-57:]
+                    sys.stdout.write(f"\r\033[K\033[90m[Thinking {elapsed:.1f}s] {snippet}\033[0m")
+                    sys.stdout.flush()
                     
                 content = getattr(delta, "content", None)
                 if content:
                     if was_reasoning:
-                        print("\n\n", end="")
+                        sys.stdout.write("\r\033[K")
+                        sys.stdout.flush()
                         was_reasoning = False
                         
                     print(content, end="", flush=True)
+            if was_reasoning:
+                sys.stdout.write("\r\033[K")
+                sys.stdout.flush()
             print()
             success = True
             break
@@ -530,7 +545,23 @@ def _query_model(model_name, messages, temperature=0.7):
         kwargs["extra_body"] = extra_body
         
     resp = client.chat.completions.create(**kwargs)
-    return resp.choices[0].message.content
+    if resp is None:
+        raise RuntimeError("OpenRouter returned None response.")
+    choices = getattr(resp, "choices", None)
+    if choices is None:
+        raise RuntimeError("OpenRouter response choices field is None.")
+    if len(choices) == 0:
+        raise RuntimeError("OpenRouter response choices list is empty.")
+    choice = choices[0]
+    if choice is None:
+        raise RuntimeError("OpenRouter response first choice is None.")
+    message = getattr(choice, "message", None)
+    if message is None:
+        raise RuntimeError("OpenRouter response choice message is None.")
+    content = getattr(message, "content", None)
+    if content is None:
+        raise RuntimeError("OpenRouter response choice message content is None.")
+    return content
 
 def _query_model_with_timing(model_name, messages, temperature=0.7):
     start_time = time.time()
@@ -541,6 +572,46 @@ def _query_model_with_timing(model_name, messages, temperature=0.7):
     except Exception as e:
         elapsed = time.time() - start_time
         return model_name, None, str(e), elapsed
+
+def _query_model_with_fallback_and_timing(model_name, messages, temperature=0.7, excluded_models=None):
+    if excluded_models is None:
+        excluded_models = set()
+    start_time = time.time()
+    
+    # We will try the primary model first, and then fallback to other free models if it fails.
+    attempts = [model_name]
+    
+    # Standard free backup pool
+    fallbacks = [
+        "google/gemma-4-31b-it:free",
+        "qwen/qwen3-coder:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "nvidia/nemotron-3-super-120b-a12b:free",
+        "google/gemma-2-9b-it:free",
+        "qwen/qwen-2.5-coder-32b-instruct:free",
+        "meta-llama/llama-3-8b-instruct:free",
+        "microsoft/phi-3-medium-128k-instruct:free"
+    ]
+    
+    for f in fallbacks:
+        if f not in attempts and f not in excluded_models:
+            attempts.append(f)
+            
+    last_err = None
+    failed_attempts = []
+    
+    for attempt in attempts:
+        try:
+            content = _query_model(attempt, messages, temperature)
+            elapsed = time.time() - start_time
+            return attempt, content, None, elapsed, failed_attempts
+        except Exception as e:
+            failed_attempts.append((attempt, str(e)))
+            last_err = e
+            continue
+            
+    elapsed = time.time() - start_time
+    return model_name, None, str(last_err), elapsed, failed_attempts
 
 def run_council(prompt, use_deep_context=False):
     """Executes Karpathy-style LLM Council deliberation protocol:
@@ -647,14 +718,23 @@ def run_council(prompt, use_deep_context=False):
     ]
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(council_models)) as executor:
-        futures = {executor.submit(_query_model_with_timing, m, stage1_messages): m for m in council_models}
+        futures = {executor.submit(_query_model_with_fallback_and_timing, m, stage1_messages, 0.7, set(council_models)): m for m in council_models}
         for future in concurrent.futures.as_completed(futures):
-            model_name, content, err, elapsed = future.result()
+            orig_model = futures[future]
+            succeeded_model, content, err, elapsed, failed_attempts = future.result()
+            
+            # Print failures for this slot
+            for failed_m, failed_e in failed_attempts:
+                print(f"  \033[91m✗ {failed_m} failed to reply: {failed_e}\033[0m")
+                
             if err:
-                print(f"  \033[91m✗ {model_name} failed to reply: {err} [{elapsed:.2f}s]\033[0m")
+                print(f"  \033[91m✗ All fallbacks failed for slot {orig_model} [{elapsed:.2f}s]\033[0m")
             else:
-                print(f"  \033[92m✓ {model_name} completed [{elapsed:.2f}s]\033[0m")
-                opinions[model_name] = content
+                if succeeded_model != orig_model:
+                    print(f"  \033[92m✓ {orig_model} failed, successfully fell back to {succeeded_model} [{elapsed:.2f}s]\033[0m")
+                else:
+                    print(f"  \033[92m✓ {succeeded_model} completed [{elapsed:.2f}s]\033[0m")
+                opinions[succeeded_model] = content
                 
     stage1_duration = time.time() - stage1_start
     print(f"\033[94m[Stage 1] Completed in {stage1_duration:.2f}s\033[0m\n")
@@ -662,26 +742,83 @@ def run_council(prompt, use_deep_context=False):
     if not opinions:
         print("\033[91m[LLM Council] Warning: All council models failed in Stage 1. Falling back to direct Chairman query.\033[0m")
         # Direct Chairman query fallback
-        client, target_model = get_client_and_model(chairman_model)
-        kwargs = {
-            "model": target_model,
-            "messages": [
-                {"role": "system", "content": system_instruction},
-                {"role": "user", "content": prompt}
-            ],
-            "stream": True
-        }
+        chairman_fallbacks = [
+            chairman_model,
+            "openai/o3-mini",
+            "google/gemma-4-31b-it:free",
+            "meta-llama/llama-3.3-70b-instruct:free",
+            "nvidia/nemotron-3-super-120b-a12b:free"
+        ]
+        resp = None
+        target_model = None
+        for attempt in chairman_fallbacks:
+            try:
+                client, target_model = get_client_and_model(attempt)
+                kwargs = {
+                    "model": target_model,
+                    "messages": [
+                        {"role": "system", "content": system_instruction},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "stream": True
+                }
+                base_model_id = target_model.split("/")[-1].split(":")[0]
+                if base_model_id not in NO_TEMPERATURE_MODELS:
+                    kwargs["temperature"] = 0.7
+                
+                extra_body = {}
+                if "nemotron-3-ultra" in target_model:
+                    extra_body = {"chat_template_kwargs": {"enable_thinking": True}, "reasoning_budget": 4096}
+                elif "deepseek-v4-flash" in target_model:
+                    extra_body = {"chat_template_kwargs": {"thinking": True, "reasoning_effort": "high"}}
+                if extra_body:
+                    kwargs["extra_body"] = extra_body
+                    
+                resp = client.chat.completions.create(**kwargs)
+                break
+            except Exception as e:
+                print(f"\033[91mChairman fallback attempt {attempt} failed to start: {e}. Trying fallback...\033[0m")
+                continue
+                
+        if not resp:
+            raise RuntimeError("All Chairman fallback attempts failed to start.")
+            
         print(f"\033[96m🤖 Chairman ({target_model}):\033[0m\n", end="", flush=True)
-        resp = client.chat.completions.create(**kwargs)
         assistant_reply = ""
+        was_reasoning = False
+        reasoning_start_time = None
+        accumulated_reasoning = ""
         for chunk in resp:
             if not getattr(chunk, "choices", None) or len(chunk.choices) == 0:
                 continue
             delta = chunk.choices[0].delta
+            
+            reasoning = getattr(delta, "reasoning_content", None)
+            if reasoning:
+                if not was_reasoning:
+                    was_reasoning = True
+                    reasoning_start_time = time.time()
+                    accumulated_reasoning = ""
+                accumulated_reasoning += reasoning
+                elapsed = time.time() - reasoning_start_time
+                snippet = accumulated_reasoning.replace("\n", " ").replace("\r", " ")
+                if len(snippet) > 60:
+                    snippet = "..." + snippet[-57:]
+                sys.stdout.write(f"\r\033[K\033[90m[Thinking {elapsed:.1f}s] {snippet}\033[0m")
+                sys.stdout.flush()
+                
             content = getattr(delta, "content", None)
             if content:
+                if was_reasoning:
+                    sys.stdout.write("\r\033[K")
+                    sys.stdout.flush()
+                    was_reasoning = False
                 print(content, end="", flush=True)
                 assistant_reply += content
+                
+        if was_reasoning:
+            sys.stdout.write("\r\033[K")
+            sys.stdout.flush()
         print()
         return assistant_reply
 
@@ -718,14 +855,23 @@ def run_council(prompt, use_deep_context=False):
     
     reviews = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(opinions)) as executor:
-        futures = {executor.submit(_query_model_with_timing, m, peer_review_messages): m for m in opinions.keys()}
+        futures = {executor.submit(_query_model_with_fallback_and_timing, m, peer_review_messages, 0.7, set(opinions.keys())): m for m in opinions.keys()}
         for future in concurrent.futures.as_completed(futures):
-            model_name, content, err, elapsed = future.result()
+            orig_model = futures[future]
+            succeeded_model, content, err, elapsed, failed_attempts = future.result()
+            
+            # Print failures for this review slot
+            for failed_m, failed_e in failed_attempts:
+                print(f"  \033[91m✗ {failed_m} review failed: {failed_e}\033[0m")
+                
             if err:
-                print(f"  \033[91m✗ {model_name} review failed: {err} [{elapsed:.2f}s]\033[0m")
+                print(f"  \033[91m✗ All fallbacks failed for review by {orig_model} [{elapsed:.2f}s]\033[0m")
             else:
-                print(f"  \033[92m✓ {model_name} review completed [{elapsed:.2f}s]\033[0m")
-                reviews[model_name] = content
+                if succeeded_model != orig_model:
+                    print(f"  \033[92m✓ {orig_model} review failed, successfully fell back to {succeeded_model} [{elapsed:.2f}s]\033[0m")
+                else:
+                    print(f"  \033[92m✓ {succeeded_model} review completed [{elapsed:.2f}s]\033[0m")
+                reviews[succeeded_model] = content
                 
     stage2_duration = time.time() - stage2_start
     print(f"\033[94m[Stage 2] Completed in {stage2_duration:.2f}s\033[0m\n")
@@ -751,43 +897,54 @@ def run_council(prompt, use_deep_context=False):
         "Focus on inversion, first principles, and actionable, high-quality developer insights. Output the final synthesized response directly."
     )
     
-    client, target_model = get_client_and_model(chairman_model)
-    base_model_id = target_model.split("/")[-1].split(":")[0]
-    supports_temperature = base_model_id not in NO_TEMPERATURE_MODELS
-    
-    kwargs = {
-        "model": target_model,
-        "messages": [
-            {"role": "system", "content": system_instruction},
-            {"role": "user", "content": chairman_user_prompt}
-        ],
-        "stream": True
-    }
-    if supports_temperature:
-        kwargs["temperature"] = 0.7
-        
-    extra_body = {}
-    if "nemotron-3-ultra" in target_model:
-        extra_body = {"chat_template_kwargs": {"enable_thinking": True}, "reasoning_budget": 4096}
-    elif "deepseek-v4-flash" in target_model:
-        extra_body = {"chat_template_kwargs": {"thinking": True, "reasoning_effort": "high"}}
-        
-    if extra_body:
-        kwargs["extra_body"] = extra_body
+    chairman_fallbacks = [
+        chairman_model,
+        "openai/o3-mini",
+        "google/gemma-4-31b-it:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "nvidia/nemotron-3-super-120b-a12b:free"
+    ]
+    resp = None
+    target_model = None
+    for attempt in chairman_fallbacks:
+        try:
+            client, target_model = get_client_and_model(attempt)
+            kwargs = {
+                "model": target_model,
+                "messages": [
+                    {"role": "system", "content": system_instruction},
+                    {"role": "user", "content": chairman_user_prompt}
+                ],
+                "stream": True
+            }
+            base_model_id = target_model.split("/")[-1].split(":")[0]
+            supports_temperature = base_model_id not in NO_TEMPERATURE_MODELS
+            if supports_temperature:
+                kwargs["temperature"] = 0.7
+                
+            extra_body = {}
+            if "nemotron-3-ultra" in target_model:
+                extra_body = {"chat_template_kwargs": {"enable_thinking": True}, "reasoning_budget": 4096}
+            elif "deepseek-v4-flash" in target_model:
+                extra_body = {"chat_template_kwargs": {"thinking": True, "reasoning_effort": "high"}}
+            if extra_body:
+                kwargs["extra_body"] = extra_body
+                
+            resp = client.chat.completions.create(**kwargs)
+            break
+        except Exception as e:
+            print(f"\033[91mChairman model attempt {attempt} failed to start: {e}. Trying fallback...\033[0m")
+            continue
+            
+    if not resp:
+        raise RuntimeError("All Chairman fallback attempts failed to start.")
         
     print(f"\033[96m🤖 Chairman ({target_model}):\033[0m\n", end="", flush=True)
     
-    try:
-        resp = client.chat.completions.create(**kwargs)
-    except Exception as e:
-        print(f"\033[91mChairman model {chairman_model} failed to start: {e}. Falling back to general fallback.\033[0m")
-        fallback_model = "google/gemma-4-31b-it:free"
-        client, target_model = get_client_and_model(fallback_model)
-        kwargs["model"] = target_model
-        resp = client.chat.completions.create(**kwargs)
-        
     assistant_reply = ""
     was_reasoning = False
+    reasoning_start_time = None
+    accumulated_reasoning = ""
     for chunk in resp:
         if not getattr(chunk, "choices", None) or len(chunk.choices) == 0:
             continue
@@ -795,17 +952,31 @@ def run_council(prompt, use_deep_context=False):
         
         reasoning = getattr(delta, "reasoning_content", None)
         if reasoning:
-            was_reasoning = True
-            print(f"\033[90m{reasoning}\033[0m", end="", flush=True)
+            if not was_reasoning:
+                was_reasoning = True
+                reasoning_start_time = time.time()
+                accumulated_reasoning = ""
+            accumulated_reasoning += reasoning
+            elapsed = time.time() - reasoning_start_time
+            snippet = accumulated_reasoning.replace("\n", " ").replace("\r", " ")
+            if len(snippet) > 60:
+                snippet = "..." + snippet[-57:]
+            sys.stdout.write(f"\r\033[K\033[90m[Thinking {elapsed:.1f}s] {snippet}\033[0m")
+            sys.stdout.flush()
             
         content = getattr(delta, "content", None)
         if content:
             if was_reasoning:
-                print("\n\n", end="")
+                sys.stdout.write("\r\033[K")
+                sys.stdout.flush()
                 was_reasoning = False
                 
             print(content, end="", flush=True)
             assistant_reply += content
+            
+    if was_reasoning:
+        sys.stdout.write("\r\033[K")
+        sys.stdout.flush()
     print()
     
     is_paid = "free" not in chairman_model.lower() and "nvidia" not in chairman_model.lower()
@@ -897,10 +1068,6 @@ def read_prompt():
                     buffer.extend(list(pasted_text))
                     sys.stdout.write(pasted_text)
                     sys.stdout.flush()
-                    
-                    # If the paste had a trailing newline, we automatically submit the prompt
-                    if pasted_text.endswith(("\n", "\r")):
-                        break
                     continue
                 elif seq_str == "\x1b[201~":
                     # Ignore stray paste end codes
@@ -1263,6 +1430,8 @@ def repl(model, use_deep_context=False):
                 daily_requests += 1
                 
                 was_reasoning = False
+                reasoning_start_time = None
+                accumulated_reasoning = ""
                 for chunk in resp:
                     if not getattr(chunk, "choices", None) or len(chunk.choices) == 0:
                         continue
@@ -1270,17 +1439,30 @@ def repl(model, use_deep_context=False):
                     
                     reasoning = getattr(delta, "reasoning_content", None)
                     if reasoning:
-                        was_reasoning = True
-                        print(f"\033[90m{reasoning}\033[0m", end="", flush=True)
+                        if not was_reasoning:
+                            was_reasoning = True
+                            reasoning_start_time = time.time()
+                            accumulated_reasoning = ""
+                        accumulated_reasoning += reasoning
+                        elapsed = time.time() - reasoning_start_time
+                        snippet = accumulated_reasoning.replace("\n", " ").replace("\r", " ")
+                        if len(snippet) > 60:
+                            snippet = "..." + snippet[-57:]
+                        sys.stdout.write(f"\r\033[K\033[90m[Thinking {elapsed:.1f}s] {snippet}\033[0m")
+                        sys.stdout.flush()
                         
                     content = getattr(delta, "content", None)
                     if content:
                         if was_reasoning:
-                            print("\n\n", end="")
+                            sys.stdout.write("\r\033[K")
+                            sys.stdout.flush()
                             was_reasoning = False
                             
                         print(content, end="", flush=True)
                         assistant_reply += content
+                if was_reasoning:
+                    sys.stdout.write("\r\033[K")
+                    sys.stdout.flush()
                 print()
                 
                 if is_paid:
