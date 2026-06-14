@@ -20,8 +20,13 @@
    * Docs: save progress for hybrid paste fix (cc46ada)
  - **2025-10-07:**
    * Fixed router: replaced vanished deepseek-r1:free with nemotron-3-super and documented learnings from live routing experiment (0a2bf46)
+ - **2026-06-14:**
+   * Implemented Karpathy-style LLM Council deliberation protocol in `openai_wrapper.py` supporting Stage 1 (opinions), Stage 2 (reviews), and Stage 3 (synthesis).
+   * Integrated council deliberation via `ask council "prompt"` keyword and `/council <prompt>` REPL command.
+   * Added unit tests for `run_council` and council routing in `test_routing_magic.py`.
+   * Updated `README.md` and `lessons.md` to document the council feature and parallel execution latency mitigation.
 
 ## Backlog / Next Steps
- - [ ] Push latest changes to GitHub repository.
+ - [x] Implement LLM Council multi-agent deliberation.
  - [ ] Test the `! <cmd>` error interception in a real node/python project.
  - [ ] Monitor rate-limit hits for OpenRouter free models to ensure the fallback chain shifts smoothly.

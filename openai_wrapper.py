@@ -22,6 +22,7 @@ import shlex
 import atexit
 import tty
 import termios
+import concurrent.futures
 from pathlib import Path
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -205,6 +206,10 @@ def smart_route(prompt):
     """Intelligently routes the prompt to the best available free model."""
     prompt_lower = prompt.lower()
     
+    # 0. Council Deliberation -> Multi-agent council protocol
+    if re.search(r'\b(council|deliberate|critically? audit|council-deliberation|llm-council|council deliberation)\b', prompt_lower):
+        return "council", "llm_council_deliberation"
+        
     # 1. Financial/Math Reasoning & Deep Logic -> DeepSeek R1 (free)
     if re.search(r'\b(math|financial analysis|deep reasoning|o1|complex logic|tradeoffs|step-by-step|chain of thought|deep analysis)\b', prompt_lower):
         return "nvidia/nemotron-3-super-120b-a12b:free", "financial_math_reasoning"
@@ -374,6 +379,17 @@ def chat_oneshot(model, prompt, use_deep_context=False):
 
     success = False
     for attempt_model in fallback_chain:
+        if attempt_model == "council":
+            try:
+                run_council(prompt, use_deep_context=use_deep_context)
+                success = True
+                break
+            except Exception as e:
+                print(f"\n\033[91m[Error with council] {e}\033[0m")
+                if attempt_model != fallback_chain[-1]:
+                    print("\033[93mTrying fallback model...\033[0m")
+                continue
+
         try:
             temp_client, final_model_id = get_client_and_model(attempt_model)
             
@@ -427,6 +443,261 @@ def chat_oneshot(model, prompt, use_deep_context=False):
             
     if not success:
         raise RuntimeError("All models in the fallback chain failed for chat_oneshot.")
+
+
+def _query_model(model_name, messages, temperature=0.7):
+    client, target_model = get_client_and_model(model_name)
+    base_model_id = target_model.split("/")[-1].split(":")[0]
+    supports_temperature = base_model_id not in NO_TEMPERATURE_MODELS
+    
+    kwargs = {
+        "model": target_model,
+        "messages": messages,
+    }
+    if supports_temperature:
+        kwargs["temperature"] = temperature
+        
+    extra_body = {}
+    if "nemotron-3-ultra" in target_model:
+        extra_body = {"chat_template_kwargs": {"enable_thinking": True}, "reasoning_budget": 4096}
+    elif "deepseek-v4-flash" in target_model:
+        extra_body = {"chat_template_kwargs": {"thinking": True, "reasoning_effort": "high"}}
+        
+    if extra_body:
+        kwargs["extra_body"] = extra_body
+        
+    resp = client.chat.completions.create(**kwargs)
+    return resp.choices[0].message.content
+
+def _query_model_with_timing(model_name, messages, temperature=0.7):
+    start_time = time.time()
+    try:
+        content = _query_model(model_name, messages, temperature)
+        elapsed = time.time() - start_time
+        return model_name, content, None, elapsed
+    except Exception as e:
+        elapsed = time.time() - start_time
+        return model_name, None, str(e), elapsed
+
+def run_council(prompt, use_deep_context=False):
+    """Executes Karpathy-style LLM Council deliberation protocol:
+    Stage 1: parallel opinions from 4 free models.
+    Stage 2: parallel peer critique and scoring (1-10).
+    Stage 3: synthesis by the Chairman model (paid DeepSeek R1 for heavy reasoning, otherwise free Gemma 4).
+    """
+    import concurrent.futures
+    
+    council_models = [
+        "google/gemma-4-31b-it:free",
+        "qwen/qwen3-coder:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "nvidia/nemotron-3-super-120b-a12b:free"
+    ]
+    
+    context_str = get_deep_context() if use_deep_context else get_instant_context()
+    system_instruction = (
+        "You are a rigorous analytical assistant trained on Charlie Munger's mental models. "
+        "1. INVERSION: Identify failure paths and how to avoid them.\n"
+        "2. FIRST PRINCIPLES: Strip away assumptions; answer from the irreducible truth.\n"
+        "3. NO FLUFF: Avoid generic advice. Give clear, specific, actionable insights.\n"
+        f"Context:\n{context_str}"
+    )
+    
+    # Select Chairman based on regex heuristics
+    is_high_reasoning = bool(re.search(
+        r'\b(math|financial analysis|deep reasoning|o1|complex logic|tradeoffs|step-by-step|chain of thought|deep analysis|critically audit|audit|algorithm|proof|prove|equation|derivation)\b',
+        prompt.lower()
+    ))
+    
+    if is_high_reasoning:
+        chairman_model = "deepseek/deepseek-r1"
+        reasoning_reason = "high reasoning required (regex matched)"
+    else:
+        chairman_model = "google/gemma-4-31b-it:free"
+        reasoning_reason = "general query"
+        
+    print("\n\033[95m[LLM Council] Starting deliberation...\033[0m")
+    print("\033[94m[Stage 1] Querying 4 council members for opinions in parallel...\033[0m")
+    
+    stage1_start = time.time()
+    opinions = {}
+    stage1_messages = [
+        {"role": "system", "content": system_instruction},
+        {"role": "user", "content": prompt}
+    ]
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(council_models)) as executor:
+        futures = {executor.submit(_query_model_with_timing, m, stage1_messages): m for m in council_models}
+        for future in concurrent.futures.as_completed(futures):
+            model_name, content, err, elapsed = future.result()
+            if err:
+                print(f"  \033[91m✗ {model_name} failed to reply: {err} [{elapsed:.2f}s]\033[0m")
+            else:
+                print(f"  \033[92m✓ {model_name} completed [{elapsed:.2f}s]\033[0m")
+                opinions[model_name] = content
+                
+    stage1_duration = time.time() - stage1_start
+    print(f"\033[94m[Stage 1] Completed in {stage1_duration:.2f}s\033[0m\n")
+    
+    if not opinions:
+        print("\033[91m[LLM Council] Warning: All council models failed in Stage 1. Falling back to direct Chairman query.\033[0m")
+        # Direct Chairman query fallback
+        client, target_model = get_client_and_model(chairman_model)
+        kwargs = {
+            "model": target_model,
+            "messages": [
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": prompt}
+            ],
+            "stream": True
+        }
+        print(f"\033[96m🤖 Chairman ({target_model}):\033[0m\n", end="", flush=True)
+        resp = client.chat.completions.create(**kwargs)
+        assistant_reply = ""
+        for chunk in resp:
+            if not getattr(chunk, "choices", None) or len(chunk.choices) == 0:
+                continue
+            delta = chunk.choices[0].delta
+            content = getattr(delta, "content", None)
+            if content:
+                print(content, end="", flush=True)
+                assistant_reply += content
+        print()
+        return assistant_reply
+
+    # Stage 2: Peer Review
+    print("\033[94m[Stage 2] Running anonymized peer reviews & scoring in parallel...\033[0m")
+    stage2_start = time.time()
+    
+    anonymized_opinions = []
+    response_to_model = {}
+    for i, (model_name, content) in enumerate(opinions.items(), 1):
+        label = f"Response {i}"
+        anonymized_opinions.append((label, content))
+        response_to_model[label] = model_name
+        
+    opinions_block = ""
+    for label, content in anonymized_opinions:
+        opinions_block += f"=== {label} ===\n{content}\n\n"
+        
+    peer_review_user_prompt = (
+        f"You are part of an LLM Council deliberating on the user's prompt: \"{prompt}\".\n\n"
+        "Here are the responses generated by other council members (anonymized):\n\n"
+        f"{opinions_block}"
+        "Please critically evaluate each response. For each response, do the following:\n"
+        "1. Identify any errors, flawed assumptions, or missing details.\n"
+        "2. Provide constructive suggestions for improvement.\n"
+        "3. Assign a quantitative score from 1 to 10 based on accuracy, depth, and usefulness.\n\n"
+        "Present your review clearly and objectively. Use the labels (Response 1, Response 2, etc.) to reference each response."
+    )
+    
+    peer_review_messages = [
+        {"role": "system", "content": system_instruction},
+        {"role": "user", "content": peer_review_user_prompt}
+    ]
+    
+    reviews = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(opinions)) as executor:
+        futures = {executor.submit(_query_model_with_timing, m, peer_review_messages): m for m in opinions.keys()}
+        for future in concurrent.futures.as_completed(futures):
+            model_name, content, err, elapsed = future.result()
+            if err:
+                print(f"  \033[91m✗ {model_name} review failed: {err} [{elapsed:.2f}s]\033[0m")
+            else:
+                print(f"  \033[92m✓ {model_name} review completed [{elapsed:.2f}s]\033[0m")
+                reviews[model_name] = content
+                
+    stage2_duration = time.time() - stage2_start
+    print(f"\033[94m[Stage 2] Completed in {stage2_duration:.2f}s\033[0m\n")
+    
+    # Stage 3: Synthesis by Chairman
+    print(f"\033[94m[Stage 3] Synthesizing final response via Chairman: {chairman_model} ({reasoning_reason})...\033[0m\n")
+    
+    council_deliberation_content = ""
+    for label, content in anonymized_opinions:
+        model_name = response_to_model[label]
+        review_text = reviews.get(model_name, "No review available.")
+        council_deliberation_content += f"=== Council Member: {model_name} (Anonymized as {label}) ===\n"
+        council_deliberation_content += f"Original Response:\n{content}\n\n"
+        council_deliberation_content += f"Peer Critique provided by this member:\n{review_text}\n\n"
+        council_deliberation_content += "=" * 40 + "\n\n"
+        
+    chairman_user_prompt = (
+        f"You are the Chairman of the LLM Council. Your task is to synthesize the final response to the user's prompt based on the deliberation of the council members.\n\n"
+        f"User Prompt: \"{prompt}\"\n\n"
+        "Here are the responses and peer critiques from the council members:\n\n"
+        f"{council_deliberation_content}"
+        "Analyze the responses and peer critiques, identify the best points, correct any errors, and synthesize a single, unified, high-quality final response. Do not just summarize the opinions; produce the absolute best, most accurate, and most comprehensive answer to the user's prompt.\n\n"
+        "Focus on inversion, first principles, and actionable, high-quality developer insights. Output the final synthesized response directly."
+    )
+    
+    client, target_model = get_client_and_model(chairman_model)
+    base_model_id = target_model.split("/")[-1].split(":")[0]
+    supports_temperature = base_model_id not in NO_TEMPERATURE_MODELS
+    
+    kwargs = {
+        "model": target_model,
+        "messages": [
+            {"role": "system", "content": system_instruction},
+            {"role": "user", "content": chairman_user_prompt}
+        ],
+        "stream": True
+    }
+    if supports_temperature:
+        kwargs["temperature"] = 0.7
+        
+    extra_body = {}
+    if "nemotron-3-ultra" in target_model:
+        extra_body = {"chat_template_kwargs": {"enable_thinking": True}, "reasoning_budget": 4096}
+    elif "deepseek-v4-flash" in target_model:
+        extra_body = {"chat_template_kwargs": {"thinking": True, "reasoning_effort": "high"}}
+        
+    if extra_body:
+        kwargs["extra_body"] = extra_body
+        
+    print(f"\033[96m🤖 Chairman ({target_model}):\033[0m\n", end="", flush=True)
+    
+    try:
+        resp = client.chat.completions.create(**kwargs)
+    except Exception as e:
+        print(f"\033[91mChairman model {chairman_model} failed to start: {e}. Falling back to general fallback.\033[0m")
+        fallback_model = "google/gemma-4-31b-it:free"
+        client, target_model = get_client_and_model(fallback_model)
+        kwargs["model"] = target_model
+        resp = client.chat.completions.create(**kwargs)
+        
+    assistant_reply = ""
+    was_reasoning = False
+    for chunk in resp:
+        if not getattr(chunk, "choices", None) or len(chunk.choices) == 0:
+            continue
+        delta = chunk.choices[0].delta
+        
+        reasoning = getattr(delta, "reasoning_content", None)
+        if reasoning:
+            was_reasoning = True
+            print(f"\033[90m{reasoning}\033[0m", end="", flush=True)
+            
+        content = getattr(delta, "content", None)
+        if content:
+            if was_reasoning:
+                print("\n\n", end="")
+                was_reasoning = False
+                
+            print(content, end="", flush=True)
+            assistant_reply += content
+    print()
+    
+    is_paid = "free" not in chairman_model.lower() and "nvidia" not in chairman_model.lower()
+    if is_paid:
+        approx_tokens = len(assistant_reply) / 4
+        global SESSION_COST
+        if "deepseek-r1" in target_model.lower():
+            SESSION_COST += approx_tokens * 0.0000016
+        else:
+            SESSION_COST += approx_tokens * 0.00001
+            
+    return assistant_reply
 
 
 def cleanup_terminal():
@@ -560,9 +831,12 @@ def handle_exit(messages):
 def repl(model, use_deep_context=False):
     global WORKSPACE, TEMP_MEM_FILE, SESSION_COST, daily_requests, request_timestamps
     
-    if model != "smart":
+    if model != "smart" and model != "council":
         client, target_model = get_client_and_model(model)
         print(f"🦾 Universal Chat REPL — model: {model} (Target: {target_model})")
+    elif model == "council":
+        client, target_model = None, None
+        print(f"🦾 LLM Council Deliberation REPL")
     else:
         client, target_model = None, None
         print(f"🧠 Smart Router REPL")
@@ -574,7 +848,10 @@ def repl(model, use_deep_context=False):
         print("\033[90m[Loaded previous session history. Type /clear to start fresh.]\033[0m")
         if model == "smart":
             target_model, task_type = smart_route(messages[-1]["content"] if len(messages)>1 else "resume")
-            client, target_model = get_client_and_model(target_model)
+            if target_model != "council":
+                client, target_model = get_client_and_model(target_model)
+            else:
+                client, target_model = None, None
             
     if not messages:
         if use_deep_context:
@@ -619,6 +896,19 @@ def repl(model, use_deep_context=False):
             )
             messages = [{"role": "system", "content": system_instruction}]
             print("\033[93mConversation history cleared.\033[0m")
+            continue
+            
+        # Council Deliberation Command
+        if line_stripped.startswith("/council "):
+            parts = line.split(" ", 1)
+            if len(parts) > 1 and parts[1].strip():
+                council_prompt = parts[1].strip()
+                reply = run_council(council_prompt, use_deep_context=use_deep_context)
+                messages.append({"role": "user", "content": line})
+                messages.append({"role": "assistant", "content": reply})
+                save_temp_memory(messages)
+            else:
+                print("\033[91mUsage: /council <prompt>\033[0m")
             continue
             
         # 1. Context Pinning & Agent Workspaces
@@ -798,6 +1088,23 @@ def repl(model, use_deep_context=False):
         assistant_reply = ""
         
         for attempt_model in fallback_chain:
+            if attempt_model == "council":
+                try:
+                    print(f"\n\033[96m🤖 assistant (council):\033[0m\n", end="", flush=True)
+                    assistant_reply = run_council(line, use_deep_context=use_deep_context)
+                    success = True
+                    # BUG-04 FIX: Only update target_model if this was the originally intended model
+                    if model == "smart" and smart_routed_model and attempt_model == smart_routed_model:
+                        target_model = "council"
+                    elif model != "smart":
+                        target_model = "council"
+                    break
+                except Exception as e:
+                    print(f"\n\033[91m[Error with council] {e}\033[0m")
+                    if attempt_model != fallback_chain[-1]:
+                        print("\033[93mTrying fallback model...\033[0m")
+                    continue
+
             is_paid = "free" not in attempt_model.lower() and "nvidia" not in attempt_model.lower()
             if is_paid and SESSION_COST >= MAX_BUDGET:
                 print(f"\033[91mBudget cap (${MAX_BUDGET}) reached. Skipping paid fallback.\033[0m")
@@ -859,7 +1166,10 @@ def repl(model, use_deep_context=False):
                 if is_paid:
                     # Approximate tokens (1 token ≈ 4 chars) then apply per-model rate
                     approx_tokens = len(assistant_reply) / 4
-                    SESSION_COST += approx_tokens * 0.00001  # ~$10/M tokens
+                    if "deepseek-r1" in temp_target.lower():
+                        SESSION_COST += approx_tokens * 0.0000016
+                    else:
+                        SESSION_COST += approx_tokens * 0.00001  # ~$10/M tokens
                     
                 success = True
                 # BUG-04 FIX: Only update target_model if this was the originally intended model
@@ -895,6 +1205,11 @@ def main():
     model_id = sys.argv[1]
     args = sys.argv[2:]
     
+    # Map 'smart council' argument structure to 'council' model mode
+    if model_id == "smart" and args and args[0] == "council":
+        model_id = "council"
+        args.pop(0)
+        
     use_deep = False
     if args and args[0] in ["deep", "--deep"]:
         use_deep = True

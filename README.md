@@ -64,13 +64,14 @@ No need to configure keys for every single project:
 ## 🧠 June 2026 AntiGravity Model Stack
 RoutingMagic uses a zero-latency heuristic algorithm (`smart_route`) to precisely direct your task to the best available model based on their documented strengths:
 
-*   **Deep Math & Finance** ➡️ `deepseek-r1:free`
+*   **Deep Math & Finance** ➡️ `nvidia/nemotron-3-super-120b-a12b:free`
 *   **Long Document Planning** ➡️ `nemotron-3-super-120b` (1M Context)
 *   **Rapid Code Refactoring** ➡️ `qwen3-coder:free`
 *   **Agentic JSON Workflows** ➡️ `llama-3.3-70b-instruct:free`
 *   **Flagship Tool Orchestration** ➡️ `nemotron-super-49b` (NVIDIA NIM)
 *   **Stock Chart Vision** ➡️ `nemotron-nano-vl-8b` (NVIDIA NIM)
 *   **Financial Document Extraction** ➡️ `nemotron-ocr-v1` (NVIDIA NIM)
+*   **Multi-Agent Deliberation** ➡️ **LLM Council** (gemma-4 + qwen3 + llama-3.3 + nemotron-3-super)
 
 If OpenRouter hits its 200 req/day limit or a NIM endpoint fails, the system flawlessly streams through a 6-tier **Fallback Rotation** (`gemma -> nemotron -> gpt-oss -> qwen -> llama -> gemini`) to ensure 100% uptime.
 
@@ -100,6 +101,15 @@ This command keeps your project documentation up-to-date automatically using AI.
 ### 4. `cc-route "your task"`
 Routes your task to the best Claude Code model configuration.
 *   **Example:** `cc-route "fix the auth bug on production"` (automatically routes to paid Sonnet 4.6 because it's critical production work).
+
+### 5. `ask council "your question"` (Multi-Agent Deliberation)
+Delivers extremely high-reasoning, peer-critiqued and synthesized answers.
+*   **Example:** `ask council "Critically audit our deployment architecture plan"`
+*   **How it works:** Executes a 3-stage deliberation protocol:
+    1. **Stage 1 (Opinions):** Queries 4 diverse free models in parallel (`gemma-4`, `qwen3-coder`, `llama-3.3`, `nemotron-3-super`) to gather independent viewpoints.
+    2. **Stage 2 (Peer Review):** Anonymizes and swaps the opinions, querying the 4 models in parallel to critique and score (1-10) each other's responses.
+    3. **Stage 3 (Synthesis):** A designated **Chairman** (paid `deepseek/deepseek-r1` for heavy reasoning queries, otherwise free `google/gemma-4-31b-it:free`) synthesizes all opinions and reviews into a single, premium final response.
+*   *Note: In the interactive REPL, you can run this via `/council your question`.*
 
 ---
 

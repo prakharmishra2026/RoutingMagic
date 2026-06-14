@@ -243,5 +243,49 @@ class TestRoutingMagic(unittest.TestCase):
         client, m_id = get_client_and_model("qwen/qwen3-coder:free")
         self.assertEqual(m_id, "qwen/qwen3-coder:free")
 
+    # 31. smart_route routes critically audit to council
+    def test_smart_route_council(self):
+        model, role = smart_route("Please critically audit this plan and give feedback")
+        self.assertEqual(model, "council")
+        self.assertEqual(role, "llm_council_deliberation")
+
+    # 32. run_council execution and querying stages
+    @patch('openai_wrapper._query_model')
+    @patch('openai_wrapper.get_client_and_model')
+    def test_run_council(self, mock_get_client, mock_query_model):
+        mock_client = MagicMock()
+        mock_get_client.return_value = (mock_client, "google/gemma-4-31b-it:free")
+        mock_chunk = MagicMock()
+        mock_chunk.choices = [MagicMock(delta=MagicMock(content="Synthesized Answer", reasoning_content=None))]
+        mock_client.chat.completions.create.return_value = [mock_chunk]
+        
+        mock_query_model.side_effect = [
+            "Opinion 1", "Opinion 2", "Opinion 3", "Opinion 4",
+            "Review 1", "Review 2", "Review 3", "Review 4"
+        ]
+        
+        reply = openai_wrapper.run_council("Deliberate on microservices tradeoffs")
+        self.assertEqual(reply, "Synthesized Answer")
+        self.assertEqual(mock_query_model.call_count, 8)
+
+    # 33. run_council selects reasoning Chairman for complex logic
+    @patch('openai_wrapper._query_model')
+    @patch('openai_wrapper.get_client_and_model')
+    def test_run_council_reasoning(self, mock_get_client, mock_query_model):
+        mock_client = MagicMock()
+        mock_get_client.return_value = (mock_client, "deepseek/deepseek-r1")
+        mock_chunk = MagicMock()
+        mock_chunk.choices = [MagicMock(delta=MagicMock(content="Reasoned Answer", reasoning_content="thinking"))]
+        mock_client.chat.completions.create.return_value = [mock_chunk]
+        
+        mock_query_model.side_effect = [
+            "Opinion 1", "Opinion 2", "Opinion 3", "Opinion 4",
+            "Review 1", "Review 2", "Review 3", "Review 4"
+        ]
+        
+        reply = openai_wrapper.run_council("Step-by-step math proof for 2+2=4")
+        self.assertEqual(reply, "Reasoned Answer")
+        mock_get_client.assert_called_with("deepseek/deepseek-r1")
+
 if __name__ == '__main__':
     unittest.main()
