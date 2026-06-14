@@ -111,6 +111,12 @@ Delivers extremely high-reasoning, peer-critiqued and synthesized answers.
     3. **Stage 3 (Synthesis):** A designated **Chairman** (a paid reasoning model dynamically resolved via OpenAI router metadata for heavy reasoning/architecture queries, otherwise free `google/gemma-4-31b-it:free`) synthesizes all opinions and reviews into a single, premium final response. *Streams reasoning/thinking in-place on a single line dynamically, clearing it completely (`\r\033[K`) before starting the final reply to save terminal workspace.*
 *   *Note: In the interactive REPL, you can run this via `/council your question`, `/mc your question`, `/MC your question`, `mc your question`, or `MC your question`.*
 
+### 6. `ask /paste "your prompt"` (Clipboard Image Paste & Vision Analysis)
+Analyze, explain, or convert clipboard images directly from the terminal or inside the chat REPL.
+*   **Example:** `ask /paste "convert this dashboard UI mockup to HTML/CSS code"`
+*   **How it works:** Checks the macOS clipboard for an image (copied via `Command+C`). If found, saves it to a local file, base64-encodes it, and queries our June 2026 Vision Stack (`nvidia/llama-3.1-nemotron-nano-vl-8b-v1`, with failovers to `google/gemini-2.5-flash:free` and `openai/gpt-4o-mini`).
+*   **Keystroke Shortcut:** In the interactive REPL, simply press `Ctrl+V` to trigger this flow.
+
 ---
 
 ## 🛠️ Interactive REPL Commands (Inside `ask`)
@@ -119,6 +125,7 @@ When you type `ask` and enter the interactive chat room, you unlock powerful spe
 
 ### 📋 Paste & Editing Experience
 *   **Multi-Step Paste:** Large pasted text blocks containing newlines do not trigger auto-submission. You can paste your context in multiple steps, copy, or edit it, and press Enter to submit only when you are ready.
+*   **Clipboard Image Paste:** Type `/paste [prompt]` (or `/v`, `/image`, `/img`) or press `Ctrl+V` to capture your macOS clipboard image, save it locally, and send it to the Vision Stack for description or code generation.
 
 ### 🧠 Model & Cost Management
 *   `/model` - Opens a dropdown menu to instantly switch between available free and paid models (e.g. GLM-5.1, DeepSeek, o3-mini).

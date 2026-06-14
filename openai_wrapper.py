@@ -203,6 +203,145 @@ def is_port_open(ip, port):
         except Exception:
             return False
 
+def check_clipboard_has_image():
+    """Check if macOS clipboard contains an image format."""
+    try:
+        res = subprocess.run(["osascript", "-e", "clipboard info"], capture_output=True, text=True, timeout=3)
+        if res.returncode != 0:
+            return False
+        info = res.stdout
+        for img_class in ["«class PNGf»", "PNGf", "JPEG picture", "GIF picture", "TIFF picture"]:
+            if img_class in info:
+                return True
+    except Exception:
+        pass
+    return False
+
+def extract_clipboard_image(dest_path):
+    """Write clipboard image data to dest_path using AppleScript.
+    Returns the file extension (e.g. '.png') if successful, else None.
+    """
+    try:
+        res = subprocess.run(["osascript", "-e", "clipboard info"], capture_output=True, text=True, timeout=3)
+        if res.returncode != 0:
+            return None
+        info = res.stdout
+        
+        img_class = None
+        ext = ".png"
+        if "«class PNGf»" in info or "PNGf" in info:
+            img_class = "«class PNGf»"
+            ext = ".png"
+        elif "JPEG picture" in info:
+            img_class = "JPEG picture"
+            ext = ".jpg"
+        elif "TIFF picture" in info:
+            img_class = "TIFF picture"
+            ext = ".tiff"
+        elif "GIF picture" in info:
+            img_class = "GIF picture"
+            ext = ".gif"
+            
+        if not img_class:
+            return None
+            
+        if os.path.exists(dest_path):
+            try:
+                os.remove(dest_path)
+            except Exception:
+                pass
+                
+        cmd = [
+            "osascript",
+            "-e",
+            f'write (the clipboard as {img_class}) to (open for access POSIX file "{dest_path}" with write permission)'
+        ]
+        res2 = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        if res2.returncode == 0 and os.path.exists(dest_path) and os.path.getsize(dest_path) > 0:
+            return ext
+    except Exception:
+        pass
+    return None
+
+def run_vision_query(image_path, prompt, model_name=None):
+    """Base64-encodes the image at image_path and queries a vision-capable model
+    with a fallback chain.
+    """
+    import base64
+    if not os.path.exists(image_path):
+        print(f"\033[91mError: Image path {image_path} does not exist.\033[0m")
+        return None
+        
+    try:
+        with open(image_path, "rb") as f:
+            base64_image = base64.b64encode(f.read()).decode("utf-8")
+    except Exception as e:
+        print(f"\033[91mError base64-encoding image: {e}\033[0m")
+        return None
+        
+    ext = os.path.splitext(image_path)[1].lower()
+    mime_type = "image/png"
+    if ext in [".jpg", ".jpeg"]:
+        mime_type = "image/jpeg"
+    elif ext == ".gif":
+        mime_type = "image/gif"
+    elif ext == ".webp":
+        mime_type = "image/webp"
+        
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": prompt},
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:{mime_type};base64,{base64_image}"
+                    }
+                }
+            ]
+        }
+    ]
+    
+    # Vision fallback chain
+    vision_fallback = [
+        "nvidia/llama-3.1-nemotron-nano-vl-8b-v1",
+        "google/gemini-2.5-flash:free",
+        "openai/gpt-4o-mini"
+    ]
+    if model_name:
+        vision_fallback = [model_name] + [m for m in vision_fallback if m != model_name]
+        
+    resp = None
+    selected_model = None
+    for attempt in vision_fallback:
+        try:
+            client, selected_model = get_client_and_model(attempt)
+            resp = client.chat.completions.create(
+                model=selected_model,
+                messages=messages,
+                stream=True
+            )
+            break
+        except Exception as e:
+            continue
+            
+    if not resp:
+        print("\033[91m[Vision] All vision models failed to start the request.\033[0m")
+        return None
+        
+    print(f"\033[96m🤖 Vision ({selected_model}):\033[0m\n", end="", flush=True)
+    assistant_reply = ""
+    for chunk in resp:
+        if not getattr(chunk, "choices", None) or len(chunk.choices) == 0:
+            continue
+        content = getattr(chunk.choices[0].delta, "content", None)
+        if content:
+            print(content, end="", flush=True)
+            assistant_reply += content
+    print()
+    return assistant_reply
+
 def smart_route(prompt):
     """Intelligently routes the prompt to the best available free model."""
     prompt_lower = prompt.lower()
@@ -1156,6 +1295,41 @@ def read_prompt():
                     # Ignore other escape sequences (like arrow keys)
                     continue
             
+            # Handle Ctrl-V (macOS Clipboard Image Paste shortcut)
+            if char == "\x16":
+                if check_clipboard_has_image():
+                    sys.stdout.write("\n\033[92m[Ctrl+V] Detected image in macOS clipboard. Saving...\033[0m\n")
+                    sys.stdout.flush()
+                    dest = os.path.abspath(".rm_pasted_image.png")
+                    ext = extract_clipboard_image(dest)
+                    if ext:
+                        sys.stdout.write(f"\033[92m[Ctrl+V] Image saved to {dest}.\033[0m\n")
+                        sys.stdout.write("\033[93mEnter prompt for image (default: 'Describe this image in detail'): \033[0m")
+                        sys.stdout.flush()
+                        
+                        # Temporarily restore settings to read a whole line for prompt
+                        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                        try:
+                            user_prompt = sys.stdin.readline().strip()
+                        finally:
+                            # Re-enable cbreak mode
+                            tty.setcbreak(fd)
+                            new_settings = termios.tcgetattr(fd)
+                            new_settings[3] = new_settings[3] & ~termios.ECHO
+                            termios.tcsetattr(fd, termios.TCSADRAIN, new_settings)
+                            
+                        if not user_prompt:
+                            user_prompt = "Describe this image in detail and summarize the key information shown."
+                            
+                        return f"/paste {user_prompt}"
+                    else:
+                        sys.stdout.write("\033[91m[Ctrl+V] Error extracting image from clipboard.\033[0m\n>>> ")
+                        sys.stdout.flush()
+                else:
+                    sys.stdout.write("\033[93m[Ctrl+V] No image found in macOS clipboard. Copy an image first.\033[0m\n>>> ")
+                    sys.stdout.flush()
+                continue
+
             # Handle Ctrl-D (EOF)
             if char == "\x04":
                 if not buffer:
@@ -1265,6 +1439,37 @@ def repl(model, use_deep_context=False):
             print("\033[93mConversation history cleared.\033[0m")
             continue
             
+        # Clipboard Image Paste / Vision command
+        if line_stripped.startswith(("/paste", "/image", "/img", "/v")) and not line_stripped.startswith("/workspace") and not line_stripped.startswith("/restore"):
+            is_match = False
+            for cmd_pref in ["/paste", "/image", "/img", "/v"]:
+                if line_stripped.startswith(cmd_pref + " ") or line_stripped == cmd_pref:
+                    is_match = True
+                    break
+            if is_match:
+                parts = line.split(" ", 1)
+                user_prompt = parts[1].strip() if len(parts) > 1 and parts[1].strip() else ""
+                
+                # Check clipboard
+                if check_clipboard_has_image():
+                    dest = os.path.abspath(".rm_pasted_image.png")
+                    ext = extract_clipboard_image(dest)
+                    if ext:
+                        if not user_prompt:
+                            user_prompt = "Describe this image in detail and summarize the key information shown."
+                        print(f"\033[92m[Vision] Extracted image from clipboard and saved to {dest}.\033[0m")
+                        print(f"\033[93m[Vision] Prompt: {user_prompt}\033[0m")
+                        reply = run_vision_query(dest, user_prompt)
+                        if reply:
+                            messages.append({"role": "user", "content": f"[Image attached: {dest}] {user_prompt}"})
+                            messages.append({"role": "assistant", "content": reply})
+                            save_temp_memory(messages)
+                    else:
+                        print("\033[91m[Vision] Error extracting image from clipboard.\033[0m")
+                else:
+                    print("\033[91m[Vision] No image found in macOS clipboard. Copy an image first (Command+C).\033[0m")
+                continue
+
         # Council Deliberation Command
         if line_stripped.startswith(("/council ", "/mc ")) or line_stripped in ("/council", "/mc"):
             parts = line.split(" ", 1)
@@ -1591,6 +1796,26 @@ def main():
     if model_id == "smart" and args and args[0] == "council":
         model_id = "council"
         args.pop(0)
+        
+    # Map 'smart /paste' argument structure
+    if model_id == "smart" and args and args[0] in ["/paste", "/image", "/img", "/v"]:
+        model_id = args[0]
+        args.pop(0)
+        
+    if model_id in ["/paste", "/image", "/img", "/v"]:
+        prompt = " ".join(args) if args else "Describe this image in detail and summarize the key information shown."
+        if check_clipboard_has_image():
+            dest = os.path.abspath(".rm_pasted_image.png")
+            ext = extract_clipboard_image(dest)
+            if ext:
+                print(f"\033[92m[Vision] Extracted image from clipboard and saved to {dest}.\033[0m")
+                print(f"\033[93m[Vision] Prompt: {prompt}\033[0m")
+                run_vision_query(dest, prompt)
+            else:
+                print("\033[91m[Vision] Error extracting image from clipboard.\033[0m")
+        else:
+            print("\033[91m[Vision] No image found in macOS clipboard. Copy an image first (Command+C).\033[0m")
+        sys.exit(0)
         
     use_deep = False
     if args and args[0] in ["deep", "--deep"]:

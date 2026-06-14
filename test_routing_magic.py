@@ -382,5 +382,61 @@ class TestRoutingMagic(unittest.TestCase):
         self.assertEqual(failed_attempts[0][0], "primary-model")
         self.assertIn("Rate limit 429", failed_attempts[0][1])
 
+    # 35. Test check_clipboard_has_image
+    @patch('subprocess.run')
+    def test_check_clipboard_has_image(self, mock_run):
+        # Case 1: Image exists in clipboard info
+        mock_res = MagicMock()
+        mock_res.returncode = 0
+        mock_res.stdout = "«class PNGf», JPEG picture, TIFF picture"
+        mock_run.return_value = mock_res
+        self.assertTrue(openai_wrapper.check_clipboard_has_image())
+        
+        # Case 2: No image in clipboard info
+        mock_res.stdout = "string, Unicode text"
+        self.assertFalse(openai_wrapper.check_clipboard_has_image())
+        
+        # Case 3: Error in command execution
+        mock_res.returncode = 1
+        self.assertFalse(openai_wrapper.check_clipboard_has_image())
+
+    # 36. Test extract_clipboard_image
+    @patch('os.path.getsize')
+    @patch('os.path.exists')
+    @patch('os.remove')
+    @patch('subprocess.run')
+    def test_extract_clipboard_image(self, mock_run, mock_remove, mock_exists, mock_getsize):
+        mock_res_info = MagicMock()
+        mock_res_info.returncode = 0
+        mock_res_info.stdout = "«class PNGf»"
+        
+        mock_res_write = MagicMock()
+        mock_res_write.returncode = 0
+        
+        mock_run.side_effect = [mock_res_info, mock_res_write]
+        mock_exists.return_value = True
+        mock_getsize.return_value = 100
+        
+        ext = openai_wrapper.extract_clipboard_image("dummy.png")
+        self.assertEqual(ext, ".png")
+        mock_remove.assert_called_once_with("dummy.png")
+
+    # 37. Test run_vision_query
+    @patch('builtins.open', new_callable=mock_open, read_data=b"fake_image_bytes")
+    @patch('os.path.exists')
+    @patch('openai_wrapper.get_client_and_model')
+    def test_run_vision_query(self, mock_get_client, mock_exists, mock_file):
+        mock_exists.return_value = True
+        
+        mock_client = MagicMock()
+        mock_get_client.return_value = (mock_client, "nvidia/llama-3.1-nemotron-nano-vl-8b-v1")
+        
+        mock_chunk = MagicMock()
+        mock_chunk.choices = [MagicMock(delta=MagicMock(content="Mocked vision analysis description"))]
+        mock_client.chat.completions.create.return_value = [mock_chunk]
+        
+        reply = openai_wrapper.run_vision_query("dummy.png", "what is this")
+        self.assertEqual(reply, "Mocked vision analysis description")
+
 if __name__ == '__main__':
     unittest.main()
