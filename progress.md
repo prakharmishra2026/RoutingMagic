@@ -1,6 +1,8 @@
 # Project Progress: RoutingMagic
 
 ## Chronological Log
+ - **2026-06-17:**
+   * Added clipboard image paste (/paste, Ctrl+V) and vision model analysis integration. (57e6ef0)
  - **Phase 1:** Built foundational REPL, `openai_wrapper.py`, and smart routing logic for NVIDIA/OpenAI models.
  - **Phase 2:** Defined Zsh aliases to inject commands globally across all system projects.
  - **Phase 3:** Converted to an advanced IDE-like Terminal Protocol with auto-commit failsafes, cost/rate-limit tracking, model fallback chains, workspace context isolation, and smart `stderr` error interception.
