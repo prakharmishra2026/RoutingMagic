@@ -249,10 +249,12 @@ class TestRoutingMagic(unittest.TestCase):
         self.assertEqual(model, "council")
         self.assertEqual(role, "llm_council_deliberation")
 
-    # 32. run_council execution and querying stages
+    # 32. run_council execution and querying stages (offline fallback test)
+    @patch('urllib.request.urlopen')
     @patch('openai_wrapper._query_model')
     @patch('openai_wrapper.get_client_and_model')
-    def test_run_council(self, mock_get_client, mock_query_model):
+    def test_run_council(self, mock_get_client, mock_query_model, mock_urlopen):
+        mock_urlopen.side_effect = Exception("Fetch failed")
         mock_client = MagicMock()
         mock_get_client.return_value = (mock_client, "google/gemma-4-31b-it:free")
         mock_chunk = MagicMock()
@@ -268,12 +270,14 @@ class TestRoutingMagic(unittest.TestCase):
         self.assertEqual(reply, "Synthesized Answer")
         self.assertEqual(mock_query_model.call_count, 8)
 
-    # 33. run_council selects reasoning Chairman for complex logic
+    # 33. run_council selects reasoning Chairman for complex logic (offline fallback test)
+    @patch('urllib.request.urlopen')
     @patch('openai_wrapper._query_model')
     @patch('openai_wrapper.get_client_and_model')
-    def test_run_council_reasoning(self, mock_get_client, mock_query_model):
+    def test_run_council_reasoning(self, mock_get_client, mock_query_model, mock_urlopen):
+        mock_urlopen.side_effect = Exception("Fetch failed")
         mock_client = MagicMock()
-        mock_get_client.return_value = (mock_client, "deepseek/deepseek-r1")
+        mock_get_client.return_value = (mock_client, "openai/o3-mini")
         mock_chunk = MagicMock()
         mock_chunk.choices = [MagicMock(delta=MagicMock(content="Reasoned Answer", reasoning_content="thinking"))]
         mock_client.chat.completions.create.return_value = [mock_chunk]
@@ -285,7 +289,50 @@ class TestRoutingMagic(unittest.TestCase):
         
         reply = openai_wrapper.run_council("Step-by-step math proof for 2+2=4")
         self.assertEqual(reply, "Reasoned Answer")
-        mock_get_client.assert_called_with("deepseek/deepseek-r1")
+        mock_get_client.assert_called_with("openai/o3-mini")
+
+    # 34. run_council dynamic model selection with mock registry data
+    @patch('urllib.request.urlopen')
+    @patch('openai_wrapper._query_model')
+    @patch('openai_wrapper.get_client_and_model')
+    def test_run_council_dynamic_selection(self, mock_get_client, mock_query_model, mock_urlopen):
+        mock_response = MagicMock()
+        mock_response.read.return_value = json.dumps({
+            "data": [
+                {
+                    "id": "qwen/qwen3-max-thinking",
+                    "name": "Qwen3 Max Thinking",
+                    "created": 1770000000,
+                    "pricing": {"prompt": "0.0000008", "completion": "0.000004"},
+                    "context_length": 262144,
+                    "supported_parameters": ["reasoning", "structured_outputs"]
+                },
+                {
+                    "id": "openai/o3-mini",
+                    "name": "OpenAI o3-mini",
+                    "created": 1738000000,
+                    "pricing": {"prompt": "0.0000011", "completion": "0.0000044"},
+                    "context_length": 200000,
+                    "supported_parameters": ["reasoning", "structured_outputs"]
+                }
+            ]
+        }).encode('utf-8')
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+
+        mock_client = MagicMock()
+        mock_get_client.return_value = (mock_client, "qwen/qwen3-max-thinking")
+        mock_chunk = MagicMock()
+        mock_chunk.choices = [MagicMock(delta=MagicMock(content="Dynamic Synthesized Answer", reasoning_content=None))]
+        mock_client.chat.completions.create.return_value = [mock_chunk]
+
+        mock_query_model.side_effect = [
+            "Opinion 1", "Opinion 2", "Opinion 3", "Opinion 4",
+            "Review 1", "Review 2", "Review 3", "Review 4"
+        ]
+
+        reply = openai_wrapper.run_council("Step-by-step math proof for 2+2=4")
+        self.assertEqual(reply, "Dynamic Synthesized Answer")
+        mock_get_client.assert_called_with("qwen/qwen3-max-thinking")
 
 if __name__ == '__main__':
     unittest.main()

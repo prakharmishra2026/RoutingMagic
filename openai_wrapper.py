@@ -23,6 +23,7 @@ import atexit
 import tty
 import termios
 import concurrent.futures
+import urllib.request
 from pathlib import Path
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -445,6 +446,68 @@ def chat_oneshot(model, prompt, use_deep_context=False):
         raise RuntimeError("All models in the fallback chain failed for chat_oneshot.")
 
 
+def avg_price_per_m(model):
+    """Calculate average price per million tokens."""
+    p = model.get("pricing", {}) or {}
+    try:
+        prompt = float(p.get("prompt", 0) or 0)
+        completion = float(p.get("completion", 0) or 0)
+    except (TypeError, ValueError):
+        return float("inf")
+    if prompt < 0 or completion < 0:
+        return float("inf")
+    return (prompt + completion) / 2.0 * 1_000_000.0
+
+def get_dynamic_model(models_list, free=True, price_ceiling=None, required_params=None, min_context=128000, fallback_default=None):
+    """Dynamically selects the latest model passing the criteria from the registry."""
+    if not models_list:
+        return fallback_default
+
+    passers = []
+    for m in models_list:
+        # Check pricing
+        ap = avg_price_per_m(m)
+        if free:
+            if ap != 0.0:
+                continue
+        else:
+            if ap == float("inf"):
+                continue
+            if price_ceiling is not None and ap > price_ceiling:
+                continue
+                
+        # Check context length
+        if (m.get("context_length") or 0) < min_context:
+            continue
+            
+        # Check supported parameters
+        sp = set(m.get("supported_parameters", []) or [])
+        if required_params:
+            if not set(required_params).issubset(sp):
+                continue
+                
+        passers.append(m)
+
+    if not passers:
+        return fallback_default
+
+    # Sort candidates DESC:
+    # 1. Has structured outputs
+    # 2. Created timestamp (latest first)
+    # 3. Cheapest first (-avg_price)
+    # 4. Context length (larger first)
+    def sort_key(model):
+        sp = set(model.get("supported_parameters", []) or [])
+        has_struct = 1 if "structured_outputs" in sp else 0
+        created = model.get("created") or 0
+        neg_price = -avg_price_per_m(model)
+        ctx = model.get("context_length") or 0
+        return (has_struct, created, neg_price, ctx)
+
+    passers.sort(key=sort_key, reverse=True)
+    return passers[0]["id"]
+
+
 def _query_model(model_name, messages, temperature=0.7):
     client, target_model = get_client_and_model(model_name)
     base_model_id = target_model.split("/")[-1].split(":")[0]
@@ -483,17 +546,71 @@ def run_council(prompt, use_deep_context=False):
     """Executes Karpathy-style LLM Council deliberation protocol:
     Stage 1: parallel opinions from 4 free models.
     Stage 2: parallel peer critique and scoring (1-10).
-    Stage 3: synthesis by the Chairman model (paid DeepSeek R1 for heavy reasoning, otherwise free Gemma 4).
+    Stage 3: synthesis by the Chairman model (dynamic latest reasoning model for heavy queries, otherwise latest free general model).
     """
     import concurrent.futures
+    import urllib.request
     
-    council_models = [
-        "google/gemma-4-31b-it:free",
-        "qwen/qwen3-coder:free",
-        "meta-llama/llama-3.3-70b-instruct:free",
-        "nvidia/nemotron-3-super-120b-a12b:free"
-    ]
-    
+    # Fetch live models from OpenRouter registry to prevent static model rot
+    models_list = None
+    try:
+        url = "https://openrouter.ai/api/v1/models"
+        req = urllib.request.Request(url, headers={"User-Agent": "RoutingMagic/1.0"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            models_list = json.loads(resp.read())["data"]
+            print("\033[92m[LLM Council] Successfully fetched live model registry from OpenRouter.\033[0m")
+    except Exception as e:
+        print(f"\033[93m[LLM Council] Warning: Live registry fetch failed ({e}). Using hardcoded model defaults.\033[0m")
+
+    # Dynamically select 4 council models
+    council_models = []
+    if models_list:
+        try:
+            # 1. Coding Specialist (free, coder/code in ID, prefers structured outputs)
+            c_model = get_dynamic_model(models_list, free=True, fallback_default="qwen/qwen3-coder:free", 
+                                        min_context=128000, required_params=["structured_outputs"])
+            council_models.append(c_model)
+            
+            # 2. Reasoning/Context Specialist (free, supports reasoning)
+            r_model = get_dynamic_model(models_list, free=True, fallback_default="nvidia/nemotron-3-super-120b-a12b:free",
+                                        min_context=128000, required_params=["reasoning"])
+            if r_model not in council_models:
+                council_models.append(r_model)
+                
+            # 3. Instruction/Agentic Specialist (free, general context)
+            i_model = get_dynamic_model(models_list, free=True, fallback_default="meta-llama/llama-3.3-70b-instruct:free",
+                                        min_context=128000)
+            if i_model not in council_models:
+                council_models.append(i_model)
+                
+            # 4. General Flagship (free, general context)
+            g_model = get_dynamic_model(models_list, free=True, fallback_default="google/gemma-4-31b-it:free",
+                                        min_context=128000)
+            if g_model not in council_models:
+                council_models.append(g_model)
+                
+            # Fill up to 4 unique if duplicates occurred
+            for fallback in ["google/gemma-4-31b-it:free", "qwen/qwen3-coder:free", "meta-llama/llama-3.3-70b-instruct:free", "nvidia/nemotron-3-super-120b-a12b:free"]:
+                if len(council_models) >= 4:
+                    break
+                if fallback not in council_models:
+                    council_models.append(fallback)
+        except Exception as e:
+            print(f"\033[93m[LLM Council] Error selecting dynamic council models: {e}. Using defaults.\033[0m")
+            council_models = [
+                "google/gemma-4-31b-it:free",
+                "qwen/qwen3-coder:free",
+                "meta-llama/llama-3.3-70b-instruct:free",
+                "nvidia/nemotron-3-super-120b-a12b:free"
+            ]
+    else:
+        council_models = [
+            "google/gemma-4-31b-it:free",
+            "qwen/qwen3-coder:free",
+            "meta-llama/llama-3.3-70b-instruct:free",
+            "nvidia/nemotron-3-super-120b-a12b:free"
+        ]
+
     context_str = get_deep_context() if use_deep_context else get_instant_context()
     system_instruction = (
         "You are a rigorous analytical assistant trained on Charlie Munger's mental models. "
@@ -503,21 +620,24 @@ def run_council(prompt, use_deep_context=False):
         f"Context:\n{context_str}"
     )
     
-    # Select Chairman based on regex heuristics
+    # Select Chairman based on regex heuristics (supports trade-offs with hyphens)
     is_high_reasoning = bool(re.search(
-        r'\b(math|financial analysis|deep reasoning|o1|complex logic|tradeoffs|step-by-step|chain of thought|deep analysis|critically audit|audit|algorithm|proof|prove|equation|derivation)\b',
+        r'\b(math|financial analysis|deep reasoning|o1|complex logic|tradeoffs|trade-offs|step-by-step|chain of thought|deep analysis|critically audit|audit|algorithm|proof|prove|equation|derivation)\b',
         prompt.lower()
     ))
     
     if is_high_reasoning:
-        chairman_model = "deepseek/deepseek-r1"
-        reasoning_reason = "high reasoning required (regex matched)"
+        # Dynamically choose the latest paid reasoning model under $3.00/M tokens ceiling
+        chairman_model = get_dynamic_model(models_list, free=False, price_ceiling=3.0, required_params=["reasoning"],
+                                           fallback_default="openai/o3-mini")
+        reasoning_reason = f"high reasoning required (regex matched) -> selected latest {chairman_model}"
     else:
-        chairman_model = "google/gemma-4-31b-it:free"
-        reasoning_reason = "general query"
+        # Dynamically choose the latest free flagship model
+        chairman_model = get_dynamic_model(models_list, free=True, fallback_default="google/gemma-4-31b-it:free")
+        reasoning_reason = f"general query -> selected latest {chairman_model}"
         
     print("\n\033[95m[LLM Council] Starting deliberation...\033[0m")
-    print("\033[94m[Stage 1] Querying 4 council members for opinions in parallel...\033[0m")
+    print(f"\033[94m[Stage 1] Querying 4 council members {council_models} for opinions in parallel...\033[0m")
     
     stage1_start = time.time()
     opinions = {}
