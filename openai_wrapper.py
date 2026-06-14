@@ -206,7 +206,7 @@ def is_port_open(ip, port):
 def check_clipboard_has_image():
     """Check if macOS clipboard contains an image format."""
     try:
-        res = subprocess.run(["osascript", "-e", "clipboard info"], capture_output=True, text=True, timeout=3)
+        res = subprocess.run(["osascript", "-e", "clipboard info"], capture_output=True, text=True, timeout=6)
         if res.returncode != 0:
             print(f"\033[91m[Vision Debug] osascript failed with code {res.returncode}. Stderr: {res.stderr.strip()}\033[0m")
             return False
@@ -229,7 +229,7 @@ def extract_clipboard_image(dest_path):
     Returns the file extension (e.g. '.png') if successful, else None.
     """
     try:
-        res = subprocess.run(["osascript", "-e", "clipboard info"], capture_output=True, text=True, timeout=3)
+        res = subprocess.run(["osascript", "-e", "clipboard info"], capture_output=True, text=True, timeout=6)
         if res.returncode != 0:
             print(f"\033[91m[Vision Debug] extract clipboard info failed with code {res.returncode}. Stderr: {res.stderr.strip()}\033[0m")
             return None
@@ -262,10 +262,19 @@ def extract_clipboard_image(dest_path):
                 
         cmd = [
             "osascript",
-            "-e",
-            f'write (the clipboard as {img_class}) to (open for access POSIX file "{dest_path}" with write permission)'
+            "-e", f'set f to open for access POSIX file "{dest_path}" with write permission',
+            "-e", 'try',
+            "-e", 'set eof f to 0',
+            "-e", f'write (the clipboard as {img_class}) to f',
+            "-e", 'close access f',
+            "-e", 'on error e',
+            "-e", 'try',
+            "-e", 'close access f',
+            "-e", 'end try',
+            "-e", 'error e',
+            "-e", 'end try'
         ]
-        res2 = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        res2 = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
         if res2.returncode == 0 and os.path.exists(dest_path) and os.path.getsize(dest_path) > 0:
             return ext
         else:
