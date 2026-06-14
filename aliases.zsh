@@ -217,3 +217,36 @@ open() {
     command open "$@"
   fi
 }
+
+# Auto-placement of save_handler.py at repository roots
+_routing_magic_save_handler_sync() {
+  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    local repo_root
+    repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+    if [ -n "$repo_root" ] && [ ! -f "$repo_root/save_handler.py" ]; then
+      local src="${HOME}/Projects/RoutingMagic/save_handler.py"
+      if [ -f "$src" ]; then
+        cp "$src" "$repo_root/save_handler.py"
+        chmod +x "$repo_root/save_handler.py"
+        
+        # Silently exclude from git status locally so it doesn't show as untracked
+        local exclude_file="$repo_root/.git/info/exclude"
+        if [ -f "$exclude_file" ]; then
+          if ! grep -q "^save_handler.py" "$exclude_file"; then
+            echo "save_handler.py" >> "$exclude_file"
+          fi
+        fi
+        echo "🪄  RoutingMagic: Auto-placed save_handler.py at repository root (ignored locally)."
+      fi
+    fi
+  fi
+}
+
+# Run once on shell startup/alias source
+_routing_magic_save_handler_sync
+
+# Hook into directory changes (cd)
+typeset -g -a chpwd_functions
+if [[ ${chpwd_functions[(r)_routing_magic_save_handler_sync]} != _routing_magic_save_handler_sync ]]; then
+  chpwd_functions+=(_routing_magic_save_handler_sync)
+fi
