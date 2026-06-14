@@ -25,6 +25,8 @@
    * Integrated council deliberation via `ask council "prompt"` keyword and `/council <prompt>` REPL command.
    * Added unit tests for `run_council` and council routing in `test_routing_magic.py`.
    * Updated `README.md` and `lessons.md` to document the council feature and parallel execution latency mitigation.
+ - **2026-06-15:**
+   * Fixed paste auto-submission, handled empty choices NoneType error, added backup free fallback pool, and implemented in-place reasoning display (dde51fa).
 
 ## Backlog / Next Steps
  - [x] Implement LLM Council multi-agent deliberation.
