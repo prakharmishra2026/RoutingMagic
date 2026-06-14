@@ -208,13 +208,20 @@ def check_clipboard_has_image():
     try:
         res = subprocess.run(["osascript", "-e", "clipboard info"], capture_output=True, text=True, timeout=3)
         if res.returncode != 0:
+            print(f"\033[91m[Vision Debug] osascript failed with code {res.returncode}. Stderr: {res.stderr.strip()}\033[0m")
             return False
         info = res.stdout
+        found = False
         for img_class in ["«class PNGf»", "PNGf", "JPEG picture", "GIF picture", "TIFF picture"]:
             if img_class in info:
-                return True
-    except Exception:
-        pass
+                found = True
+                break
+        if not found:
+            formats = info.replace("\n", " ").strip()
+            print(f"\033[93m[Vision Debug] No image class found. Current clipboard contains: {formats}\033[0m")
+        return found
+    except Exception as e:
+        print(f"\033[91m[Vision Debug] check_clipboard exception: {e}\033[0m")
     return False
 
 def extract_clipboard_image(dest_path):
@@ -224,6 +231,7 @@ def extract_clipboard_image(dest_path):
     try:
         res = subprocess.run(["osascript", "-e", "clipboard info"], capture_output=True, text=True, timeout=3)
         if res.returncode != 0:
+            print(f"\033[91m[Vision Debug] extract clipboard info failed with code {res.returncode}. Stderr: {res.stderr.strip()}\033[0m")
             return None
         info = res.stdout
         
@@ -243,6 +251,7 @@ def extract_clipboard_image(dest_path):
             ext = ".gif"
             
         if not img_class:
+            print(f"\033[91m[Vision Debug] No compatible image class found for extraction. Clipboard info: {info.strip()}\033[0m")
             return None
             
         if os.path.exists(dest_path):
@@ -259,8 +268,10 @@ def extract_clipboard_image(dest_path):
         res2 = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
         if res2.returncode == 0 and os.path.exists(dest_path) and os.path.getsize(dest_path) > 0:
             return ext
-    except Exception:
-        pass
+        else:
+            print(f"\033[91m[Vision Debug] extract write command failed with code {res2.returncode}. Stderr: {res2.stderr.strip()}\033[0m")
+    except Exception as e:
+        print(f"\033[91m[Vision Debug] extract_clipboard exception: {e}\033[0m")
     return None
 
 def run_vision_query(image_path, prompt, model_name=None):
