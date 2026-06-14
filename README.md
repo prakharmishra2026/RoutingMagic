@@ -71,7 +71,7 @@ RoutingMagic uses a zero-latency heuristic algorithm (`smart_route`) to precisel
 *   **Flagship Tool Orchestration** ➡️ `nemotron-super-49b` (NVIDIA NIM)
 *   **Stock Chart Vision** ➡️ `nemotron-nano-vl-8b` (NVIDIA NIM)
 *   **Financial Document Extraction** ➡️ `nemotron-ocr-v1` (NVIDIA NIM)
-*   **Multi-Agent Deliberation** ➡️ **LLM Council** (gemma-4 + qwen3 + llama-3.3 + nemotron-3-super)
+*   **Multi-Agent Deliberation** ➡️ **LLM Council** (3 dynamic, query-tailored distinct models)
 
 If OpenRouter hits its 200 req/day limit or a NIM endpoint fails, the system flawlessly streams through a 6-tier **Fallback Rotation** (`gemma -> nemotron -> gpt-oss -> qwen -> llama -> gemini`) to ensure 100% uptime.
 
@@ -102,14 +102,14 @@ This command keeps your project documentation up-to-date automatically using AI.
 Routes your task to the best Claude Code model configuration.
 *   **Example:** `cc-route "fix the auth bug on production"` (automatically routes to paid Sonnet 4.6 because it's critical production work).
 
-### 5. `ask council "your question"` (Multi-Agent Deliberation)
+### 5. `ask council "your question"`, `/MC`, `/mc`, `mc`, or `MC` (Multi-Agent Deliberation)
 Delivers extremely high-reasoning, peer-critiqued and synthesized answers.
 *   **Example:** `ask council "Critically audit our deployment architecture plan"`
 *   **How it works:** Executes a 3-stage deliberation protocol:
-    1. **Stage 1 (Opinions):** Queries 4 diverse free models in parallel (`gemma-4`, `qwen3-coder`, `llama-3.3`, `nemotron-3-super`) to gather independent viewpoints. *If a model is rate-limited (429) or offline, it automatically fails over to backup free models from a fallback pool.*
-    2. **Stage 2 (Peer Review):** Anonymizes and swaps the opinions, querying the 4 models in parallel to critique and score (1-10) each other's responses. *Also supported by automatic free model failovers.*
-    3. **Stage 3 (Synthesis):** A designated **Chairman** (paid `deepseek/deepseek-r1` for heavy reasoning queries, otherwise free `google/gemma-4-31b-it:free`) synthesizes all opinions and reviews into a single, premium final response. *Streams reasoning/thinking in-place on a single line dynamically, clearing it completely (`\r\033[K`) before starting the final reply to save terminal workspace.*
-*   *Note: In the interactive REPL, you can run this via `/council your question`.*
+    1. **Stage 1 (Opinions):** Queries exactly 3 diverse, query-tailored distinct free models in parallel (e.g. Coder, Reasoning, and General models selected dynamically based on the prompt's category) to gather independent viewpoints. *If a model is rate-limited (429) or offline, it automatically fails over to backup models from a fallback pool, excluding already-active models to guarantee 100% distinctiveness.*
+    2. **Stage 2 (Peer Review):** Anonymizes and swaps the opinions, querying the 3 models in parallel to critique and score (1-10) each other's responses. *Also supported by automatic free model failovers.*
+    3. **Stage 3 (Synthesis):** A designated **Chairman** (a paid reasoning model dynamically resolved via OpenAI router metadata for heavy reasoning/architecture queries, otherwise free `google/gemma-4-31b-it:free`) synthesizes all opinions and reviews into a single, premium final response. *Streams reasoning/thinking in-place on a single line dynamically, clearing it completely (`\r\033[K`) before starting the final reply to save terminal workspace.*
+*   *Note: In the interactive REPL, you can run this via `/council your question`, `/mc your question`, `/MC your question`, `mc your question`, or `MC your question`.*
 
 ---
 

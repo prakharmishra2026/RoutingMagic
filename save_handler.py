@@ -212,7 +212,23 @@ You must output ONLY a valid JSON object. Do not wrap in markdown quotes. The JS
                     temperature=0.3,
                     response_format={"type": "json_object"} if "glm-5.1" not in model_id else None
                 )
-                output = resp.choices[0].message.content.strip()
+                if resp is None:
+                    raise RuntimeError("Response from API is None")
+                choices = getattr(resp, "choices", None)
+                if choices is None:
+                    raise RuntimeError("Response choices field is None")
+                if len(choices) == 0:
+                    raise RuntimeError("Response choices list is empty")
+                first_choice = choices[0]
+                if first_choice is None:
+                    raise RuntimeError("First choice is None")
+                message = getattr(first_choice, "message", None)
+                if message is None:
+                    raise RuntimeError("Message in first choice is None")
+                content = getattr(message, "content", None)
+                if content is None:
+                    raise RuntimeError("Content in message is None")
+                output = content.strip()
                 print(f"\033[92m[Save] Successfully generated diff using {target_model}.\033[0m")
                 break
             except Exception as e:
