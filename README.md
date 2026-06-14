@@ -106,9 +106,9 @@ Routes your task to the best Claude Code model configuration.
 Delivers extremely high-reasoning, peer-critiqued and synthesized answers.
 *   **Example:** `ask council "Critically audit our deployment architecture plan"`
 *   **How it works:** Executes a 3-stage deliberation protocol:
-    1. **Stage 1 (Opinions):** Queries 4 diverse free models in parallel (`gemma-4`, `qwen3-coder`, `llama-3.3`, `nemotron-3-super`) to gather independent viewpoints.
-    2. **Stage 2 (Peer Review):** Anonymizes and swaps the opinions, querying the 4 models in parallel to critique and score (1-10) each other's responses.
-    3. **Stage 3 (Synthesis):** A designated **Chairman** (paid `deepseek/deepseek-r1` for heavy reasoning queries, otherwise free `google/gemma-4-31b-it:free`) synthesizes all opinions and reviews into a single, premium final response.
+    1. **Stage 1 (Opinions):** Queries 4 diverse free models in parallel (`gemma-4`, `qwen3-coder`, `llama-3.3`, `nemotron-3-super`) to gather independent viewpoints. *If a model is rate-limited (429) or offline, it automatically fails over to backup free models from a fallback pool.*
+    2. **Stage 2 (Peer Review):** Anonymizes and swaps the opinions, querying the 4 models in parallel to critique and score (1-10) each other's responses. *Also supported by automatic free model failovers.*
+    3. **Stage 3 (Synthesis):** A designated **Chairman** (paid `deepseek/deepseek-r1` for heavy reasoning queries, otherwise free `google/gemma-4-31b-it:free`) synthesizes all opinions and reviews into a single, premium final response. *Streams reasoning/thinking in-place on a single line dynamically, clearing it completely (`\r\033[K`) before starting the final reply to save terminal workspace.*
 *   *Note: In the interactive REPL, you can run this via `/council your question`.*
 
 ---
@@ -116,6 +116,9 @@ Delivers extremely high-reasoning, peer-critiqued and synthesized answers.
 ## 🛠️ Interactive REPL Commands (Inside `ask`)
 
 When you type `ask` and enter the interactive chat room, you unlock powerful specialized commands. Type these directly into the chat:
+
+### 📋 Paste & Editing Experience
+*   **Multi-Step Paste:** Large pasted text blocks containing newlines do not trigger auto-submission. You can paste your context in multiple steps, copy, or edit it, and press Enter to submit only when you are ready.
 
 ### 🧠 Model & Cost Management
 *   `/model` - Opens a dropdown menu to instantly switch between available free and paid models (e.g. GLM-5.1, DeepSeek, o3-mini).
