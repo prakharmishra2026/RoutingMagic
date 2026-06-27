@@ -1,0 +1,11 @@
+# Python bytecode cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment files
+*.env
+.env
+
+# OS files
+.DS_Store
