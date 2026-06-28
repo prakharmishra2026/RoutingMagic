@@ -1,13 +1,20 @@
 # RoutingMagic 🪄
 
-**Your Smart AI Assistant & Codebase Router**
+**Your Heuristic AI Pair-Programmer & Codebase Router**
+
+RoutingMagic is a terminal-based developer assistant designed to sit directly in your workspace. It sniffs project context, implements resilient model routing with automatic failovers, provides git-snapshot failsafes (undos), and supports multi-image analysis and multi-agent council deliberation—all without token bloat.
 
 ---
 
 ## 📖 The User Story
-Imagine you're building a massive application. You need an AI assistant, but pasting hundreds of files into ChatGPT is exhausting, and giving an AI terminal access can be dangerous if it writes bad code. 
 
-**RoutingMagic** solves this. It sits in your Mac's terminal and automatically knows what folder you are in. When you type `ask`, it instantly acts as your pair programmer. If an AI model gets too expensive, RoutingMagic automatically switches to a free model. If the AI breaks your code, RoutingMagic has a built-in "Undo" button to instantly fix it. It even automatically writes your project documentation for you!
+Imagine you're coding a complex application. Copy-pasting multiple files into a web-based AI chat is slow, and giving an autonomous agent full write access to your directory is risky if it writes broken code. 
+
+**RoutingMagic** solves this. Running directly in your terminal, it automatically understands your current workspace and stack.
+- Type `ask` to start a continuous, context-aware pair-programming session.
+- If a paid model fails or gets rate-limited, RoutingMagic automatically rotates through a resilient fallback chain.
+- If the AI writes broken code, a simple `/restore` command acts as an "Undo" button to revert your codebase.
+- Need high-reasoning audits? A `/council` command spins up three distinct models to critique and synthesize the best solution.
 
 ---
 
@@ -35,110 +42,115 @@ graph TD
 ## 📦 Step-by-Step Installation
 
 ### Step 1: Install & Start 9router
-RoutingMagic relies on **9router** to securely route requests locally before hitting the cloud. 
+RoutingMagic relies on **9router** to securely route requests locally.
 1. Open your terminal.
-2. Install and start 9router so it runs in the background (it binds to port `20128` by default).
+2. Install and start 9router in the background (it binds to port `20128` by default).
 
 ### Step 2: Clone RoutingMagic
-Download the RoutingMagic tool to your computer:
+Clone the repository to your projects folder:
 ```bash
 git clone https://github.com/prakharmishra2026/RoutingMagic.git ~/Projects/RoutingMagic
 cd ~/Projects/RoutingMagic
 ```
 
 ### Step 3: Run the Installer
-Run the installation script to globally register the shortcuts on your computer:
+Register the global commands and aliases on your computer:
 ```bash
+chmod +x install.sh
 ./install.sh
 source ~/.zshrc
 ```
 
 ### Step 4: Add Your API Keys
-No need to configure keys for every single project:
-1. Open `~/global.env` on your computer.
-2. Add your AI provider keys (e.g., `NVAPI_KEY`, `OPENROUTER_API_KEY`).
-*RoutingMagic will automatically map specialized NVIDIA NIM endpoints to their distinct keys if provided (e.g., `NVAPI_KEY_NEMOTRON_OCR`).*
+Open `~/global.env` and populate your API credentials:
+```env
+NVAPI_KEY=your_nvidia_nim_api_key
+OPENROUTER_API_KEY=your_openrouter_api_key
+# Optional: Model-specific NVIDIA NIM keys
+NVAPI_KEY_NEMOTRON_OCR=key_for_ocr
+```
+
+---
+
+## 🚀 How to Use (CLI vs. Interactive REPL)
+
+RoutingMagic operates in two main modes: **CLI One-Shot Mode** and **Interactive REPL Mode**.
+
+### 1. Interactive REPL Mode (Most Powerful)
+To use interactive features, slash commands, or maintain a conversation, **you must start the interactive REPL session first**.
+
+Start the session by typing one of these commands in your terminal:
+- `ask` — Start a standard REPL session (fast, context-aware).
+- `ask deep` — Start a deep-context REPL session (scans project memory files: `memory.md`, `progress.md`, `scratchpad.md`, `lessons.md` to load full codebase context).
+
+#### 🛠️ Slash Commands (Only inside the active `ask` REPL session)
+Once you see the green `>>>` prompt, you are inside the REPL and can type these commands:
+
+| Command | Action | Example |
+| :--- | :--- | :--- |
+| **`/council <prompt>`** | Launch 3-model multi-agent deliberation & synthesis | `/council critique this architecture` |
+| **`/mc <prompt>`** | Alias for `/council` | `/mc refactor this logic` |
+| **`/paste`** | Enter clipboard image pasting queue (Ctrl+V / Cmd+V) | `/paste compare these mockups` |
+| **`/model`** | Dropdown menu to dynamically switch active LLM models | `/model` |
+| **`/cost`** | View token cost tracking and daily RPM/budget limits | `/cost` |
+| **`/safe`** | Take a silent git snapshot of the directory before AI writes code | `/safe` |
+| **`/restore`** | Revert directory to the last snapshot taken with `/safe` (Undo) | `/restore` |
+| **`/workspace <name>`** | Separate conversation context (e.g. `frontend`, `backend`) | `/workspace api` |
+| **`/pin <file>`** | Lock a critical file into memory so the AI never forgets it | `/pin src/auth.ts` |
+| **`/run <command>`** | Run a terminal command; if it errors, AI auto-corrects the code | `/run npm run build` |
+| **`/test <command>`** | Run tests; if they fail, error logs are piped to the AI | `/test pytest` |
+| **`exit` / `quit`** | Close the REPL session safely | `exit` |
+
+---
+
+### 2. CLI One-Shot Mode (Quick Terminal Commands)
+Run these commands directly in your terminal shell without starting the REPL:
+
+- **`ask "your question"`**
+  Quickly asks a question about the directory you are in.
+  *Example:* `ask "How do I start the server?"`
+- **`ask deep "your question"`**
+  Asks a question using the deep repository context.
+  *Example:* `ask deep "Are there any security issues in our auth setup?"`
+- **`ask council "your question"`** (or `mc "..."` / `MC "..."`)
+  Delivers a high-reasoning, peer-critiqued and synthesized answer.
+  *Example:* `ask council "Audit our database migration plan"`
+- **`ask /paste [image_paths...] "your prompt"`**
+  Analyze or compare images directly from files.
+  *Example:* `ask /paste img1.png img2.png "Compare these charts"`
+- **`save`**
+  Generate a plain-English, color-coded summary of recent git changes, then update your project memory files (`memory.md`, `progress.md`, etc.). Use `save --auto` to skip confirmation.
 
 ---
 
 ## 🧠 June 2026 AntiGravity Model Stack
-RoutingMagic uses a zero-latency heuristic algorithm (`smart_route`) to precisely direct your task to the best available model based on their documented strengths:
 
-*   **Deep Math & Finance** ➡️ `nvidia/nemotron-3-super-120b-a12b:free`
-*   **Long Document Planning** ➡️ `nemotron-3-super-120b` (1M Context)
-*   **Rapid Code Refactoring** ➡️ `qwen3-coder:free`
-*   **Agentic JSON Workflows** ➡️ `llama-3.3-70b-instruct:free`
-*   **Flagship Tool Orchestration** ➡️ `nemotron-super-49b` (NVIDIA NIM)
-*   **Stock Chart Vision** ➡️ `nemotron-nano-vl-8b` (NVIDIA NIM)
-*   **Financial Document Extraction** ➡️ `nemotron-ocr-v1` (NVIDIA NIM)
-*   **Multi-Agent Deliberation** ➡️ **LLM Council** (3 dynamic, query-tailored distinct models)
+RoutingMagic uses zero-latency regex heuristics (`smart_route`) to direct your query to the specialized model best equipped for the task:
 
-If OpenRouter hits its 200 req/day limit or a NIM endpoint fails, the system flawlessly streams through a 6-tier **Fallback Rotation** (`gemma -> nemotron -> gpt-oss -> qwen -> llama -> gemini`) to ensure 100% uptime.
+* **Deep Math & Finance** ➡️ `nvidia/nemotron-3-super-120b-a12b:free`
+* **Long Document Planning** ➡️ `nemotron-3-super-120b` (1M Context)
+* **Rapid Code Refactoring** ➡️ `qwen3-coder:free`
+* **Agentic JSON Workflows** ➡️ `llama-3.3-70b-instruct:free`
+* **Flagship Tool Orchestration** ➡️ `nemotron-super-49b` (NVIDIA NIM)
+* **Stock Chart Vision** ➡️ `nemotron-nano-vl-8b` (NVIDIA NIM)
+* **Financial Document Extraction** ➡️ `nemotron-ocr-v1` (NVIDIA NIM)
+* **Multi-Agent Deliberation** ➡️ **LLM Council** (3 dynamic, query-tailored distinct models)
 
----
-
-## 🚀 Global Terminal Commands (Use anywhere)
-
-You can run these commands from **any** folder or project on your computer using your standard Mac terminal, VS Code terminal, or Antigravity IDE terminal.
-
-### 1. `ask "your question"`
-This is your fast, daily assistant. Type `ask` followed by what you want to know. 
-*   **Example:** `ask "How do I connect to Supabase?"`
-*   **How it works:** It instantly sniffs out the folder you are in, detects your project stack, and gets you a contextual answer in milliseconds.
-*   **Interactive Chat:** Type `ask` with nothing after it to enter a continuous chat room (REPL).
-
-### 2. `ask deep "your question"`
-Use this for big architectural questions when you want the AI to understand your entire project.
-*   **Example:** `ask deep "Is my mutual funds page effective?"`
-*   **How it works:** It looks for your core project status files (`memory.md`, `progress.md`, `scratchpad.md`, `lessons.md`). If they are there, it reads them instantly (saving you tokens). If not, it does a full scan of your project files.
-
-### 3. `save` (Intelligent Codebase Auto-Saver)
-This command keeps your project documentation up-to-date automatically using AI.
-*   **Example:** Just type `save` in your project folder.
-*   **How it works:** It reads your recent code changes and generates a **plain English, color-coded summary** (Grill Me Diff). It will present this summary and ask for your approval before updating your 4 core developer files (`memory.md`, `progress.md`, `scratchpad.md`, `lessons.md`).
-*   **Pro-tip:** Type `save --auto` to skip the approval process if you trust the AI.
-
-### 4. `cc-route "your task"`
-Routes your task to the best Claude Code model configuration.
-*   **Example:** `cc-route "fix the auth bug on production"` (automatically routes to paid Sonnet 4.6 because it's critical production work).
-
-### 5. `ask council "your question"`, `/MC`, `/mc`, `mc`, or `MC` (Multi-Agent Deliberation)
-Delivers extremely high-reasoning, peer-critiqued and synthesized answers.
-*   **Example:** `ask council "Critically audit our deployment architecture plan"`
-*   **How it works:** Executes a 3-stage deliberation protocol:
-    1. **Stage 1 (Opinions):** Queries exactly 3 diverse, query-tailored distinct free models in parallel (e.g. Coder, Reasoning, and General models selected dynamically based on the prompt's category) to gather independent viewpoints. *If a model is rate-limited (429) or offline, it automatically fails over to backup models from a fallback pool, excluding already-active models to guarantee 100% distinctiveness.*
-    2. **Stage 2 (Peer Review):** Anonymizes and swaps the opinions, querying the 3 models in parallel to critique and score (1-10) each other's responses. *Also supported by automatic free model failovers.*
-    3. **Stage 3 (Synthesis):** A designated **Chairman** (a paid reasoning model dynamically resolved via OpenAI router metadata for heavy reasoning/architecture queries, otherwise free `google/gemma-4-31b-it:free`) synthesizes all opinions and reviews into a single, premium final response. *Streams reasoning/thinking in-place on a single line dynamically, clearing it completely (`\r\033[K`) before starting the final reply to save terminal workspace.*
-*   *Note: In the interactive REPL, you can run this via `/council your question`, `/mc your question`, `/MC your question`, `mc your question`, or `MC your question`.*
-
-### 6. `ask /paste "your prompt"` (Clipboard Image Paste & Vision Analysis)
-Analyze, explain, or convert clipboard images directly from the terminal or inside the chat REPL.
-*   **Example:** `ask /paste "convert this dashboard UI mockup to HTML/CSS code"`
-*   **How it works:** Checks the macOS clipboard for an image (copied via `Command+C`). If found, saves it to a local file, base64-encodes it, and queries our June 2026 Vision Stack (`nvidia/llama-3.1-nemotron-nano-vl-8b-v1`, with failovers to `google/gemini-2.5-flash:free` and `openai/gpt-4o-mini`).
-*   **Keystroke Shortcut:** In the interactive REPL, simply press `Ctrl+V` to trigger this flow.
+### Fallback Rotation
+If OpenRouter limits are hit (429) or NIM endpoints fail, requests automatically fail over through a 6-tier rotation:
+`Target Model -> Gemma 4 31B -> Nemotron 3 Super 120B -> GPT-OSS 120B -> Qwen3 Coder -> Llama 3.3 70B -> Gemini 2.5 Pro`
 
 ---
 
-## 🛠️ Interactive REPL Commands (Inside `ask`)
+## 🛡️ Key Features In-Depth
 
-When you type `ask` and enter the interactive chat room, you unlock powerful specialized commands. Type these directly into the chat:
+### 1. Multi-Agent Council (`/council`)
+Uses a 3-stage deliberation protocol to deliver premium, peer-reviewed solutions:
+1. **Stage 1 (Opinions):** Queries exactly 3 distinct specialized free models in parallel (Coder, Reasoning, and General models resolved from the live OpenRouter registry).
+2. **Stage 2 (Peer Review):** Anonymizes and swaps opinions, querying the 3 models in parallel to critique and score (1-10) each other.
+3. **Stage 3 (Synthesis):** A paid reasoning Chairman (or `gemma-4-31b-it` if reasoning is not required) synthesizes the critiques into a single, high-fidelity final output.
 
-### 📋 Paste & Editing Experience
-*   **Multi-Step Paste:** Large pasted text blocks containing newlines do not trigger auto-submission. You can paste your context in multiple steps, copy, or edit it, and press Enter to submit only when you are ready.
-*   **Clipboard Image Paste:** Type `/paste [prompt]` (or `/v`, `/image`, `/img`) or press `Ctrl+V` to capture your macOS clipboard image, save it locally, and send it to the Vision Stack for description or code generation.
-
-### 🧠 Model & Cost Management
-*   `/model` - Opens a dropdown menu to instantly switch between available free and paid models (e.g. GLM-5.1, DeepSeek, o3-mini).
-*   `/cost` - Shows you how many requests you've used today, your RPM (Requests Per Minute) limits for free models, and tracks your $5 budget cap for paid models.
-
-### 🛡️ Code Failsafes (Undo Button)
-*   `/safe` - Creates an instant, silent Git snapshot of your codebase. Always run this before asking the AI to write complex code!
-*   `/restore` - If the AI breaks your code, run this to instantly "Undo" and revert your project back to exactly how it was when you ran `/safe`.
-
-### 📂 Agent Workspaces & Memory
-*   `/workspace [name]` - (e.g., `/workspace frontend`) Creates an isolated memory context. Your frontend and backend chats will no longer pollute each other's windows.
-*   `/pin [filename]` - Permanently locks a critical file into the system's memory so the AI never forgets it, no matter how long the conversation goes.
-
-### 🐛 Smart Error Interception & Testing
-*   `! [command]` or `/run [command]` - Run any normal terminal command (e.g., `! npm start`). If the command crashes, the system intercepts the red error text and asks if you want the LLM to automatically fix the bug.
-*   `/test [command]` - Run a background test (e.g., `/test pytest`). If the test fails, it skips the prompt and immediately feeds the error log to the LLM to auto-correct the code.
+### 2. Multi-Image Paste & Vision (`/paste`)
+- Enforces a **10-image maximum** and **25MB cumulative base64 payload size** limit.
+- **Explicit DONE Flow:** Paste images sequentially (Ctrl+V / Cmd+V). Hit Enter on a blank line to see the queue count. Type `done` or `/done` to proceed with your analysis prompt.
+- **Session Cleanup:** Image paste queues are session-scoped and managed inside a temporary directory context manager (`SessionContext`), keeping your filesystem clean under any exit or exception.

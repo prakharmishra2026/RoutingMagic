@@ -16,6 +16,8 @@ import re
 import json
 import subprocess
 import shutil
+import tempfile
+import hashlib
 import time
 import select
 import shlex
@@ -54,7 +56,6 @@ load_dotenv(os.path.expanduser("~/global.env"))
 WORKSPACE = "default"
 TEMP_MEM_FILE = f".rm_session_{WORKSPACE}.json"
 SESSION_DIR = os.path.expanduser("~/Projects/RoutingMagic/sessions")
-
 SESSION_COST = 0.0
 MAX_BUDGET = 5.0
 PINNED_CONTEXT = []
@@ -203,6 +204,96 @@ def is_port_open(ip, port):
         except Exception:
             return False
 
+class SessionContext:
+    """Session-scoped context for managing active REPL state, including pasted images."""
+    def __init__(self):
+        import uuid
+        self.session_id = uuid.uuid4().hex[:8]
+        self.temp_dir = tempfile.TemporaryDirectory(prefix=f"rm_pasted_{self.session_id}_")
+        self.image_paths = []
+        self.image_hashes = set()
+        
+    def __enter__(self):
+        return self
+        
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.cleanup()
+        
+    def add_image_from_clipboard(self) -> str | None:
+        """Saves clipboard image to the temp directory and registers it.
+        Returns the absolute file path, or "duplicate" if it's already added, or None on failure.
+        """
+        temp_file_name = f"image_{len(self.image_paths)}.png"
+        dest_path = os.path.join(self.temp_dir.name, temp_file_name)
+        
+        if not check_clipboard_has_image():
+            return None
+            
+        ext = extract_clipboard_image(dest_path)
+        if not ext:
+            return None
+            
+        if ext != ".png":
+            new_path = os.path.splitext(dest_path)[0] + ext
+            try:
+                os.rename(dest_path, new_path)
+                dest_path = new_path
+            except Exception:
+                pass
+                
+        try:
+            with open(dest_path, "rb") as f:
+                file_hash = hashlib.md5(f.read()).hexdigest()
+        except Exception:
+            file_hash = dest_path
+            
+        if file_hash in self.image_hashes:
+            try:
+                os.remove(dest_path)
+            except Exception:
+                pass
+            return "duplicate"
+            
+        self.image_hashes.add(file_hash)
+        self.image_paths.append(dest_path)
+        return dest_path
+        
+    def clear(self):
+        """Clears current image queue and resets temp directory."""
+        self.image_paths = []
+        self.image_hashes = set()
+        try:
+            self.temp_dir.cleanup()
+        except Exception:
+            pass
+        import uuid
+        self.session_id = uuid.uuid4().hex[:8]
+        self.temp_dir = tempfile.TemporaryDirectory(prefix=f"rm_pasted_{self.session_id}_")
+        
+    def cleanup(self):
+        """Clean up the temporary directory."""
+        try:
+            self.temp_dir.cleanup()
+        except Exception:
+            pass
+
+def parse_image_args(args) -> tuple[list[str], str]:
+    """Parse command-line arguments to separate image file paths from the text prompt."""
+    image_paths = []
+    prompt_parts = []
+    
+    img_exts = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".tiff", ".bmp"}
+    
+    for arg in args:
+        ext = os.path.splitext(arg.lower())[1]
+        if ext in img_exts and os.path.exists(arg):
+            image_paths.append(os.path.abspath(arg))
+        else:
+            prompt_parts.append(arg)
+            
+    prompt = " ".join(prompt_parts)
+    return image_paths, prompt
+
 def check_clipboard_has_image():
     """Check if macOS clipboard contains an image format."""
     try:
@@ -283,43 +374,60 @@ def extract_clipboard_image(dest_path):
         print(f"\033[91m[Vision Debug] extract_clipboard exception: {e}\033[0m")
     return None
 
-def run_vision_query(image_path, prompt, model_name=None):
-    """Base64-encodes the image at image_path and queries a vision-capable model
+def run_vision_query(image_paths, prompt, model_name=None, detail="auto"):
+    """Base64-encodes multiple images and queries a vision-capable model
     with a fallback chain.
     """
     import base64
-    if not os.path.exists(image_path):
-        print(f"\033[91mError: Image path {image_path} does not exist.\033[0m")
+    if isinstance(image_paths, str):
+        image_paths = [image_paths]
+        
+    if len(image_paths) > 10:
+        print("\033[91mError: Maximum of 10 images can be processed at once.\033[0m")
         return None
         
-    try:
-        with open(image_path, "rb") as f:
-            base64_image = base64.b64encode(f.read()).decode("utf-8")
-    except Exception as e:
-        print(f"\033[91mError base64-encoding image: {e}\033[0m")
-        return None
-        
-    ext = os.path.splitext(image_path)[1].lower()
-    mime_type = "image/png"
-    if ext in [".jpg", ".jpeg"]:
-        mime_type = "image/jpeg"
-    elif ext == ".gif":
-        mime_type = "image/gif"
-    elif ext == ".webp":
-        mime_type = "image/webp"
+    content_list = [{"type": "text", "text": prompt}]
+    total_base64_len = 0
+    
+    for image_path in image_paths:
+        if not os.path.exists(image_path):
+            print(f"\033[91mError: Image path {image_path} does not exist.\033[0m")
+            return None
+            
+        try:
+            with open(image_path, "rb") as f:
+                img_data = f.read()
+                base64_image = base64.b64encode(img_data).decode("utf-8")
+        except Exception as e:
+            print(f"\033[91mError base64-encoding image {image_path}: {e}\033[0m")
+            return None
+            
+        total_base64_len += len(base64_image)
+        if total_base64_len > 25 * 1024 * 1024:
+            print("\033[91mError: Cumulative base64 image payload size exceeds 25MB limit.\033[0m")
+            return None
+            
+        ext = os.path.splitext(image_path)[1].lower()
+        mime_type = "image/png"
+        if ext in [".jpg", ".jpeg"]:
+            mime_type = "image/jpeg"
+        elif ext == ".gif":
+            mime_type = "image/gif"
+        elif ext == ".webp":
+            mime_type = "image/webp"
+            
+        content_list.append({
+            "type": "image_url",
+            "image_url": {
+                "url": f"data:{mime_type};base64,{base64_image}",
+                "detail": detail
+            }
+        })
         
     messages = [
         {
             "role": "user",
-            "content": [
-                {"type": "text", "text": prompt},
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:{mime_type};base64,{base64_image}"
-                    }
-                }
-            ]
+            "content": content_list
         }
     ]
     
@@ -1236,7 +1344,7 @@ def cleanup_terminal():
 
 atexit.register(cleanup_terminal)
 
-def read_prompt():
+def read_prompt(session_context=None):
     """Read a prompt from stdin using cbreak mode to prevent terminal freezes
     and handle large bracketed pastes of any size on macOS/Linux.
     """
@@ -1274,6 +1382,9 @@ def read_prompt():
             if not char:
                 raise EOFError()
                 
+            is_paste_image = False
+            pasted_text = ""
+            
             # Handle Escape sequences (like arrow keys, bracketed paste)
             if char == "\x1b":
                 # Check if more characters are available immediately
@@ -1305,38 +1416,12 @@ def read_prompt():
                             break
                     pasted_text = "".join(paste_chars)
                     if (pasted_text == "" or pasted_text.isspace()) and check_clipboard_has_image():
-                        sys.stdout.write("\n\033[92m[Paste] Detected image in macOS clipboard. Saving...\033[0m\n")
-                        sys.stdout.flush()
-                        dest = os.path.abspath(".rm_pasted_image.png")
-                        ext = extract_clipboard_image(dest)
-                        if ext:
-                            sys.stdout.write(f"\033[92m[Paste] Image saved to {dest}.\033[0m\n")
-                            sys.stdout.write("\033[93mEnter prompt for image (default: 'Describe this image in detail'): \033[0m")
-                            sys.stdout.flush()
-                            
-                            # Temporarily restore settings to read a whole line for prompt
-                            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-                            try:
-                                user_prompt = sys.stdin.readline().strip()
-                            finally:
-                                # Re-enable cbreak mode
-                                tty.setcbreak(fd)
-                                new_settings = termios.tcgetattr(fd)
-                                new_settings[3] = new_settings[3] & ~termios.ECHO
-                                termios.tcsetattr(fd, termios.TCSADRAIN, new_settings)
-                                
-                            if not user_prompt:
-                                user_prompt = "Describe this image in detail and summarize the key information shown."
-                                
-                            return f"/paste {user_prompt}"
-                        else:
-                            sys.stdout.write("\033[91m[Paste] Error extracting image from clipboard.\033[0m\n>>> ")
-                            sys.stdout.flush()
+                        is_paste_image = True
                     else:
                         buffer.extend(list(pasted_text))
                         sys.stdout.write(pasted_text)
                         sys.stdout.flush()
-                    continue
+                        continue
                 elif seq_str == "\x1b[201~":
                     # Ignore stray paste end codes
                     continue
@@ -1345,37 +1430,37 @@ def read_prompt():
                     continue
             
             # Handle Ctrl-V (macOS Clipboard Image Paste shortcut)
-            if char == "\x16":
+            elif char == "\x16":
                 if check_clipboard_has_image():
-                    sys.stdout.write("\n\033[92m[Ctrl+V] Detected image in macOS clipboard. Saving...\033[0m\n")
+                    is_paste_image = True
+                else:
+                    sys.stdout.write("\033[93m[Paste] No image found in macOS clipboard. Copy an image first.\033[0m\n>>> ")
                     sys.stdout.flush()
-                    dest = os.path.abspath(".rm_pasted_image.png")
-                    ext = extract_clipboard_image(dest)
-                    if ext:
-                        sys.stdout.write(f"\033[92m[Ctrl+V] Image saved to {dest}.\033[0m\n")
-                        sys.stdout.write("\033[93mEnter prompt for image (default: 'Describe this image in detail'): \033[0m")
+                    continue
+            
+            if is_paste_image:
+                if session_context:
+                    # Check maximum images (max 10)
+                    if len(session_context.image_paths) >= 10:
+                        sys.stdout.write("\n\033[91m[Paste] Maximum limit of 10 images reached. Cannot add more.\033[0m\n>>> ")
                         sys.stdout.flush()
+                        continue
                         
-                        # Temporarily restore settings to read a whole line for prompt
-                        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-                        try:
-                            user_prompt = sys.stdin.readline().strip()
-                        finally:
-                            # Re-enable cbreak mode
-                            tty.setcbreak(fd)
-                            new_settings = termios.tcgetattr(fd)
-                            new_settings[3] = new_settings[3] & ~termios.ECHO
-                            termios.tcsetattr(fd, termios.TCSADRAIN, new_settings)
-                            
-                        if not user_prompt:
-                            user_prompt = "Describe this image in detail and summarize the key information shown."
-                            
-                        return f"/paste {user_prompt}"
+                    sys.stdout.write("\n\033[92m[Paste] Detected image in macOS clipboard. Saving...\033[0m\n")
+                    sys.stdout.flush()
+                    
+                    dest_path = session_context.add_image_from_clipboard()
+                    if dest_path == "duplicate":
+                        sys.stdout.write("\033[93m[Paste] Warning: Image already added to the queue (duplicate ignored).\033[0m\n>>> ")
+                        sys.stdout.flush()
+                    elif dest_path:
+                        sys.stdout.write(f"\033[92m[Paste] Image {len(session_context.image_paths)} saved. Paste more, or type 'done' to process.\033[0m\n>>> ")
+                        sys.stdout.flush()
                     else:
-                        sys.stdout.write("\033[91m[Ctrl+V] Error extracting image from clipboard.\033[0m\n>>> ")
+                        sys.stdout.write("\033[91m[Paste] Error saving image.\033[0m\n>>> ")
                         sys.stdout.flush()
                 else:
-                    sys.stdout.write("\033[93m[Ctrl+V] No image found in macOS clipboard. Copy an image first.\033[0m\n>>> ")
+                    sys.stdout.write("\n\033[91m[Paste] Clipboard image pasting is only supported inside an active REPL session.\033[0m\n>>> ")
                     sys.stdout.flush()
                 continue
 
@@ -1412,13 +1497,42 @@ def read_prompt():
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
         cleanup_terminal()
         
-    return "".join(buffer)
+    typed_line = "".join(buffer).strip()
+    if session_context and session_context.image_paths:
+        if typed_line.lower() in ["/clear", "clear"]:
+            session_context.clear()
+            sys.stdout.write("\033[93m[Paste] Image queue cleared.\033[0m\n")
+            sys.stdout.flush()
+            return ""
+            
+        if typed_line.lower() in ["done", "/done"]:
+            sys.stdout.write(f"\033[93mWhat would you like to do with these {len(session_context.image_paths)} images? (or press Enter for default summary): \033[0m")
+            sys.stdout.flush()
+            user_prompt = sys.stdin.readline().strip()
+            
+            if user_prompt.lower() in ["/clear", "clear"]:
+                session_context.clear()
+                sys.stdout.write("\033[93m[Paste] Image queue cleared.\033[0m\n")
+                sys.stdout.flush()
+                return ""
+                
+            if not user_prompt:
+                user_prompt = "Describe these images in detail and summarize the key information shown."
+            return f"/paste {user_prompt}"
+        elif typed_line == "":
+            sys.stdout.write(f"\033[93m[Paste] Queue contains {len(session_context.image_paths)} image(s). Paste more or type 'done' to process.\033[0m\n")
+            sys.stdout.flush()
+            return ""
+        else:
+            return f"/paste {typed_line}"
+            
+    return typed_line
 
 def handle_exit(messages):
     print(f"\n\033[92mConversation saved to {TEMP_MEM_FILE}. Exiting.\033[0m")
     cleanup_terminal()
 
-def repl(model, use_deep_context=False):
+def repl(model, use_deep_context=False, session_context=None):
     global WORKSPACE, TEMP_MEM_FILE, SESSION_COST, daily_requests, request_timestamps
     
     if model != "smart" and model != "council":
@@ -1459,10 +1573,13 @@ def repl(model, use_deep_context=False):
         )
         messages = [{"role": "system", "content": system_instruction}]
 
+    if session_context is None:
+        session_context = SessionContext()
     while True:
         try:
-            line = read_prompt()
+            line = read_prompt(session_context)
         except (EOFError, KeyboardInterrupt):
+            session_context.cleanup()
             handle_exit(messages)
             break
             
@@ -1472,6 +1589,7 @@ def repl(model, use_deep_context=False):
         line_stripped = line.strip().lower()
             
         if line_stripped in ["exit", "quit", "/exit", "/quit"]:
+            session_context.cleanup()
             handle_exit(messages)
             break
             
@@ -1500,24 +1618,67 @@ def repl(model, use_deep_context=False):
                 parts = line.split(" ", 1)
                 user_prompt = parts[1].strip() if len(parts) > 1 and parts[1].strip() else ""
                 
-                # Check clipboard
-                if check_clipboard_has_image():
-                    dest = os.path.abspath(".rm_pasted_image.png")
-                    ext = extract_clipboard_image(dest)
-                    if ext:
-                        if not user_prompt:
-                            user_prompt = "Describe this image in detail and summarize the key information shown."
-                        print(f"\033[92m[Vision] Extracted image from clipboard and saved to {dest}.\033[0m")
-                        print(f"\033[93m[Vision] Prompt: {user_prompt}\033[0m")
-                        reply = run_vision_query(dest, user_prompt)
+                if session_context and session_context.image_paths:
+                    print(f"\033[92m[Vision] Processing {len(session_context.image_paths)} image(s) from session queue.\033[0m")
+                    print(f"\033[93m[Vision] Prompt: {user_prompt}\033[0m")
+                    
+                    image_paths_to_send = list(session_context.image_paths)
+                    reply = run_vision_query(image_paths_to_send, user_prompt)
+                    if reply:
+                        messages.append({"role": "user", "content": f"[Image(s) attached] {user_prompt}"})
+                        messages.append({"role": "assistant", "content": reply})
+                        save_temp_memory(messages)
+                    
+                    session_context.clear()
+                else:
+                    # Parse files from prompt argument list (e.g. /v img1.png img2.png "compare")
+                    args_list = parts[1].split(" ") if len(parts) > 1 else []
+                    image_paths, prompt_from_args = parse_image_args(args_list)
+                    if not prompt_from_args and not user_prompt:
+                        prompt_from_args = "Describe this image in detail and summarize the key information shown."
+                    elif not prompt_from_args:
+                        prompt_from_args = user_prompt
+                        
+                    if image_paths:
+                        if len(image_paths) > 10:
+                            print("\033[91m[Vision] Error: Maximum of 10 images can be processed at once.\033[0m")
+                            continue
+                        total_size = sum(os.path.getsize(p) for p in image_paths)
+                        if total_size > 15 * 1024 * 1024:
+                            print("\033[91m[Vision] Error: Total image size exceeds the 15MB limit.\033[0m")
+                            continue
+                            
+                        print(f"\033[92m[Vision] Processing {len(image_paths)} image(s) from files.\033[0m")
+                        print(f"\033[93m[Vision] Prompt: {prompt_from_args}\033[0m")
+                        reply = run_vision_query(image_paths, prompt_from_args)
                         if reply:
-                            messages.append({"role": "user", "content": f"[Image attached: {dest}] {user_prompt}"})
+                            messages.append({"role": "user", "content": f"[Image(s) attached: {', '.join(image_paths)}] {prompt_from_args}"})
                             messages.append({"role": "assistant", "content": reply})
                             save_temp_memory(messages)
                     else:
-                        print("\033[91m[Vision] Error extracting image from clipboard.\033[0m")
-                else:
-                    print("\033[91m[Vision] No image found in macOS clipboard. Copy an image first (Command+C).\033[0m")
+                        if check_clipboard_has_image():
+                            with tempfile.TemporaryDirectory(prefix="rm_one_shot_") as tmp_dir:
+                                dest = os.path.join(tmp_dir, "clip_image.png")
+                                ext = extract_clipboard_image(dest)
+                                if ext:
+                                    if ext != ".png":
+                                        new_path = os.path.splitext(dest)[0] + ext
+                                        try:
+                                            os.rename(dest, new_path)
+                                            dest = new_path
+                                        except Exception:
+                                            pass
+                                    print(f"\033[92m[Vision] Extracted image from clipboard.\033[0m")
+                                    print(f"\033[93m[Vision] Prompt: {user_prompt}\033[0m")
+                                    reply = run_vision_query([dest], user_prompt)
+                                    if reply:
+                                        messages.append({"role": "user", "content": f"[Image attached: clipboard] {user_prompt}"})
+                                        messages.append({"role": "assistant", "content": reply})
+                                        save_temp_memory(messages)
+                                else:
+                                    print("\033[91m[Vision] Error extracting image from clipboard.\033[0m")
+                        else:
+                            print("\033[91m[Vision] No image found in macOS clipboard. Copy an image first (Command+C).\033[0m")
                 continue
 
         # Council Deliberation Command
@@ -1853,18 +2014,42 @@ def main():
         args.pop(0)
         
     if model_id in ["/paste", "/image", "/img", "/v"]:
-        prompt = " ".join(args) if args else "Describe this image in detail and summarize the key information shown."
-        if check_clipboard_has_image():
-            dest = os.path.abspath(".rm_pasted_image.png")
-            ext = extract_clipboard_image(dest)
-            if ext:
-                print(f"\033[92m[Vision] Extracted image from clipboard and saved to {dest}.\033[0m")
-                print(f"\033[93m[Vision] Prompt: {prompt}\033[0m")
-                run_vision_query(dest, prompt)
-            else:
-                print("\033[91m[Vision] Error extracting image from clipboard.\033[0m")
+        image_paths, prompt = parse_image_args(args)
+        if not prompt:
+            prompt = "Describe this image in detail and summarize the key information shown." if len(image_paths) == 1 else "Describe these images in detail and summarize the key information shown."
+            
+        if image_paths:
+            if len(image_paths) > 10:
+                print("\033[91m[Vision] Error: Maximum of 10 images can be processed at once.\033[0m")
+                sys.exit(1)
+            total_size = sum(os.path.getsize(p) for p in image_paths)
+            if total_size > 15 * 1024 * 1024:
+                print("\033[91m[Vision] Error: Total image size exceeds the 15MB limit.\033[0m")
+                sys.exit(1)
+                
+            print(f"\033[92m[Vision] Processing {len(image_paths)} image(s) from files.\033[0m")
+            print(f"\033[93m[Vision] Prompt: {prompt}\033[0m")
+            run_vision_query(image_paths, prompt)
         else:
-            print("\033[91m[Vision] No image found in macOS clipboard. Copy an image first (Command+C).\033[0m")
+            if check_clipboard_has_image():
+                with tempfile.TemporaryDirectory(prefix="rm_one_shot_") as tmp_dir:
+                    dest = os.path.join(tmp_dir, "clip_image.png")
+                    ext = extract_clipboard_image(dest)
+                    if ext:
+                        if ext != ".png":
+                            new_path = os.path.splitext(dest)[0] + ext
+                            try:
+                                os.rename(dest, new_path)
+                                dest = new_path
+                            except Exception:
+                                pass
+                        print(f"\033[92m[Vision] Extracted image from clipboard.\033[0m")
+                        print(f"\033[93m[Vision] Prompt: {prompt}\033[0m")
+                        run_vision_query([dest], prompt)
+                    else:
+                        print("\033[91m[Vision] Error extracting image from clipboard.\033[0m")
+            else:
+                print("\033[91m[Vision] No image found in macOS clipboard. Copy an image first (Command+C).\033[0m")
         sys.exit(0)
         
     use_deep = False
@@ -1902,7 +2087,8 @@ def main():
             with open(TEMP_MEM_FILE, "w") as jf:
                 json.dump(session_messages, jf)
             print(f"Loaded session {sel}.")
-            repl(model_id, use_deep_context=use_deep)
+            with SessionContext() as session_context:
+                repl(model_id, use_deep_context=use_deep, session_context=session_context)
         except (IndexError, ValueError):
             print("Invalid selection.")
         except Exception as e:
@@ -1910,7 +2096,8 @@ def main():
         sys.exit(0)
         
     if len(args) == 0:
-        repl(model_id, use_deep_context=use_deep)
+        with SessionContext() as session_context:
+            repl(model_id, use_deep_context=use_deep, session_context=session_context)
     else:
         prompt = " ".join(args)
         chat_oneshot(model_id, prompt, use_deep_context=use_deep)

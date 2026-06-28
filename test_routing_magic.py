@@ -438,5 +438,151 @@ class TestRoutingMagic(unittest.TestCase):
         reply = openai_wrapper.run_vision_query("dummy.png", "what is this")
         self.assertEqual(reply, "Mocked vision analysis description")
 
+    # 38. Test parse_image_args
+    @patch('os.path.exists')
+    def test_parse_image_args(self, mock_exists):
+        def exists_side_effect(path):
+            return path.endswith((".png", ".jpg"))
+        mock_exists.side_effect = exists_side_effect
+        
+        image_paths, prompt = openai_wrapper.parse_image_args(["img1.png", "img2.jpg", "compare", "these"])
+        self.assertEqual(len(image_paths), 2)
+        self.assertTrue(image_paths[0].endswith("img1.png"))
+        self.assertTrue(image_paths[1].endswith("img2.jpg"))
+        self.assertEqual(prompt, "compare these")
+
+    # 39. Test SessionContext
+    @patch('openai_wrapper.check_clipboard_has_image')
+    @patch('openai_wrapper.extract_clipboard_image')
+    def test_session_context(self, mock_extract, mock_check_clip):
+        mock_check_clip.return_value = True
+        mock_extract.return_value = ".png"
+        
+        ctx = openai_wrapper.SessionContext()
+        self.assertTrue(os.path.exists(ctx.temp_dir.name))
+        
+        # Add first image
+        with patch('builtins.open', mock_open(read_data=b"image1_data")):
+            p1 = ctx.add_image_from_clipboard()
+            self.assertIsNotNone(p1)
+            self.assertTrue(p1.endswith(".png"))
+            self.assertIn(p1, ctx.image_paths)
+            
+        # Add duplicate image
+        with patch('builtins.open', mock_open(read_data=b"image1_data")):
+            p2 = ctx.add_image_from_clipboard()
+            self.assertEqual(p2, "duplicate")
+            self.assertEqual(len(ctx.image_paths), 1)
+            
+        # Add different image
+        with patch('builtins.open', mock_open(read_data=b"image2_data")):
+            p3 = ctx.add_image_from_clipboard()
+            self.assertIsNotNone(p3)
+            self.assertNotEqual(p3, "duplicate")
+            self.assertEqual(len(ctx.image_paths), 2)
+            
+        # Clear queue
+        temp_dir_before = ctx.temp_dir.name
+        ctx.clear()
+        self.assertEqual(len(ctx.image_paths), 0)
+        self.assertNotEqual(ctx.temp_dir.name, temp_dir_before)
+        
+        ctx.cleanup()
+        self.assertFalse(os.path.exists(ctx.temp_dir.name))
+
+    # 40. Test run_vision_query with multiple images
+    @patch('builtins.open', new_callable=mock_open, read_data=b"fake_image_bytes")
+    @patch('os.path.exists')
+    @patch('openai_wrapper.get_client_and_model')
+    def test_run_vision_query_multi(self, mock_get_client, mock_exists, mock_file):
+        mock_exists.return_value = True
+        
+        mock_client = MagicMock()
+        mock_get_client.return_value = (mock_client, "google/gemini-2.5-flash:free")
+        
+        mock_chunk = MagicMock()
+        mock_chunk.choices = [MagicMock(delta=MagicMock(content="Mocked multi-vision analysis response"))]
+        mock_client.chat.completions.create.return_value = [mock_chunk]
+        
+        reply = openai_wrapper.run_vision_query(["img1.png", "img2.png"], "compare these two images")
+        self.assertEqual(reply, "Mocked multi-vision analysis response")
+        
+        mock_client.chat.completions.create.assert_called_once()
+        kwargs = mock_client.chat.completions.create.call_args[1]
+        self.assertIn("messages", kwargs)
+        messages = kwargs["messages"]
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(messages[0]["role"], "user")
+        content = messages[0]["content"]
+        self.assertEqual(len(content), 3)
+        self.assertEqual(content[0]["type"], "text")
+        self.assertEqual(content[0]["text"], "compare these two images")
+        self.assertEqual(content[1]["type"], "image_url")
+        self.assertEqual(content[2]["type"], "image_url")
+
+    # 41. Test SessionContext context manager cleanup
+    def test_session_context_context_manager(self):
+        temp_dir_path = None
+        with openai_wrapper.SessionContext() as ctx:
+            temp_dir_path = ctx.temp_dir.name
+            self.assertTrue(os.path.exists(temp_dir_path))
+        self.assertFalse(os.path.exists(temp_dir_path))
+
+    # 42. Test read_prompt warning on empty Enter vs done Flow
+    @patch('os.isatty', return_value=True)
+    @patch('sys.stdin.fileno', return_value=0)
+    @patch('termios.tcgetattr', return_value=[0, 0, 0, 0, 0, 0, 0])
+    @patch('termios.tcsetattr')
+    @patch('tty.setcbreak')
+    @patch('sys.stdin.read')
+    @patch('sys.stdin.readline')
+    def test_read_prompt_enter_warning(self, mock_readline, mock_read, mock_setcbreak, mock_tcsetattr, mock_tcgetattr, mock_fileno, mock_isatty):
+        ctx = openai_wrapper.SessionContext()
+        ctx.image_paths = ["/fake/img1.png"]
+        
+        # Test empty Enter -> should print warning and return ""
+        mock_read.side_effect = ["\n"]
+        res = openai_wrapper.read_prompt(ctx)
+        self.assertEqual(res, "")
+        
+        # Test typing 'done' -> should prompt for user instructions and return /paste <prompt>
+        mock_read.side_effect = ["d", "o", "n", "e", "\n"]
+        mock_readline.return_value = "explain this image\n"
+        res2 = openai_wrapper.read_prompt(ctx)
+        self.assertEqual(res2, "/paste explain this image")
+        
+        ctx.cleanup()
+
+    # 43. Test run_vision_query limits (max 10 images and 25MB base64 size)
+    @patch('os.path.exists', return_value=True)
+    def test_run_vision_query_limits(self, mock_exists):
+        # 11 images
+        res = openai_wrapper.run_vision_query(["img.png"] * 11, "prompt")
+        self.assertIsNone(res)
+        
+        # Exceeds 25MB base64 size (using a large mocked open read)
+        large_bytes = b"x" * 20 * 1024 * 1024 # 20MB raw is > 26MB base64
+        with patch('builtins.open', mock_open(read_data=large_bytes)):
+            res2 = openai_wrapper.run_vision_query(["img.png"], "prompt")
+            self.assertIsNone(res2)
+
+    # 44. Test run_vision_query detail level parameter
+    @patch('builtins.open', new_callable=mock_open, read_data=b"fake_image_bytes")
+    @patch('os.path.exists', return_value=True)
+    @patch('openai_wrapper.get_client_and_model')
+    def test_run_vision_query_detail_level(self, mock_get_client, mock_exists, mock_file):
+        mock_client = MagicMock()
+        mock_get_client.return_value = (mock_client, "google/gemini-2.5-flash:free")
+        mock_chunk = MagicMock()
+        mock_chunk.choices = [MagicMock(delta=MagicMock(content="Mocked vision response"))]
+        mock_client.chat.completions.create.return_value = [mock_chunk]
+        
+        openai_wrapper.run_vision_query(["img.png"], "prompt", detail="low")
+        
+        mock_client.chat.completions.create.assert_called_once()
+        kwargs = mock_client.chat.completions.create.call_args[1]
+        content = kwargs["messages"][0]["content"]
+        self.assertEqual(content[1]["image_url"]["detail"], "low")
+
 if __name__ == '__main__':
     unittest.main()

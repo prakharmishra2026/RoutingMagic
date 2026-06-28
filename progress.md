@@ -1,6 +1,11 @@
 # Project Progress: RoutingMagic
 
 ## Chronological Log
+ - **2026-06-18:**
+   * Improved clipboard image paste handling: intercept empty/whitespace bracketed pastes (47e3f73)
+   * Fixed file descriptor leak in AppleScript clipboard write (816b3e2)
+   * Added diagnostic print messages to clipboard check/extract functions (4b0585f)
+   * Updated progress log for clipboard image paste (f87b2dc)
  - **2026-06-17:**
    * Added clipboard image paste (/paste, Ctrl+V) and vision model analysis integration. (57e6ef0)
  - **Phase 1:** Built foundational REPL, `openai_wrapper.py`, and smart routing logic for NVIDIA/OpenAI models.
@@ -33,8 +38,16 @@
    * Added chpwd directory hook to auto-place `save_handler.py` at repository roots when changing directories (7acf324).
    * Updated README.md with documentation for multi-step pastes and in-place reasoning features (f46b443).
    * Enhanced the LLM Council to use a dynamic 3-model configuration and added REPL aliases (`/council`, `/MC`, `/mc`) and global shell aliases for quick access (ba9f050).
+ - **2026-06-28:**
+   * Implemented session-scoped multi-image pasting with unique temp directories via `SessionContext` context manager.
+   * Removed global variable `LAST_PASTED_IMAGES` to eliminate state leakage.
+   * Updated the user flow to warn on empty Enter, requiring an explicit `done`/`/done` command to start vision analysis.
+   * Added cost/resolution control with `detail` parameter and enforced 10-image / 25MB limits.
+   * Completely rewrote `README.md` to clearly document Zsh installation, API key configuration, CLI one-shots, and REPL slash commands.
+   * Added 4 new unit tests covering SessionContext, warning checks, detail level configuration, and payload validation.
 
 ## Backlog / Next Steps
  - [x] Implement LLM Council multi-agent deliberation.
+ - [x] Refactor multi-image paste queues to use SessionContext context manager with done flow.
  - [ ] Test the `! <cmd>` error interception in a real node/python project.
  - [ ] Monitor rate-limit hits for OpenRouter free models to ensure the fallback chain shifts smoothly.
