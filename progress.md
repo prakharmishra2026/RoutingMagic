@@ -6,6 +6,7 @@
    * Fixed file descriptor leak in AppleScript clipboard write (816b3e2)
    * Added diagnostic print messages to clipboard check/extract functions (4b0585f)
    * Updated progress log for clipboard image paste (f87b2dc)
+   * Implemented session-scoped multi-image paste & analysis and rewrote README.md (8cb5812)
  - **2026-06-17:**
    * Added clipboard image paste (/paste, Ctrl+V) and vision model analysis integration. (57e6ef0)
  - **Phase 1:** Built foundational REPL, `openai_wrapper.py`, and smart routing logic for NVIDIA/OpenAI models.

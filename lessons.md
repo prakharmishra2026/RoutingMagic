@@ -6,6 +6,7 @@
 - **Resource Leaks in Utility Functions:** Utility functions like `is_port_open` must ensure resources (like sockets) are properly closed, even in error cases, to avoid file descriptor leaks.
 - **Regex False Positives:** Regular expressions used for input sanitization must be rigorously tested to avoid false positives that can break functionality.
 - **Terminal Deadlocks in Bracketed Paste Mode:** Failing to properly handle bracketed paste mode can lead to terminal deadlocks, particularly on macOS. Solution: Use a non-blocking input collector with a timeout (e.g., rolling window) and ensure the terminal is restored to its original state after pasting.
+- **State Leakage from Global Variables:** Using global variables for temporary data (like tracking pasted images) can lead to state leakage between sessions or operations. Solution: Use session-scoped context managers (like `SessionContext`) to manage temporary state and ensure it is cleaned up.
 
 ## Best Practices
 - Keep `.zshrc` aliases decoupled from Python logic so the terminal commands `ask`, `chat`, and `save` inject cleanly into any workspace.
