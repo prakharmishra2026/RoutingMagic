@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # RoutingMagic installer — idempotent.
 # 1) sources aliases.zsh from ~/.zshrc   2) symlinks the skill for Claude Code.
+# 3) runs interactive API key setup if not configured.
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ZSHRC="${HOME}/.zshrc"
 SOURCE_LINE="source ${REPO_DIR}/aliases.zsh"
 SKILL_LINK="${HOME}/.claude/skills/RoutingMagic"
+RM_ENV="${HOME}/.routingmagic/.env"
 
 echo "RoutingMagic install — repo at: ${REPO_DIR}"
 
@@ -33,6 +35,29 @@ elif [ -e "${SKILL_LINK}" ]; then
 else
   ln -s "${REPO_DIR}" "${SKILL_LINK}"
   echo "  ✓ symlinked skill → ${SKILL_LINK}"
+fi
+
+# 3) API key setup (interactive, skip if already configured) ---------
+if [ -f "${RM_ENV}" ]; then
+  echo "  ✓ API keys already configured (${RM_ENV})"
+else
+  echo ""
+  echo "┌──────────────────────────────────────────────────────────┐"
+  echo "│  API Key Setup Required                                  │"
+  echo "│                                                          │"
+  echo "│  RoutingMagic needs at least an OpenRouter API key       │"
+  echo "│  to access free models and Model Council.                │"
+  echo "│                                                          │"
+  echo "│  Sign up free: https://openrouter.ai/keys                │"
+  echo "└──────────────────────────────────────────────────────────┘"
+  echo ""
+  read -p "  Run API key setup now? [Y/n] " -n 1 -r
+  echo ""
+  if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+    python3 "${REPO_DIR}/setup_keys.py"
+  else
+    echo "  Skipped. Run manually: python3 ${REPO_DIR}/setup_keys.py"
+  fi
 fi
 
 echo ""

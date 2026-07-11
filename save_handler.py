@@ -17,8 +17,8 @@ except ImportError:
         base_url = "https://openrouter.ai/api/v1" if "openrouter" in model_name else "https://integrate.api.nvidia.com/v1"
         return OpenAI(api_key=api_key, base_url=base_url), model_name
 
-# Load API keys
-load_dotenv(os.path.expanduser("~/Projects/investogram/.env"))
+# Load API keys from user's own config (portable, no hardcoded paths)
+load_dotenv(os.path.expanduser("~/.routingmagic/.env"))
 load_dotenv(os.path.expanduser("~/global.env"))
 
 FILES = ["memory.md", "progress.md", "scratchpad.md", "lessons.md"]

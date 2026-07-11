@@ -61,14 +61,27 @@ chmod +x install.sh
 source ~/.zshrc
 ```
 
-### Step 4: Add Your API Keys
-Open `~/global.env` and populate your API credentials:
-```env
-NVAPI_KEY=your_nvidia_nim_api_key
-OPENROUTER_API_KEY=your_openrouter_api_key
-# Optional: Model-specific NVIDIA NIM keys
-NVAPI_KEY_NEMOTRON_OCR=key_for_ocr
+### Step 4: Configure Your API Keys
+RoutingMagic uses your **own API keys** — nothing is hardcoded. The installer will guide you through setup interactively, or you can run it manually:
+
+```bash
+python3 ~/Projects/RoutingMagic/setup_keys.py
 ```
+
+#### Recommended: OpenRouter (Free Models + Model Council)
+[**OpenRouter**](https://openrouter.ai/keys) is **strongly recommended** as your primary key. It gives you:
+- Access to all free models (Qwen3-Coder, GPT-OSS-120B, Gemma-4, Nemotron, etc.)
+- Full Model Council support (`/council`, `/mc` commands)
+- Automatic fallback chains for 429 resilience
+- Many models are **completely free** — no credit card needed
+
+#### Optional: NVIDIA NIM
+[NVIDIA NIM](https://build.nvidia.com/nim/dashboard) unlocks GLM-5.1, Nemotron Ultra, Vision (VL), OCR, and DeepSeek V4.
+
+#### Optional: OpenAI
+[OpenAI](https://platform.openai.com/api-keys) enables GPT-5, o3-mini, and GPT-4-Turbo (paid models).
+
+Keys are stored in `~/.routingmagic/.env` — your own config, portable across projects.
 
 ---
 
@@ -142,6 +155,57 @@ If OpenRouter limits are hit (429) or NIM endpoints fail, requests automatically
 
 ---
 
+## 🧠 Mythos-Inspired Features (v2)
+
+RoutingMagic v2 incorporates techniques inspired by **OpenMythos** (Recurrent-Depth Transformer architecture):
+
+### Adaptive Computation Time (ACT)
+Dynamically selects reasoning effort based on task complexity:
+- **low**: Fast, cheap responses for simple questions
+- **medium**: Standard effort for explanations and comparisons
+- **high**: Deep reasoning for proofs, algorithms, and complex analysis
+
+```bash
+# ACT automatically applied via smart_route()
+ask "What is 2+2?"                    # → low effort (fast)
+ask "Explain how async/await works"    # → medium effort
+ask "Prove the correctness of quicksort" # → high effort (deep reasoning)
+```
+
+### Reasoning Tokens (Latent-Space Thinking)
+Models with reasoning support enable hidden multi-step thinking:
+- **GLM 4.5 Air**: "thinking mode" for deep reasoning
+- **Nemotron Ultra**: 550B flagship reasoning
+- **GPT-OSS-120B**: Configurable reasoning effort
+
+```bash
+# Direct access to reasoning models
+myth "Prove that the square root of 2 is irrational"    # GLM 4.5 Air thinking mode
+myth3 "Analyze the tradeoffs between microservices"      # GPT-OSS-120B reasoning effort
+myth5 "Deep analysis of algorithm complexity"             # Nemotron Ultra 550B
+```
+
+### MoE-Style Expert Selection (Council)
+Model Council now uses task-specific expert selection:
+- **Reasoning tasks**: Prefer models with reasoning tokens
+- **Coding tasks**: Prefer Qwen3-Coder and similar
+- **Agentic tasks**: Prefer models with tool support
+- **General tasks**: Prefer Gemma-4 and Llama models
+
+### Multi-Pass Prompting
+High-effort tasks receive structured reasoning templates:
+1. **Pass 1**: Initial Analysis — Identify key components and constraints
+2. **Pass 2**: Verification — Check for logical consistency and edge cases
+3. **Pass 3**: Final Answer — Synthesize refined response with confidence level
+
+```bash
+# Multi-pass automatically applied for high-effort tasks
+ask "Derive the formula for compound interest"  # Gets multi-pass template
+ask "Prove the Fundamental Theorem of Calculus"  # Gets multi-pass template
+```
+
+---
+
 ## 🛡️ Key Features In-Depth
 
 ### 1. Multi-Agent Council (`/council`)
@@ -154,3 +218,36 @@ Uses a 3-stage deliberation protocol to deliver premium, peer-reviewed solutions
 - Enforces a **10-image maximum** and **25MB cumulative base64 payload size** limit.
 - **Explicit DONE Flow:** Paste images sequentially (Ctrl+V / Cmd+V). Hit Enter on a blank line to see the queue count. Type `done` or `/done` to proceed with your analysis prompt.
 - **Session Cleanup:** Image paste queues are session-scoped and managed inside a temporary directory context manager (`SessionContext`), keeping your filesystem clean under any exit or exception.
+
+---
+
+## 🔧 Troubleshooting
+
+### "No API keys found" warning
+Run the setup wizard: `python3 ~/Projects/RoutingMagic/setup_keys.py`
+Or manually create `~/.routingmagic/.env` with your keys.
+
+### "OpenRouter API key not found"
+You need a free OpenRouter key for free models and Model Council:
+1. Sign up: https://openrouter.ai/keys
+2. Run: `python3 ~/Projects/RoutingMagic/setup_keys.py`
+3. Paste your key when prompted
+
+### "NVIDIA NIM API key not found"
+This only affects NVIDIA-specific models (GLM-5.1, Nemotron, Vision, OCR).
+Free models via OpenRouter work without it. Get a key: https://build.nvidia.com/nim/dashboard
+
+### Model Council not working
+Model Council (`/council`, `/mc`) requires an OpenRouter API key.
+Without it, council falls back to a single model response.
+
+### 9router not running
+Free model aliases (`cc`, `ccc`, `ccg`, etc.) require 9router:
+```bash
+npm i -g 9router
+9router  # starts on port 20128
+```
+
+### Config file location
+All API keys are stored in: `~/.routingmagic/.env`
+This is portable — works on any machine, any project directory.

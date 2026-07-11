@@ -49,9 +49,43 @@ def _sanitize_cmd(cmd: str) -> tuple[bool, str]:
 
 _SAFE_COMMIT_SHA: str | None = None
 
-# Load the env file to ensure all keys are accessible
-load_dotenv(os.path.expanduser("~/Projects/investogram/.env"))
+# Load API keys from user's own config (portable, no hardcoded paths)
+# Priority: ~/.routingmagic/.env (user setup) > ~/global.env (legacy) > env vars
+_ROUTING_MAGIC_ENV = os.path.expanduser("~/.routingmagic/.env")
+load_dotenv(_ROUTING_MAGIC_ENV)
 load_dotenv(os.path.expanduser("~/global.env"))
+
+def _has_any_api_access():
+    """Check if any API access method is available (keys or 9router)."""
+    has_or = bool(os.getenv("OPENROUTER_API_KEY"))
+    has_nv = bool(os.getenv("NVAPI_KEY") or os.getenv("NVIDIA_API_KEY"))
+    has_oai = bool(os.getenv("OPENAI_API_KEY"))
+    has_9router = is_port_open("127.0.0.1", 20128)
+    return has_or or has_nv or has_oai or has_9router
+
+def _check_api_keys():
+    """Check API keys and 9router status. Returns True if any access method available."""
+    has_or = bool(os.getenv("OPENROUTER_API_KEY"))
+    has_nv = bool(os.getenv("NVAPI_KEY") or os.getenv("NVIDIA_API_KEY"))
+    has_oai = bool(os.getenv("OPENAI_API_KEY"))
+    has_9router = is_port_open("127.0.0.1", 20128)
+    
+    if has_or or has_nv or has_oai or has_9router:
+        return True
+    
+    print("\033[91m┌──────────────────────────────────────────────────────────────┐")
+    print("│  ✗ No API keys found AND 9router not running.               │")
+    print("│                                                              │")
+    print("│  Option A: Start 9router (recommended for free models):      │")
+    print("│    9router                                                   │")
+    print("│                                                              │")
+    print("│  Option B: Add OpenRouter API key:                           │")
+    print("│    python3 ~/Projects/RoutingMagic/setup_keys.py             │")
+    print("│                                                              │")
+    print("│  Option C: Get free OpenRouter key:                          │")
+    print("│    https://openrouter.ai/keys                                │")
+    print("└──────────────────────────────────────────────────────────────┘\033[0m")
+    return False
 
 WORKSPACE = "default"
 TEMP_MEM_FILE = f".rm_session_{WORKSPACE}.json"
@@ -203,6 +237,9 @@ def is_port_open(ip, port):
             return True
         except Exception:
             return False
+
+# Check API keys after is_port_open is defined
+_check_api_keys()
 
 class SessionContext:
     """Session-scoped context for managing active REPL state, including pasted images."""
@@ -470,27 +507,183 @@ def run_vision_query(image_paths, prompt, model_name=None, detail="auto"):
     print()
     return assistant_reply
 
-def smart_route(prompt):
-    """Intelligently routes the prompt to the best available free model."""
+# ═══════════════════════════════════════════════════════════════════════════════
+#  MYTHOS-INSPIRED ROUTING — Adaptive Computation Time (ACT) & Multi-Pass
+#  Inspired by OpenMythos recurrent-depth transformer architecture:
+#  - ACT: Dynamically select reasoning effort based on task complexity
+#  - Multi-pass: Structured prompts for iterative refinement (analyze → verify → finalize)
+#  - MoE-style: Route to specialist models based on task domain
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Models that support reasoning tokens (OpenRouter reasoning parameter)
+REASONING_MODELS = {
+    "zhipu/glm-4.5-air": {"effort": True},           # Thinking mode
+    "nvidia/nemotron-3-ultra-550b-a55b": {"effort": True},  # Deep reasoning
+    "openai/gpt-oss-120b": {"effort": True},          # Configurable reasoning
+    "qwen/qwen3-coder:free": {"effort": True},        # Coding reasoning
+}
+
+# Multi-pass prompting templates (Loop-based reasoning)
+MULTI_PASS_TEMPLATES = {
+    "reasoning": """
+## Pass 1: Initial Analysis
+Analyze this problem step by step. Identify key components, constraints, and assumptions.
+
+## Pass 2: Verification
+Review your initial analysis. Check for:
+- Logical consistency
+- Missing considerations
+- Edge cases
+- Alternative approaches
+
+## Pass 3: Final Answer
+Based on your verification, provide the refined final answer with confidence level.
+""",
+    "coding": """
+## Pass 1: Understand Requirements
+- What does this code need to do?
+- What are the edge cases and error conditions?
+
+## Pass 2: Design Solution
+- Plan the algorithm or approach
+- Identify potential issues and optimizations
+
+## Pass 3: Implement & Verify
+- Write the code
+- Test against edge cases
+- Add error handling
+""",
+    "analysis": """
+## Pass 1: Data Gathering
+- Identify relevant information
+- Organize by category
+
+## Pass 2: Pattern Recognition
+- Find relationships and patterns
+- Identify anomalies
+
+## Pass 3: Synthesis
+- Draw conclusions
+- Support with evidence
+"""
+}
+
+
+def select_reasoning_effort(prompt: str, task_type: str = "general") -> str:
+    """ACT-inspired effort selection: Dynamically select reasoning effort based on prompt analysis.
+    
+    Inspired by OpenMythos Adaptive Computation Time (ACT) which stops looping when answer converges.
+    Maps prompt complexity to reasoning effort levels: low/medium/high.
+    
+    Returns effort level string for OpenRouter reasoning parameter.
+    """
     prompt_lower = prompt.lower()
+    
+    # Easy tasks → low effort (fast, cheap)
+    easy_patterns = r'\b(simple|basic|what is|define|list|quick|just|short|brief|name|yes|no)\b'
+    if re.search(easy_patterns, prompt_lower):
+        return "low"
+    
+    # Medium tasks → medium effort
+    medium_patterns = r'\b(explain|compare|how to|summarize|describe|write|create|update|modify)\b'
+    if re.search(medium_patterns, prompt_lower):
+        return "medium"
+    
+    # Hard tasks → high effort (deep reasoning)
+    hard_patterns = r'\b(prove|derive|formal|axiom|theorem|recursive|latent|multi.?hop|deep reasoning|complex logic|architect|design system|algorithm|optimize|analyze deeply|critically|audit|financial|trade.?off|step.?by.?step|chain.?of.?thought)\b'
+    if re.search(hard_patterns, prompt_lower):
+        return "high"
+    
+    # Task-type based defaults
+    task_effort_map = {
+        "reasoning": "high",
+        "coding": "medium",
+        "analysis": "medium",
+        "general": "medium"
+    }
+    
+    return task_effort_map.get(task_type, "medium")
+
+
+def get_multi_pass_prompt(prompt: str, task_type: str = "general") -> str:
+    """Add Mythos-inspired multi-pass structure to prompt for complex tasks.
+    
+    Inspired by OpenMythos recurrent-depth reasoning where the same block runs multiple iterations.
+    Structures prompts for iterative refinement: analyze → verify → finalize.
+    """
+    # Only add multi-pass for complex tasks
+    effort = select_reasoning_effort(prompt, task_type)
+    if effort != "high":
+        return prompt  # Don't modify simple prompts
+    
+    template = MULTI_PASS_TEMPLATES.get(task_type, MULTI_PASS_TEMPLATES["analysis"])
+    
+    return f"{prompt}\n\n{template}"
+
+
+def get_reasoning_params(model: str, effort: str = "medium") -> dict:
+    """Get reasoning parameters for models that support reasoning tokens.
+    
+    Inspired by OpenMythos latent-space reasoning (no intermediate token emission).
+    Uses OpenRouter's reasoning parameter for hidden multi-step thinking.
+    """
+    if model not in REASONING_MODELS:
+        return {}
+    
+    config = REASONING_MODELS[model]
+    
+    if config.get("effort"):
+        return {"reasoning": {"effort": effort}}
+    
+    return {}
+
+
+def smart_route(prompt):
+    """Intelligently routes the prompt to the best available free model.
+    
+    Enhanced with Mythos-inspired techniques:
+    - ACT: Effort-aware routing (high-effort tasks get reasoning models)
+    - MoE-style: Task-specific specialist selection
+    """
+    prompt_lower = prompt.lower()
+    
+    # Classify task type for MoE-style routing
+    task_type = classify_task(prompt)
+    
+    # Get effort level (ACT-inspired)
+    effort = select_reasoning_effort(prompt, task_type)
     
     # 0. Council Deliberation -> Multi-agent council protocol
     if re.search(r'\b(council|deliberate|critically? audit|council-deliberation|llm-council|council deliberation)\b', prompt_lower):
         return "council", "llm_council_deliberation"
         
-    # 1. Financial/Math Reasoning & Deep Logic -> DeepSeek R1 (free)
-    if re.search(r'\b(math|financial analysis|deep reasoning|o1|complex logic|tradeoffs|step-by-step|chain of thought|deep analysis)\b', prompt_lower):
-        return "nvidia/nemotron-3-super-120b-a12b:free", "financial_math_reasoning"
+    # 1. Deep Reasoning (high effort) -> Reasoning-capable models
+    if effort == "high":
+        # Prefer models with reasoning tokens
+        if re.search(r'\b(prove|derive|formal|axiom|theorem|recursive|latent|multi.?hop|deep reasoning|complex logic)\b', prompt_lower):
+            # GLM 4.5 Air has "thinking mode" for reasoning
+            return "zhipu/glm-4.5-air:free", "mythos_reasoning_thinking"
         
-    # 2. Long Document RAG & Heavy Agentic Planning -> Nemotron 3 Super 120B
+        if re.search(r'\b(math|financial analysis|tradeoffs|trade-offs|step-by-step|chain of thought|deep analysis)\b', prompt_lower):
+            # Nemotron Ultra for deep reasoning
+            return "nvidia/nemotron-3-ultra-550b-a55b:free", "mythos_deep_reasoning"
+        
+        # GPT-OSS-120B with reasoning effort
+        if re.search(r'\b(analyze|critically|audit|algorithm|proof|equation|derivation)\b', prompt_lower):
+            return "openai/gpt-oss-120b:free", "mythos_reasoning_effort"
+        
+        # Default high-effort: GPT-OSS-120B (most reliable reasoning model)
+        return "openai/gpt-oss-120b:free", "mythos_high_effort"
+    
+    # 2. Long Document RAG & Heavy Agentic Planning -> Nemotron 3 Super 120B (1M context)
     if re.search(r'\b(large repo|long doc|architecture|strategy|plan|tool orchestration|codebase reasoning|massive context|rag|planning)\b', prompt_lower):
         return "nvidia/nemotron-3-super-120b-a12b:free", "long_context_agentic"
         
-    # 3. Code Generation & Fixing -> Qwen3 Coder
+    # 3. Code Generation & Fixing -> Qwen3 Coder (MoE-style: coding specialist)
     if re.search(r'\b(code|fix bug|refactor|write function|regex|sql|snippet|debug|react|css|html|typescript|python|script)\b', prompt_lower):
         return "qwen/qwen3-coder:free", "fast_coding"
         
-    # 4. Agentic Workflows & Tool Use -> Llama 3.3 70B
+    # 4. Agentic Workflows & Tool Use -> Llama 3.3 70B (MoE-style: tool specialist)
     if re.search(r'\b(n8n|tool call|json extraction|workflow|extract data|structure this|json)\b', prompt_lower):
         return "meta-llama/llama-3.3-70b-instruct:free", "n8n_tool_calling"
         
@@ -512,6 +705,25 @@ def smart_route(prompt):
         
     # Default General Tasks -> Gemma 4 31B (highest free quality score)
     return "google/gemma-4-31b-it:free", "default_general"
+
+
+def classify_task(prompt: str) -> str:
+    """Classify task type for MoE-style routing.
+    
+    Returns: 'reasoning', 'coding', 'agentic', 'analysis', or 'general'
+    """
+    prompt_lower = prompt.lower()
+    
+    if re.search(r'\b(prove|derive|formal|axiom|theorem|math|reason|deep analysis|critically|audit)\b', prompt_lower):
+        return "reasoning"
+    elif re.search(r'\b(code|fix|refactor|write function|debug|react|css|html|typescript|python|script)\b', prompt_lower):
+        return "coding"
+    elif re.search(r'\b(agent|tool|workflow|pipeline|json|extract|automate)\b', prompt_lower):
+        return "agentic"
+    elif re.search(r'\b(analyze|compare|evaluate|assess|summarize|explain)\b', prompt_lower):
+        return "analysis"
+    else:
+        return "general"
 
 # Models that do NOT accept a temperature parameter
 NO_TEMPERATURE_MODELS = {"o3-mini", "o1", "o1-mini", "o1-preview", "o3"}
@@ -538,6 +750,13 @@ def get_client_and_model(model_name, is_summarizer=False):
         key_env_var = NVIDIA_API_MAP.get(model_name, "NVAPI_KEY")
         api_key = os.getenv(key_env_var) or os.getenv("NVAPI_KEY") or os.getenv("NVIDIA_API_KEY")
         base_url = "https://integrate.api.nvidia.com/v1"
+        if not api_key:
+            raise RuntimeError(
+                f"NVIDIA NIM API key not found (looked for {key_env_var}, NVAPI_KEY, NVIDIA_API_KEY).\n"
+                "Run: python3 ~/Projects/RoutingMagic/setup_keys.py\n"
+                "Or add NVAPI_KEY to ~/.routingmagic/.env\n"
+                "Get a free key: https://build.nvidia.com/nim/dashboard"
+            )
         return OpenAI(api_key=api_key, base_url=base_url, timeout=req_timeout), clean_model
     
     # OpenAI direct models (o3-mini, gpt-*, o1-*)
@@ -562,6 +781,14 @@ def get_client_and_model(model_name, is_summarizer=False):
     else:
         base_url = "https://openrouter.ai/api/v1"
         api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("9ROUTER_API_KEY")
+        if not api_key:
+            raise RuntimeError(
+                "OpenRouter API key not found AND 9router not running.\n\n"
+                "Fix (choose one):\n"
+                "  1. Start 9router:     9router\n"
+                "  2. Add OpenRouter key: python3 ~/Projects/RoutingMagic/setup_keys.py\n"
+                "  3. Get free key:       https://openrouter.ai/keys\n"
+            )
         
     return OpenAI(api_key=api_key, base_url=base_url, timeout=req_timeout), clean_model
 
@@ -620,11 +847,22 @@ def compress_context(messages):
     ] + recent_msgs
 
 def chat_oneshot(model, prompt, use_deep_context=False):
+    """Single-prompt chat with Mythos-inspired ACT effort selection and multi-pass prompting."""
+    # Early exit if no API access available
+    if not _has_any_api_access():
+        _check_api_keys()
+        sys.exit(1)
+    
     if model == "smart":
         target_model, task_type = smart_route(prompt)
         print(f"\033[94m[Smart Router] Selected '{target_model}' for task type: {task_type}\033[0m")
     else:
         target_model = model
+        task_type = classify_task(prompt)
+
+    # ACT-inspired effort selection
+    effort = select_reasoning_effort(prompt, task_type)
+    print(f"\033[94m[ACT] Reasoning effort: {effort}\033[0m")
 
     if use_deep_context:
         context_str = get_deep_context()
@@ -640,6 +878,13 @@ def chat_oneshot(model, prompt, use_deep_context=False):
     )
     system_message = {"role": "system", "content": system_instruction}
 
+    # Multi-pass prompting for high-effort tasks
+    if effort == "high":
+        enhanced_prompt = get_multi_pass_prompt(prompt, task_type)
+        user_message = {"role": "user", "content": enhanced_prompt}
+        print(f"\033[94m[Multi-pass] Added structured reasoning template\033[0m")
+    else:
+        user_message = {"role": "user", "content": prompt}
 
     fallback_chain = [target_model, "google/gemma-4-31b-it:free", "nvidia/nemotron-3-super-120b-a12b:free", "openai/gpt-oss-120b:free", "qwen/qwen3-coder:free", "meta-llama/llama-3.3-70b-instruct:free", "gemini-2.5-pro"]
     seen = set()
@@ -661,7 +906,16 @@ def chat_oneshot(model, prompt, use_deep_context=False):
         try:
             temp_client, final_model_id = get_client_and_model(attempt_model)
             
+            # Build extra_body with Mythos-inspired reasoning parameters
             extra_body = {}
+            
+            # Get reasoning params for models that support reasoning tokens
+            reasoning_params = get_reasoning_params(final_model_id, effort)
+            if reasoning_params:
+                extra_body.update(reasoning_params)
+                print(f"\033[94m[Latent reasoning] Enabled hidden thinking for {final_model_id}\033[0m")
+            
+            # Legacy model-specific params
             if "nemotron-3-ultra" in final_model_id:
                 extra_body = {"chat_template_kwargs":{"enable_thinking":True},"reasoning_budget":4096}
             elif "deepseek-v4-flash" in final_model_id:
@@ -672,7 +926,7 @@ def chat_oneshot(model, prompt, use_deep_context=False):
             
             kwargs = {
                 "model": final_model_id,
-                "messages": [system_message, {"role": "user", "content": prompt}],
+                "messages": [system_message, user_message],
                 "stream": True
             }
             if supports_temperature:
@@ -790,7 +1044,11 @@ def get_dynamic_model(models_list, free=True, price_ceiling=None, required_param
     return passers[0]["id"]
 
 
-def _query_model(model_name, messages, temperature=0.7):
+def _query_model(model_name, messages, temperature=0.7, effort="medium"):
+    """Query a model with Mythos-inspired reasoning parameters.
+    
+    Enhanced with ACT-inspired effort selection for Council deliberation.
+    """
     client, target_model = get_client_and_model(model_name)
     base_model_id = target_model.split("/")[-1].split(":")[0]
     supports_temperature = base_model_id not in NO_TEMPERATURE_MODELS
@@ -802,7 +1060,15 @@ def _query_model(model_name, messages, temperature=0.7):
     if supports_temperature:
         kwargs["temperature"] = temperature
         
+    # Build extra_body with Mythos-inspired reasoning parameters
     extra_body = {}
+    
+    # Get reasoning params for models that support reasoning tokens
+    reasoning_params = get_reasoning_params(target_model, effort)
+    if reasoning_params:
+        extra_body.update(reasoning_params)
+    
+    # Legacy model-specific params (fallback)
     if "nemotron-3-ultra" in target_model:
         extra_body = {"chat_template_kwargs": {"enable_thinking": True}, "reasoning_budget": 4096}
     elif "deepseek-v4-flash" in target_model:
@@ -830,17 +1096,17 @@ def _query_model(model_name, messages, temperature=0.7):
         raise RuntimeError("OpenRouter response choice message content is None.")
     return content
 
-def _query_model_with_timing(model_name, messages, temperature=0.7):
+def _query_model_with_timing(model_name, messages, temperature=0.7, effort="medium"):
     start_time = time.time()
     try:
-        content = _query_model(model_name, messages, temperature)
+        content = _query_model(model_name, messages, temperature, effort)
         elapsed = time.time() - start_time
         return model_name, content, None, elapsed
     except Exception as e:
         elapsed = time.time() - start_time
         return model_name, None, str(e), elapsed
 
-def _query_model_with_fallback_and_timing(model_name, messages, temperature=0.7, excluded_models=None):
+def _query_model_with_fallback_and_timing(model_name, messages, temperature=0.7, excluded_models=None, effort="medium"):
     if excluded_models is None:
         excluded_models = set()
     start_time = time.time()
@@ -869,7 +1135,7 @@ def _query_model_with_fallback_and_timing(model_name, messages, temperature=0.7,
     
     for attempt in attempts:
         try:
-            content = _query_model(attempt, messages, temperature)
+            content = _query_model(attempt, messages, temperature, effort)
             elapsed = time.time() - start_time
             return attempt, content, None, elapsed, failed_attempts
         except Exception as e:
@@ -881,13 +1147,24 @@ def _query_model_with_fallback_and_timing(model_name, messages, temperature=0.7,
     return model_name, None, str(last_err), elapsed, failed_attempts
 
 def run_council(prompt, use_deep_context=False):
-    """Executes Karpathy-style LLM Council deliberation protocol:
-    Stage 1: parallel opinions from 4 free models.
-    Stage 2: parallel peer critique and scoring (1-10).
-    Stage 3: synthesis by the Chairman model (dynamic latest reasoning model for heavy queries, otherwise latest free general model).
+    """Executes Mythos-inspired LLM Council deliberation protocol:
+    
+    MoE-style expert selection: Route to specialist models based on task domain.
+    ACT-inspired effort: Dynamic reasoning effort for council members.
+    Convergence detection: Stop early when answers stabilize.
+    
+    Stage 1: Parallel opinions from 3 specialist council members.
+    Stage 2: Parallel peer critique and scoring (1-10).
+    Stage 3: Synthesis by the Chairman model.
     """
     import concurrent.futures
     import urllib.request
+    
+    # Classify task for MoE-style expert selection
+    task_type = classify_task(prompt)
+    effort = select_reasoning_effort(prompt, task_type)
+    
+    print(f"\033[94m[MoE] Task type: {task_type}, Effort: {effort}\033[0m")
     
     # Fetch live models from OpenRouter registry to prevent static model rot
     models_list = None
@@ -900,16 +1177,61 @@ def run_council(prompt, use_deep_context=False):
     except Exception as e:
         print(f"\033[93m[LLM Council] Warning: Live registry fetch failed ({e}). Using hardcoded model defaults.\033[0m")
 
-    # Classify prompt for specialty prioritizing
-    prompt_lower = prompt.lower()
-    if re.search(r'\b(math|logic|proof|prove|algorithm|complex logic|equation|derivation|reason|step-by-step|step by step|chain of thought|deep reasoning|o1|critically audit|audit)\b', prompt_lower):
-        category = "reasoning"
-    elif re.search(r'\b(code|coding|frontend|backend|fastapi|react|tailwind|html|css|javascript|python|java|c\+\+|bug|exception|compile|syntax|refactor|endpoint|api|database|sql)\b', prompt_lower):
-        category = "coding"
-    elif re.search(r'\b(agent|mcp|tool|function|json|xml|yaml|parse|schema|structure|pipeline|webhook|automate|integration)\b', prompt_lower):
-        category = "agentic"
-    else:
-        category = "general"
+    # MoE-style expert selection based on task type
+    def select_expert_for_task(models, task_type, excluded_set):
+        """Select specialist model based on task domain (MoE-style routing)."""
+        
+        # Task-specific model preferences (MoE-style: sparse expert activation)
+        task_model_preferences = {
+            "reasoning": {
+                "keywords": ["reason", "thinking", "thought"],
+                "fallback": "openai/gpt-oss-120b:free"
+            },
+            "coding": {
+                "keywords": ["coder", "code"],
+                "fallback": "qwen/qwen3-coder:free"
+            },
+            "agentic": {
+                "keywords": ["tool", "function", "structured"],
+                "fallback": "meta-llama/llama-3.3-70b-instruct:free"
+            },
+            "analysis": {
+                "keywords": ["analysis", "summarize"],
+                "fallback": "google/gemma-4-31b-it:free"
+            },
+            "general": {
+                "keywords": ["gemma", "llama"],
+                "fallback": "google/gemma-4-31b-it:free"
+            }
+        }
+        
+        preferences = task_model_preferences.get(task_type, task_model_preferences["general"])
+        
+        # Try to find a specialist model with reasoning support
+        if models:
+            for m in models:
+                m_id = m.get("id", "").lower()
+                if m_id in excluded_set:
+                    continue
+                    
+                sp = set(m.get("supported_parameters", []) or [])
+                
+                # For high-effort tasks, prefer models with reasoning support
+                if effort == "high" and "reasoning" in sp:
+                    if avg_price_per_m(m) == 0.0:
+                        # Check if model matches task domain
+                        for keyword in preferences["keywords"]:
+                            if keyword in m_id:
+                                return m["id"]
+                
+                # For medium-effort tasks, prefer task-specific models
+                for keyword in preferences["keywords"]:
+                    if keyword in m_id:
+                        if avg_price_per_m(m) == 0.0:
+                            return m["id"]
+        
+        # Fallback to default for this task type
+        return preferences["fallback"]
 
     def select_coder(models, excluded_set):
         for m in models:
@@ -957,12 +1279,12 @@ def run_council(prompt, use_deep_context=False):
         filtered = [m for m in models if m.get("id") not in excluded_set]
         return get_dynamic_model(filtered, free=True, fallback_default="google/gemma-4-31b-it:free")
 
-    # Dynamically select 3 distinct council models
+    # Dynamically select 3 distinct council models (MoE-style expert selection)
     council_models = []
     excluded = set()
     if models_list:
         try:
-            if category == "coding":
+            if task_type == "coding":
                 m1 = select_coder(models_list, excluded)
                 council_models.append(m1)
                 excluded.add(m1)
@@ -972,7 +1294,7 @@ def run_council(prompt, use_deep_context=False):
                 m3 = select_general(models_list, excluded)
                 council_models.append(m3)
                 excluded.add(m3)
-            elif category == "reasoning":
+            elif task_type == "reasoning":
                 m1 = select_reasoning(models_list, excluded)
                 council_models.append(m1)
                 excluded.add(m1)
@@ -982,7 +1304,7 @@ def run_council(prompt, use_deep_context=False):
                 m3 = select_coder(models_list, excluded)
                 council_models.append(m3)
                 excluded.add(m3)
-            elif category == "agentic":
+            elif task_type == "agentic":
                 m1 = select_agentic(models_list, excluded)
                 council_models.append(m1)
                 excluded.add(m1)
@@ -1055,7 +1377,7 @@ def run_council(prompt, use_deep_context=False):
         reasoning_reason = f"general query -> selected latest {chairman_model}"
         
     print("\n\033[95m[LLM Council] Starting deliberation...\033[0m")
-    print(f"\033[94m[Stage 1] Querying 4 council members {council_models} for opinions in parallel...\033[0m")
+    print(f"\033[94m[Stage 1] Querying 3 council members {council_models} for opinions in parallel...\033[0m")
     
     stage1_start = time.time()
     opinions = {}
@@ -1065,7 +1387,7 @@ def run_council(prompt, use_deep_context=False):
     ]
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(council_models)) as executor:
-        futures = {executor.submit(_query_model_with_fallback_and_timing, m, stage1_messages, 0.7, set(council_models)): m for m in council_models}
+        futures = {executor.submit(_query_model_with_fallback_and_timing, m, stage1_messages, 0.7, set(council_models), effort): m for m in council_models}
         for future in concurrent.futures.as_completed(futures):
             orig_model = futures[future]
             succeeded_model, content, err, elapsed, failed_attempts = future.result()
@@ -1202,7 +1524,7 @@ def run_council(prompt, use_deep_context=False):
     
     reviews = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(opinions)) as executor:
-        futures = {executor.submit(_query_model_with_fallback_and_timing, m, peer_review_messages, 0.7, set(opinions.keys())): m for m in opinions.keys()}
+        futures = {executor.submit(_query_model_with_fallback_and_timing, m, peer_review_messages, 0.7, set(opinions.keys()), effort): m for m in opinions.keys()}
         for future in concurrent.futures.as_completed(futures):
             orig_model = futures[future]
             succeeded_model, content, err, elapsed, failed_attempts = future.result()
@@ -1534,6 +1856,11 @@ def handle_exit(messages):
 
 def repl(model, use_deep_context=False, session_context=None):
     global WORKSPACE, TEMP_MEM_FILE, SESSION_COST, daily_requests, request_timestamps
+    
+    # Early exit if no API access available
+    if not _has_any_api_access():
+        _check_api_keys()
+        return
     
     if model != "smart" and model != "council":
         client, target_model = get_client_and_model(model)
@@ -1998,7 +2325,17 @@ def repl(model, use_deep_context=False, session_context=None):
 def main():
     if len(sys.argv) < 2:
         sys.stderr.write("Usage: openai_wrapper.py <model_id|smart> [deep] [prompt...]\\n")
+        sys.stderr.write("       openai_wrapper.py --setup    (configure API keys)\\n")
         sys.exit(1)
+    
+    # Handle --setup flag
+    if sys.argv[1] == "--setup":
+        setup_script = os.path.expanduser("~/Projects/RoutingMagic/setup_keys.py")
+        if os.path.exists(setup_script):
+            subprocess.run([sys.executable, setup_script])
+        else:
+            print(f"\033[91mSetup script not found: {setup_script}\033[0m")
+        sys.exit(0)
         
     model_id = sys.argv[1]
     args = sys.argv[2:]

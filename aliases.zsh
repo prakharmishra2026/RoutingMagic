@@ -1,31 +1,9 @@
-# ═══════════════════════════════════════════════════════════════════
-#  RoutingMagic — Claude Code model aliases
-#  https://github.com/prakharmishra2026/RoutingMagic
-# ───────────────────────────────────────────────────────────────────
-#  TWO ISOLATED WORLDS
-#
-#   NATIVE Claude  →  ccs / cco / ccq  (or plain `claude` + /model picker)
-#                     Talks DIRECT to api.anthropic.com via keychain login.
-#                     Default everywhere. Global ~/.claude/settings.json
-#                     stays clean — never put a proxy in it.
-#
-#   FREE models    →  cc cch cca cck ccc ccg ccx ccz ccm ccu ccb
-#                     Route through your local 9router gateway
-#                     (127.0.0.1:20128 → OpenRouter). Set INLINE per-call so
-#                     they never touch global config.
-#
-#  WHY SO MANY FREE MODELS? — 429 RESILIENCE.
-#  OpenRouter free models share a global rate limit AND can be throttled by
-#  their upstream provider ("rate-limited upstream", e.g. the Crucible 429
-#  that broke Kimi K2.6). The cure is a FALLBACK CHAIN: if your first pick
-#  429s, jump to the next model in the same role. See the chains below.
-#
-#  KIMI NOTE: cck (Kimi K2.6) is KEPT for when its upstream provider recovers,
-#  but it 429s frequently today — use ccc (Qwen3-Coder) as the UI default.
-#
-#  To install: add this line to your ~/.zshrc, then `source ~/.zshrc`
-#     source ~/RoutingMagic/aliases.zsh
-# ═══════════════════════════════════════════════════════════════════
+# RoutingMagic aliases — https://github.com/prakharmishra2026/RoutingMagic
+# Two worlds: NATIVE Claude (ccs/cco/ccq) → direct api.anthropic.com
+#              FREE models (cc/cch/cca/cck/ccc/ccg/ccx/ccz/ccm/ccu/ccb) → 9router → OpenRouter
+# Why many free models? 429 resilience — fallback chains if one gets rate-limited.
+# Kimi (cck) 429s often — prefer ccc (Qwen3-Coder) as default.
+# Install: source ~/RoutingMagic/aliases.zsh in ~/.zshrc
 
 # ── 9router local gateway (free models) ───────────────────────────
 # Sets the gateway INLINE so it never pollutes native/global config.
@@ -50,10 +28,16 @@ cck() { _9r openrouter/moonshotai/kimi-k2.6:free "$@"; }                      # 
 ccc() { _9r openrouter/qwen/qwen3-coder:free "$@"; }                          # UI / frontend / coder (DEFAULT) · 1M · 7 providers
 ccg() { _9r openrouter/openai/gpt-oss-120b:free "$@"; }                       # reasoning + tools · 131k · 19 providers (MOST reliable)
 ccx() { _9r openrouter/qwen/qwen3-next-80b-a3b-instruct:free "$@"; }          # general / agentic · 262k · 6 providers
-ccz() { _9r openrouter/z-ai/glm-4.5-air:free "$@"; }                          # fast all-rounder · 131k · 4 providers
+ccz() { _9r openrouter/z-ai/glm-4.5-air:free "$@"; }                          # fast all-rounder · 131k · 4 providers · 🧠 THINKING MODE
 ccm() { _9r openrouter/google/gemma-4-31b-it:free "$@"; }                     # resilient general · 262k · 11 providers
 ccu() { _9r openrouter/nvidia/nemotron-3-ultra-550b-a55b:free "$@"; }         # 550B flagship reasoning · 1M · ⚠ single provider
 ccb() { _9r Builder "$@"; }                                                   # Builder combo (auto-route)
+
+# ── MYTHOS-INSPIRED DEEP REASONING ─────────────────────────────────────────
+# Inspired by OpenMythos recurrent-depth transformer architecture
+myth()  { _9r openrouter/z-ai/glm-4.5-air:free "$@"; }                        # 🧠 Mythos-style deep reasoning (thinking mode)
+myth3() { _9r openrouter/openai/gpt-oss-120b:free "$@"; }                     # 🧠 Mythos reasoning with effort control
+myth5() { _9r openrouter/nvidia/nemotron-3-ultra-550b-a55b:free "$@"; }       # 🧠 Mythos 550B flagship reasoning
 
 # ── NVIDIA GLM‑5.1 (via 9router) ───────────────────────────────────────────
 glm() { _9r nvidia/z-ai/glm-5.1 "$@"; }                                       # GLM‑5.1 model via NVIDIA NIM
@@ -74,48 +58,44 @@ ccq() { claude --model claude-haiku-4-5-20251001 "$@"; }                      # 
 cc-models() {
   cat <<'EOF'
 
-╔════════════════════════════════════════════════════════════════════╗
-║                 ROUTINGMAGIC — CLAUDE CODE MODEL ROUTER             ║
-╠════════════════════════════════════════════════════════════════════╣
-║  FREE  (via 9router → OpenRouter, :20128)                           ║
-║  cc    Laguna M.1            general coding (default)   262k        ║
-║  cch   Laguna XS.2           quick edits / one-liners   262k        ║
-║  cca   Nemotron 3 Super      large context              1M          ║
-║  ccc   Qwen3-Coder           UI / frontend (DEFAULT)    1M    7 prov ║
-║  cck   Kimi K2.6             UI (kept) ⚠ 429s often — prefer ccc    ║
-║  ccg   GPT-OSS-120B          reasoning + tools  131k  19 prov ★safe ║
-║  ccx   Qwen3-Next-80B        general / agentic   262k         6 prov ║
-║  ccz   GLM-4.5-Air           fast all-rounder    131k         4 prov ║
-║  ccm   Gemma-4-31B           resilient general   262k        11 prov ║
-║  ccu   Nemotron 3 Ultra 550B flagship reasoning  1M  ⚠ 1 provider   ║
-║  ccb   Builder combo         auto multi-model                       ║
-╠════════════════════════════════════════════════════════════════════╣
-║  OPENAI & NVIDIA  (via 9router)                                    ║
-║  open  GPT-5                 General purpose flagship               ║
-║  opt   GPT-4-Turbo           Agentic coding model                   ║
-║  opo3  o3-mini               Reasoning & Coding                     ║
-║  glm   GLM-5.1               NVIDIA NIM model                       ║
-║  chat  [model]               Direct Chat REPL (No tool cost, 0 limit)║
-╠════════════════════════════════════════════════════════════════════╣
-║  NATIVE  (direct to api.anthropic.com, keychain login)             ║
-║  claude            default — then /model to switch                  ║
-║  ccs   Sonnet 4.6            balanced, production, tools            ║
-║  cco   Opus 4.8              architecture, hardest reasoning        ║
-║  ccq   Haiku 4.5             fastest native                         ║
-╠════════════════════════════════════════════════════════════════════╣
-║  429 FALLBACK CHAINS  (if a free model is rate-limited, go next →)  ║
-║  UI / frontend   :  ccc → ccz → ccm        (cck/Kimi if available) ║
-║  General coding  :  cc  → ccg → ccx                                 ║
-║  Reasoning       :  ccg → ccu → ccx                                 ║
-║  Large context   :  cca → ccc → ccu       (all 1M)                  ║
-║  Quick / trivial :  cch → ccz                                       ║
-║  Agentic / tools :  ccg → ccx → cc        (★ gpt-oss = best tools)  ║
-╠════════════════════════════════════════════════════════════════════╣
-║  SMART ROUTER                                                       ║
-║  cc-route "task"   analyse → pick best model → launch               ║
-╚════════════════════════════════════════════════════════════════════╝
-  Native = default & Antigravity.  Free = explicit cc* only.
-  9router up?  nc -z 127.0.0.1 20128 && echo UP || echo DOWN
+╔══════════════════════════════════════════════════════════════════════╗
+║              ROUTINGMAGIC — MODEL ROUTER (v2 Mythos)               ║
+╠══════════════════════════════════════════════════════════════════════╣
+║ FREE (9router → OpenRouter, :20128)                                  ║
+║  cc   Laguna M.1        general coding   262k                        ║
+║  cch  Laguna XS.2       quick edits      262k                        ║
+║  cca  Nemotron 3 Super  large context    1M                          ║
+║  ccc  Qwen3-Coder       UI/frontend      1M   7prov DEFAULT          ║
+║  cck  Kimi K2.6         UI (kept) ⚠ 429s — prefer ccc                ║
+║  ccg  GPT-OSS-120B      reasoning+tools  131k 19prov ★safe           ║
+║  ccx  Qwen3-Next-80B    general/agentic  262k 6prov                  ║
+║  ccz  GLM-4.5-Air       fast allround    131k 4prov 🧠 THINKING      ║
+║  ccm  Gemma-4-31B       resilient gen    262k 11prov                 ║
+║  ccu  Nemotron Ultra    flagship reason  1M   ⚠ 1prov                ║
+║  ccb  Builder combo     auto multi-model                             ║
+╠══════════════════════════════════════════════════════════════════════╣
+║ 🧠 MYTHOS DEEP REASONING (inspired by OpenMythos)                    ║
+║  myth   GLM 4.5 Air     thinking mode    131k  (deep reasoning)      ║
+║  myth3  GPT-OSS-120B    reasoning effort 131k  (effort control)      ║
+║  myth5  Nemotron Ultra  550B reasoning   1M    (flagship deep)       ║
+╠══════════════════════════════════════════════════════════════════════╣
+║ OPENAI & NVIDIA (9router)                                            ║
+║  op   GPT-5   opt  GPT-4-Turbo   opo3  o3-mini   glm  GLM-5.1      ║
+╠══════════════════════════════════════════════════════════════════════╣
+║ NATIVE (api.anthropic.com, keychain)                                 ║
+║  ccs  Sonnet 4.6   cco  Opus 4.8   ccq  Haiku 4.5                   ║
+╠══════════════════════════════════════════════════════════════════════╣
+║ 🧠 ACT EFFORT LEVELS (Adaptive Computation Time)                     ║
+║  low    = fast, cheap (simple questions)                             ║
+║  medium = standard (explanations, comparisons)                       ║
+║  high   = deep reasoning (proofs, algorithms, analysis)              ║
+╠══════════════════════════════════════════════════════════════════════╣
+║ 429 FALLBACK CHAINS (next → if rate-limited)                         ║
+║  UI:     ccc→ccz→ccm   Gen:  cc→ccg→ccx   Reason: myth→ccg→ccu      ║
+║  Quick:  cch→ccz        Large: cca→ccc→ccu  Agent: ccg→ccx→cc        ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  cc-route "task"  → analyze → pick best + effort → launch             ║
+╚══════════════════════════════════════════════════════════════════════╝
 
 EOF
 }
@@ -139,6 +119,16 @@ _cc_route_match() {
     "(\bproduction\b|\bcritical\b|security|vuln|CVE|\bauth\b.*(bug|error|fail|issue|broken)|\bdeploy fail|race condition|SEBI|compliance|breach|exploit|sql inject|RLS bypass|privilege escalat|data leak|\bpayment\b|financial logic|\b403\b|hotfix|regression|emergency)"; then
     echo "claude-sonnet-4-6|⚡ NATIVE|Critical/Security → Sonnet 4.6|native"
 
+  # ── FREE: Mythos Deep Reasoning (high effort) ────────────────────
+  elif echo "$t" | grep -qiE \
+    "(prove|derive|formal|axiom|theorem|recursive|latent|multi.?hop|deep reasoning|complex logic|step.?by.?step|chain.?of.?thought)"; then
+    echo "openrouter/z-ai/glm-4.5-air:free|🧠 MYTHOS|Deep Reasoning → GLM 4.5 Air (thinking mode)|9r"
+
+  # ── FREE: Mythos Reasoning with Effort (high effort) ─────────────
+  elif echo "$t" | grep -qiE \
+    "(reason|think through|math|analy[sz]e deeply|algorithm|optimi[sz]e|proof|derive|equation|derivation|critically|audit)"; then
+    echo "openrouter/openai/gpt-oss-120b:free|🧠 MYTHOS|Reasoning → GPT-OSS-120B (reasoning effort)|9r"
+
   # ── FREE: UI / Frontend / Design System ──────────────────────────
   elif echo "$t" | grep -qiE \
     "\bUI\b|\bUX\b|\bcomponent\b|frontend|tailwind|framer|figma|design system|layout|responsive|mobile.first|dark mode|glassmorphism|neo.luxury|color scheme|typography|\bcard\b|\bmodal\b|sidebar|navbar|dashboard UI|loading state|skeleton|animation|\bCSS\b"; then
@@ -153,11 +143,6 @@ _cc_route_match() {
   elif echo "$t" | grep -qiE \
     "(entire codebase|full audit|all files|large context|comprehensive review|read everything|scan all|full repo|every file|summarize the whole|inventory all|full analysis|deep dive)"; then
     echo "openrouter/nvidia/nemotron-3-super-120b-a12b:free|🟢 FREE|Large Context → Nemotron 3 Super 1M (cca; fallback: ccc, ccu)|9r"
-
-  # ── FREE: Heavy Reasoning ────────────────────────────────────────
-  elif echo "$t" | grep -qiE \
-    "(reason|think through|step by step|prove|derive|complex logic|algorithm design|optimi[sz]e|math|analy[sz]e deeply)"; then
-    echo "openrouter/openai/gpt-oss-120b:free|🟢 FREE|Reasoning → GPT-OSS-120B (ccg; fallback: ccu, ccx)|9r"
 
   # ── FREE: Quick / Trivial ────────────────────────────────────────
   elif echo "$t" | grep -qiE \
@@ -189,11 +174,21 @@ cc-route() {
   model="${decision%%|*}"; decision="${decision#*|}"
   tier="${decision%%|*}";  decision="${decision#*|}"
   reason="${decision%%|*}"; mode="${decision##*|}"
+  
+  # Detect effort level from tier (Mythos-inspired ACT)
+  local effort="medium"
+  if echo "$tier" | grep -qi "MYTHOS"; then
+    effort="high"
+  elif echo "$reason" | grep -qi "quick\|trivial"; then
+    effort="low"
+  fi
+  
   echo ""
   echo "⚡ RoutingMagic"
   echo "   Task : $*"
   echo "   Pick : $tier"
   echo "   Why  : $reason"
+  echo "   🧠 ACT: $effort effort"
   echo "   ───────────────────────────────────────────"
   echo "   Launching: $model"
   echo ""

@@ -30,7 +30,27 @@ zsh -c 'source ~/RoutingMagic/aliases.zsh && ask "Write a Python script to calcu
 - **Safety / Policy**: Prompts containing `moderation, unsafe content` are routed to **Nemotron-3.5-Content-Safety**.
 - **General Chat**: Anything else is routed to **GLM-5.1**.
 
+### Mythos-Inspired Features (v2):
+
+**Adaptive Computation Time (ACT):**
+- Dynamically selects reasoning effort: low/medium/high
+- High-effort tasks get reasoning models with hidden thinking
+
+**Reasoning Tokens (Latent-Space Thinking):**
+- Models with reasoning support enable hidden multi-step thinking
+- Access via `myth`, `myth3`, `myth5` aliases
+
+**MoE-Style Expert Selection (Council):**
+- Task-specific model selection based on domain
+- High-effort tasks prefer models with reasoning support
+
+**Multi-Pass Prompting:**
+- High-effort tasks receive structured reasoning templates
+- Three-pass approach: analyze → verify → finalize
+
 ### Agent Guidelines:
 - If you find yourself rate-limited or out of tokens on a major model, use the `ask` alias as a fallback to continue zero-cost troubleshooting.
-- The `ask` alias automatically accesses all necessary API keys via the user's `~/.env` and `~/global.env`. You do not need to supply keys.
+- The `ask` alias automatically loads API keys from `~/.routingmagic/.env` (user setup) and `~/global.env` (legacy). You do not need to supply keys.
+- If keys are missing, the tool prints setup instructions. Run: `python3 ~/Projects/RoutingMagic/setup_keys.py`
 - Do not attempt to pipe multi-line files directly into `ask` without formatting; keep the prompt string enclosed in double quotes.
+- For deep reasoning tasks, use `myth` or `myth3` for reasoning token support.
