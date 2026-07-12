@@ -39,6 +39,10 @@
 - No hardcoded keys in repo
 - `.env.example` committed as template
 
+## OpenAI Client Standards
+- **Always disable retries**: `OpenAI(..., max_retries=0)` MUST be used. Internal client retries bypass our thread-level timeouts (`f.result(timeout=35.0)`) and will cause the Model Council quorum racing mechanism to hang indefinitely if an API provider is stuck.
+- **Fail Fast**: The entire fallback architecture relies on failing fast within 15-25 seconds and immediately trying a different API provider.
+
 ## User-facing commands
 | Command | Function |
 |---------|----------|

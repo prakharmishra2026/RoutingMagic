@@ -42,3 +42,13 @@
 
 ## 010 — Test suite maintenance
 **Rule**: Keeping the automated test suite at 100% passing (`pytest tests/ -v`) ensures regression-free surgical edits on large codebases.
+
+## 011 — Internal OpenAI Client Retries (Hidden Timeouts)
+**What broke**: Model Council hung for 75s and triggered false quorum cancellations.
+**Root cause**: The `openai` python client automatically retries failed API requests up to 2 times. If a request is stuck, it hangs for `timeout * 3` seconds, completely bypassing our manual 35-second thread limits and falling out of sync with the quorum racing mechanism.
+**Rule**: ALWAYS explicitly pass `max_retries=0` when instantiating `OpenAI(api_key=..., timeout=..., max_retries=0)`. We want the client to fail fast so our custom fallback logic can instantly route to a different provider.
+
+## 012 — Real Caveman Integration (System Prompts vs CLI)
+**What broke**: Attempted to use a non-existent `caveman-compress` CLI binary via `subprocess.run()`, which always failed and fell through to simple truncation.
+**Root cause**: Caveman is actually implemented as a SYSTEM PROMPT INJECTION (instructing the LLM to output caveman-speak), not a post-processing binary.
+**Rule**: Always inspect the upstream project (like Caveman's `SKILL.md`) to understand its architecture before implementing an integration. Do not hallucinate CLI tools.

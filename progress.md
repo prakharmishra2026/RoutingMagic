@@ -39,6 +39,13 @@
 - [x] Integrated `warpdotdev/common-skills` Council Architecture (3 Specialist Personas, 7-Point Evidence Protocol, Blind `Proposal A/B/C` Cross-Critique, and Executive Decision Memo Chairman output)
 - [x] Effortless Clipboard Paste UX (`ask MC --paste`, `ask --paste`, `/paste` REPL command) for Non-Technical & IDE Users to paste multi-line specs/plans without terminal syntax errors
 
+## Phase 5: Resilience & Bug Fixes (Latest)
+
+- [x] Rewrite `caveman_integration.py` to use System Prompt Injection instead of CLI binary.
+- [x] Disable OpenAI internal client retries (`max_retries=0`) to fix false 75s quorum timeout loops.
+- [x] Refresh Fallback Model Pool (removed dead `glm-4-flash`, `gemma-4-31b`, added `qwen-2.5-72b:free`, `mistral-7b:free`, `phi-3-mini:free`).
+- [x] Update `.agents/skills/routingmagic-self-improvement/SKILL.md` with new architectural invariants.
+
 ---
 
 ## Progress Summary
@@ -48,5 +55,6 @@
 | Foundation | 5 | 5 | 100% |
 | Self-Improvement | 4 | 4 | 100% |
 | User-Facing | 5 | 5 | 100% |
-| Final Validation | 2 | 2 | 100% |
-| **Total** | **16** | **16** | **100%** |
+| Final Validation | 6 | 6 | 100% |
+| Resilience | 4 | 4 | 100% |
+| **Total** | **24** | **24** | **100%** |
