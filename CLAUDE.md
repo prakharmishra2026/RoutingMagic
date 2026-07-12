@@ -27,9 +27,14 @@ Model Council (3-model deliberation), git snapshot failsafe, vision paste.
 
 ## Structure
 
-- `openai_wrapper.py` — core: routing, REPL, council, vision, fallback chains
-- `aliases.zsh` — shell aliases (cc, ccc, ask, mc, myth, myth3, myth5, etc.)
-- `setup_keys.py` — interactive API key setup (stores in ~/.routingmagic/.env)
+- `openai_wrapper.py` — core: routing, REPL, council, vision, fallback chains, 9router auto-start
+- `aliases.zsh` — 4-core-alias system (ask, ask deep, ask MC, ask deep MC), power-user cc* aliases
+- `setup_keys.py` — interactive API key setup (stores in ~/.routingmagic/.env, 0600 perms)
+- `caveman_integration.py` — Caveman compression pipeline (65% output savings, quality guardrails)
+- `metrics_collector.py` — SQLite token metrics + savings dashboard (/savings commands)
+- `caveman_quality_loop.py` — auto-downgrade on confusion, feedback collection, self-improving prompts
+- `model_registry_updater.py` — weekly OpenRouter model fetch, free model filtering, changelog
+- `routing_learner.py` — per-task success rate tracking, model quality DB, lesson generation
 - `save_handler.py` — auto-updates project memory files after sessions
 - `glm5.py` — direct NVIDIA GLM-5.1 fallback script
 - `install.sh` — installer: zshrc + skill symlink + key setup

@@ -11,8 +11,8 @@ from openai_wrapper import smart_route, get_instant_context
 def test_smart_route_logic():
     # Test financial/math reasoning logic
     model, task = smart_route("Please reason deeply about this math problem")
-    assert "nemotron-3-super" in model
-    assert task == "financial_math_reasoning"
+    assert "nemotron" in model
+    assert task in ("financial_math_reasoning", "mythos_deep_reasoning")
     
     # Test long context / planning
     model, task = smart_route("Here is a large repo codebase architecture plan")

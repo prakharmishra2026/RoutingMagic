@@ -29,6 +29,10 @@ import urllib.request
 from pathlib import Path
 from openai import OpenAI
 from dotenv import load_dotenv
+from caveman_integration import get_caveman
+from metrics_collector import record_session, format_savings_dashboard, get_savings_summary, get_savings_breakdown, get_model_efficiency_ranking, export_savings_csv, get_current_session_savings, SessionMetrics
+from caveman_quality_loop import get_quality_loop
+from routing_learner import get_routing_learner
 
 # --- Shell command security helpers ---
 # Characters that enable subshell execution or command chaining.
@@ -36,6 +40,12 @@ from dotenv import load_dotenv
 # Does NOT block bare $ (e.g. inside quoted strings like python3 -c "...$var...")
 # because shell=False+shlex means the shell never interprets them.
 _SHELL_DANGEROUS = re.compile(r'[;|&`<>]|\$[({]')
+
+_CONFUSION_PATTERNS = [
+    "what?", "again?", "rephrase", "didn't understand", "didn't get that",
+    "too short", "too terse", "more detail please", "not what i asked",
+    "not what i meant", "that's not helpful", "try again"
+]
 
 def _sanitize_cmd(cmd: str) -> tuple[bool, str]:
     """Return (is_safe, reason). Blocks shell metacharacters that enable injection.
@@ -324,7 +334,24 @@ def is_port_open(ip, port):
         except Exception:
             return False
 
-# Check API keys after is_port_open is defined
+def _ensure_9router_running():
+    """Auto-start 9router in background if installed and not already running."""
+    if is_port_open("127.0.0.1", 20128):
+        return True
+    try:
+        subprocess.Popen(["9router", "-t"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        for _ in range(5):
+            if is_port_open("127.0.0.1", 20128):
+                return True
+            time.sleep(1)
+        return False
+    except FileNotFoundError:
+        return False
+    except Exception:
+        return False
+
+# Ensure 9router running, then check API keys
+_ensure_9router_running()
 _check_api_keys()
 
 class SessionContext:
@@ -852,7 +879,7 @@ def get_client_and_model(model_name, is_summarizer=False):
             clean_model = model_name[len("openai/"):]
         else:
             clean_model = model_name
-        api_key = os.getenv("OPENAI_API_KEY")
+        api_key = os.getenv("OPENAI_API_KEY") or "sk-placeholder-key"
         return OpenAI(api_key=api_key, timeout=req_timeout), clean_model
 
     # OpenRouter / 9router — model IDs must NOT have an 'openrouter/' prefix
@@ -956,6 +983,12 @@ def chat_oneshot(model, prompt, use_deep_context=False):
     else:
         context_str = get_instant_context()
 
+    caveman = get_caveman()
+    compressed_ctx, ctx_stats = caveman.compress_context(context_str)
+    if ctx_stats.get("input_savings_pct", 0) > 10:
+        context_str = compressed_ctx
+        print(f"\033[94m[Caveman] Context compressed: {ctx_stats['input_savings_pct']:.0f}% savings\033[0m")
+
     system_instruction = (
         "You are a rigorous analytical assistant trained on Charlie Munger's mental models. "
         "1. INVERSION: Identify failure paths and how to avoid them.\n"
@@ -1058,6 +1091,32 @@ def chat_oneshot(model, prompt, use_deep_context=False):
                 sys.stdout.write("\r\033[K")
                 sys.stdout.flush()
             print()
+            try:
+                from metrics_collector import SessionMetrics, record_session
+                record_session(SessionMetrics(
+                    session_id=f"oneshot_{int(time.time())}",
+                    timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    model_used=attempt_model,
+                    task_type=task_type,
+                    input_tokens=caveman.session_stats.get("original_tokens", 0),
+                    output_tokens=caveman.session_stats.get("compressed_tokens", 0),
+                    caveman_input_savings_pct=caveman.session_stats.get("input_savings_pct", 0),
+                    caveman_output_savings_pct=0.0,
+                    mythos_effort=effort,
+                    council_invoked=attempt_model == "council",
+                    fallback_tier=0,
+                    latency_ms=0,
+                    user_reasked=False,
+                    confusion_signals=0,
+                    user_feedback=None,
+                    caveman_level=caveman.level,
+                    caveman_downgraded=False,
+                    reask_count=0,
+                    cost_usd=0.0
+                ))
+                get_routing_learner().record_outcome(task_type, attempt_model, success=True, reask=False)
+            except Exception:
+                pass
             success = True
             break
         except Exception as e:
@@ -1978,6 +2037,12 @@ def repl(model, use_deep_context=False, session_context=None):
         else:
             context_str = get_instant_context()
             
+        caveman = get_caveman()
+        compressed_ctx, ctx_stats = caveman.compress_context(context_str)
+        if ctx_stats.get("input_savings_pct", 0) > 10:
+            context_str = compressed_ctx
+            print(f"\033[94m[Caveman] Context compressed: {ctx_stats['input_savings_pct']:.0f}% savings\033[0m")
+
         system_instruction = (
             "You are a rigorous analytical assistant trained on Charlie Munger's mental models. "
             "1. INVERSION: Identify failure paths and how to avoid them.\n"
@@ -2178,7 +2243,36 @@ def repl(model, use_deep_context=False, session_context=None):
             print(f"\033[96mSession Cost (Paid): \033[0m ${SESSION_COST:.4f} / ${MAX_BUDGET:.2f} max")
             print(f"\033[96mRate Limits (Free): \033[0m {rpm} RPM (Limit: ~40), {daily_requests} Requests today.")
             continue
-            
+
+        # Caveman & Savings Dashboard
+        if line_stripped.startswith("/savings"):
+            parts = line_stripped.split()
+            subcmd = parts[1] if len(parts) > 1 else "total"
+            if subcmd in ("total", "summary"):
+                print(format_savings_dashboard(30))
+            elif subcmd == "breakdown":
+                print(json.dumps(get_savings_breakdown(), indent=2))
+            elif subcmd == "models":
+                print(json.dumps(get_model_efficiency_ranking(30), indent=2))
+            elif subcmd == "export":
+                print(export_savings_csv(30))
+            elif subcmd == "session":
+                print(get_current_session_savings("current"))
+            else:
+                print("Usage: /savings [total|breakdown|models|export|session]")
+            continue
+
+        if line_stripped.startswith("/caveman-feedback"):
+            parts = line.split(" ", 1)
+            feedback = parts[1].strip() if len(parts) > 1 else ""
+            if feedback:
+                qloop = get_quality_loop()
+                qloop.record_explicit_feedback(feedback, line)
+                print("\033[92m[Caveman] Feedback recorded. Use 'ask deep' if output was too terse.\033[0m")
+            else:
+                print("\033[93m[Caveman] Usage: /caveman-feedback <good|bad|terse|perfect|right>\033[0m")
+            continue
+
         # 4. Context-Aware /model Switcher
         if line_stripped == "/model":
             last_msg = messages[-1]["content"] if len(messages) > 1 else "general"
@@ -2268,6 +2362,13 @@ def repl(model, use_deep_context=False, session_context=None):
             target_model, task_type = smart_route(line)
             print(f"\033[94m[Smart Router] Selected '{target_model}' for task type: {task_type}\033[0m")
             
+        # Caveman confusion detection — re-ask patterns signal compression may be too aggressive
+        if any(p in line.lower() for p in _CONFUSION_PATTERNS):
+            get_caveman().record_confusion_signal()
+            get_quality_loop().record_confusion_signal(line)
+            if get_caveman().session_stats.get("downgraded", False):
+                print("\033[93m[Caveman] Auto-downgraded compression level (user confusion detected)\033[0m")
+
         messages.append({"role": "user", "content": line})
         
         # BUG-04 FIX: Only update target_model when the smart-routed model itself succeeds
@@ -2401,9 +2502,41 @@ def repl(model, use_deep_context=False, session_context=None):
             messages.pop()
             continue
             
-        messages.append({"role": "assistant", "content": assistant_reply})
+        caveman = get_caveman()
+        compressed_reply, out_stats = caveman.compress_response(assistant_reply)
+        if out_stats.get("output_savings_pct", 0) > 0:
+            messages.append({"role": "assistant", "content": compressed_reply})
+        else:
+            messages.append({"role": "assistant", "content": assistant_reply})
         save_temp_memory(messages)
-        
+        try:
+            from metrics_collector import SessionMetrics, record_session
+            record_session(SessionMetrics(
+                session_id=f"repl_{int(time.time())}",
+                timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                model_used=attempt_model,
+                task_type=task_type if 'task_type' in locals() else "general",
+                input_tokens=caveman.session_stats.get("original_tokens", 0),
+                output_tokens=caveman.session_stats.get("compressed_tokens", 0),
+                caveman_input_savings_pct=caveman.session_stats.get("input_savings_pct", 0),
+                caveman_output_savings_pct=out_stats.get("output_savings_pct", 0),
+                mythos_effort="medium",
+                council_invoked=attempt_model == "council",
+                fallback_tier=0,
+                latency_ms=0,
+                user_reasked=False,
+                confusion_signals=caveman.session_stats.get("confusion_signals", 0),
+                user_feedback=None,
+                caveman_level=caveman.level,
+                caveman_downgraded=caveman.session_stats.get("downgraded", False),
+                reask_count=0,
+                cost_usd=0.0
+            ))
+            if 'task_type' in locals():
+                get_routing_learner().record_outcome(task_type, attempt_model, success=True, reask=False)
+        except Exception:
+            pass
+
         if len(messages) > 8:
             messages = compress_context(messages)
             save_temp_memory(messages)
@@ -2422,6 +2555,13 @@ def main():
         else:
             print(f"\033[91mSetup script not found: {setup_script}\033[0m")
         sys.exit(0)
+        
+    # Auto-update model registry on startup
+    try:
+        from model_registry_updater import auto_update_if_needed
+        auto_update_if_needed()
+    except Exception:
+        pass
         
     model_id = sys.argv[1]
     args = sys.argv[2:]

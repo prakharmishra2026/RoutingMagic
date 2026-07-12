@@ -1,19 +1,44 @@
-# Project Lessons: RoutingMagic
+# Lessons Learned
 
-## Gotchas & Pitfalls
-- **Token Bleed in Background Tasks:** Proactively scanning codebase context every time the REPL starts is too expensive. We shifted to a reactive approach where `stderr` logs are captured *only* when an error is thrown, and we prioritize reading localized `.md` files for deep context.
-- **Upstream Rate Limiting:** Free models (like OpenRouter's Kimi or NVIDIA's NIMs) can arbitrarily rate limit. Hardcoding a single model crashes the tool. Implementing a dynamic multi-model fallback chain (Free A -> Free B -> Paid) is essential for CLI robustness.
-- **Resource Leaks in Utility Functions:** Utility functions like `is_port_open` must ensure resources (like sockets) are properly closed, even in error cases, to avoid file descriptor leaks.
-- **Regex False Positives:** Regular expressions used for input sanitization must be rigorously tested to avoid false positives that can break functionality.
-- **Terminal Deadlocks in Bracketed Paste Mode:** Failing to properly handle bracketed paste mode can lead to terminal deadlocks, particularly on macOS. Solution: Use a non-blocking input collector with a timeout (e.g., rolling window) and ensure the terminal is restored to its original state after pasting.
-- **State Leakage from Global Variables:** Using global variables for temporary data (like tracking pasted images) can lead to state leakage between sessions or operations. Solution: Use session-scoped context managers (like `SessionContext`) to manage temporary state and ensure it is cleaned up.
+## 001 — Full-file write on large files breaks streaming
+**What broke**: Multiple attempts to full-rewrite `openai_wrapper.py` (2529 lines, ~110KB) timed out or failed mid-stream.
+**Root cause**: The model cannot generate 110KB reliably in one shot via streaming API.
+**Rule**: Never full-rewrite files >500 lines. Use surgical `edit` operations with unique oldString matching. One edit at a time, verify after each.
 
-## Best Practices
-- Keep `.zshrc` aliases decoupled from Python logic so the terminal commands `ask`, `chat`, and `save` inject cleanly into any workspace.
-- Rely on local `git reset --hard` for the `undo/restore` functionality rather than trying to track specific LLM file modifications manually.
-- **Systematic Debugging:** Implementing a structured debugging process (like the systematic-debugging skill) helps prevent shortcuts and ensures root cause resolution, reducing recurring issues.
-- **Live Model Refresh:** Statically defined model lists rot immediately (e.g., `deepseek-r1:free` vanished from OpenRouter). Live querying from the OpenRouter model registry `/api/v1/models` is necessary to prevent outages and auto-discover new cost-optimal free models.
-- **Deterministic Floor/Safety Gates:** Never trust an LLM "Judge" or "Committee" to enforce final safety limits (e.g. margin of safety, leverage limits). During tests, the LLM Judge correctly computed breaches but still output a `BUY` recommendation. Safety must be enforced by a hardcoded Python gate that can downgrade but never upgrade a verdict.
-- **Latency vs. Reasoning:** Reasoning models introduce significant latency (~32s p95). Non-reasoning models must be utilized for time-sensitive interactive flows, reserving reasoning models only for asynchronous advisory audits and explanations.
-- **Latency Mitigation in Multi-Agent Deliberation:** Running multiple LLM calls sequentially in a multi-stage deliberation protocol (e.g. LLM Council) multiplies latency. Implementing concurrent calls using Python's `ThreadPoolExecutor` ensures that Stage 1 (opinions) and Stage 2 (reviews) are executed in parallel, bounding total stage latency by the slowest single API call instead of the sum of all calls.
-- **Dynamic Model Selection and Freshness Sorting:** Hardcoding specific reasoning models (like `deepseek/deepseek-r1`) introduces model rot because the model landscape changes rapidly. Instead, dynamically query OpenRouter's `/api/v1/models` and filter candidates based on required capabilities (e.g., `"reasoning"` parameter support). By sorting candidates by their creation timestamp (`created` parameter) in descending order, the system automatically routes tasks to the latest and most capable reasoning models (such as `qwen/qwen3-max-thinking` or `openai/o3-mini`) rather than stale, outdated models.
+## 002 — Don't bundle integration points
+**What broke**: Previous sessions tried to integrate all Caveman/metrics/quality/learner modules into openai_wrapper.py in one massive pass.
+**Root cause**: Integration touches 8+ scattered locations in the file. Trying to do them all at once creates too many simultaneous edit operations.
+**Rule**: One edit per integration point. Each edit is small (<20 lines changed), targeting a unique oldString. Verify syntax after each.
+
+## 003 — Verify module imports exist before importing
+**What broke**: `caveman_quality_loop.py` imported `get_metrics` from `metrics_collector.py`, but that function never existed in the module.
+**Root cause**: Function was referenced in the import but never implemented in the source module.
+**Rule**: After writing any module that imports from another local module, run the full import chain (`python3 -c "import openai_wrapper"`) to catch missing exports.
+
+## 004 — 9router auto-start order
+**Rule**: 9router auto-start should happen BEFORE API key checks. If 9router starts successfully, it provides OpenRouter access without needing OPENROUTER_API_KEY.
+
+## 005 — 9router auto-start must happen before API key check
+**What broke**: Module-level `_check_api_keys()` ran before 9router was auto-started, causing false "no API access" errors.
+**Root cause**: 9router can provide OpenRouter access without needing OPENROUTER_API_KEY, but only if it's running first.
+**Rule**: Call `_ensure_9router_running()` before `_check_api_keys()` at module load.
+
+## 006 — Caveman confusion detection needs narrow patterns
+**What broke**: Broad patterns like "explain" would trigger false-positive confusion signals on normal requests like "explain how X works".
+**Root cause**: Natural language has many phrases that overlap with re-ask/complaint patterns.
+**Rule**: Use specific multi-word patterns ("didn't understand", "not what i asked") instead of single words. Test against common false positives.
+
+## 007 — Surgical edits beat file writes for large files
+**What worked**: Replacing full-file rewrites with 6 small targeted `edit` operations completed the entire integration without a single streaming failure.
+**Root cause**: Each edit targets ≤20 lines with a unique oldString, fits in one API call.
+**Rule**: For files >500 lines, always plan integration as a series of targeted edits. Never attempt a single-edit or full-file approach.
+
+## 008 — Pre-existing test failures
+**Rule**: `test_smart_route_logic` and `test_get_client_and_model` were already failing before our changes. Don't fix unrelated test failures during feature integration. Note them and move on.
+
+## 009 — Always verify SQLite table column count against INSERT statements
+**What broke**: `CREATE TABLE sessions` created 19 columns, but `INSERT OR REPLACE INTO sessions VALUES` had 18 placeholders `?`.
+**Rule**: Always verify `len(columns)` equals `len(placeholders)` in SQL insert queries.
+
+## 010 — Test suite maintenance
+**Rule**: Keeping the automated test suite at 100% passing (`pytest tests/ -v`) ensures regression-free surgical edits on large codebases.

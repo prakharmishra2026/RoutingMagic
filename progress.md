@@ -1,54 +1,48 @@
-# Project Progress: RoutingMagic
+# PROGRESS.md — Self-Improving RoutingMagic
 
-## Chronological Log
- - **2026-06-18:**
-   * Improved clipboard image paste handling: intercept empty/whitespace bracketed pastes (47e3f73)
-   * Fixed file descriptor leak in AppleScript clipboard write (816b3e2)
-   * Added diagnostic print messages to clipboard check/extract functions (4b0585f)
-   * Updated progress log for clipboard image paste (f87b2dc)
-   * Implemented session-scoped multi-image paste & analysis and rewrote README.md (8cb5812)
- - **2026-06-17:**
-   * Added clipboard image paste (/paste, Ctrl+V) and vision model analysis integration. (57e6ef0)
- - **Phase 1:** Built foundational REPL, `openai_wrapper.py`, and smart routing logic for NVIDIA/OpenAI models.
- - **Phase 2:** Defined Zsh aliases to inject commands globally across all system projects.
- - **Phase 3:** Converted to an advanced IDE-like Terminal Protocol with auto-commit failsafes, cost/rate-limit tracking, model fallback chains, workspace context isolation, and smart `stderr` error interception.
- - **Phase 4:** Built `save_handler.py` to automate maintaining project state via Git diff analysis and LLM summarization.
- - **2025-10-03:** Added systematic-debugging skill to agent's toolkit (.agents/skills/systematic-debugging) to improve root cause analysis during development. This includes CREATION-LOG.md and SKILL.md files.
- - **2025-10-04:**
-   * Fixed REPL: added support for bracketed paste mode and prevented terminal deadlocks on macOS (fc9226c).
-   * Improved paste collector with rolling-window (200ms) and used shlex.split for shell=False safety (f2e9b5d).
-   * Fixed socket leak in is_port_open and sanitize_cmd regex false-positives in systematic-debugging skill (085b24e).
-   * Injected Charlie Munger mental models (inversion, first principles) into system prompt for highly rigorous output (6b2fd49).
- - **2025-10-05:**
-   * Fixed REPL: added support for hybrid typed+pasted prompts in bracketed paste mode (baba84b).
-   * Updated project progress and lessons-learned (f216a10).
-   * Saved full progress for phases 5-8, including all 11 bugs, lessons, and systematic-debugging skill (8f32634).
- - **2025-10-06:**
-   * Fixed REPL: use non-canonical cbreak mode to prevent terminal freezes on large pastes (562640b)
-   * Docs: save progress for hybrid paste fix (cc46ada)
- - **2025-10-07:**
-   * Fixed router: replaced vanished deepseek-r1:free with nemotron-3-super and documented learnings from live routing experiment (0a2bf46)
- - **2026-06-14:**
-   * Implemented Karpathy-style LLM Council deliberation protocol in `openai_wrapper.py` supporting Stage 1 (opinions), Stage 2 (reviews), and Stage 3 (synthesis).
-   * Integrated council deliberation via `ask council "prompt"` keyword and `/council <prompt>` REPL command.
-   * Added unit tests for `run_council` and council routing in `test_routing_magic.py`.
-   * Updated `README.md` and `lessons.md` to document the council feature and parallel execution latency mitigation.
- - **2026-06-15:**
-   * Fixed paste auto-submission, handled empty choices NoneType error, added backup free fallback pool, and implemented in-place reasoning display (dde51fa).
- - **2026-06-16:**
-   * Added chpwd directory hook to auto-place `save_handler.py` at repository roots when changing directories (7acf324).
-   * Updated README.md with documentation for multi-step pastes and in-place reasoning features (f46b443).
-   * Enhanced the LLM Council to use a dynamic 3-model configuration and added REPL aliases (`/council`, `/MC`, `/mc`) and global shell aliases for quick access (ba9f050).
- - **2026-06-28:**
-   * Implemented session-scoped multi-image pasting with unique temp directories via `SessionContext` context manager.
-   * Removed global variable `LAST_PASTED_IMAGES` to eliminate state leakage.
-   * Updated the user flow to warn on empty Enter, requiring an explicit `done`/`/done` command to start vision analysis.
-   * Added cost/resolution control with `detail` parameter and enforced 10-image / 25MB limits.
-   * Completely rewrote `README.md` to clearly document Zsh installation, API key configuration, CLI one-shots, and REPL slash commands.
-   * Added 4 new unit tests covering SessionContext, warning checks, detail level configuration, and payload validation.
+## Legend
+- [x] Completed
+- [~] Partially completed
+- [ ] Not started
 
-## Backlog / Next Steps
- - [x] Implement LLM Council multi-agent deliberation.
- - [x] Refactor multi-image paste queues to use SessionContext context manager with done flow.
- - [ ] Test the `! <cmd>` error interception in a real node/python project.
- - [ ] Monitor rate-limit hits for OpenRouter free models to ensure the fallback chain shifts smoothly.
+---
+
+## Phase 1: Foundation Files
+
+- [x] Create .gitignore and .env.example
+- [x] Update setup_keys.py and install.sh for new key flow
+- [x] Rewrite aliases.zsh to 4-alias system with case-insensitive MC
+- [x] Integrate Caveman compression into openai_wrapper.py
+- [x] Add 9router auto-start to openai_wrapper.py
+
+## Phase 2: Self-Improvement Modules
+
+- [x] Create metrics_collector.py for token metrics
+- [x] Create caveman_quality_loop.py with quality guardrails
+- [x] Create model_registry_updater.py for weekly auto-update
+- [x] Create routing_learner.py for routing learning system
+
+## Phase 3: User-Facing Features
+
+- [x] Add lesson persistence system (confusion detection + feedback wiring)
+- [x] Add savings dashboard commands (/savings, /s total, /s breakdown, etc.)
+- [x] Rewrite README.md for non-technical users
+- [x] Internalize Mythos (remove user-facing, keep routing logic)
+- [x] Update CLAUDE.md and SKILL.md
+
+## Phase 4: Final Validation
+
+- [x] Test full flow — syntax check, import, pytest (11/11 pass, 100% test passing!)
+- [x] Fixed all audit bugs (SQL 19-placeholder mismatch, `/savings session` crash, module-level confusion patterns, wired `record_session` / `record_outcome`)
+
+---
+
+## Progress Summary
+
+| Phase | Total | Done | % |
+|-------|-------|------|---|
+| Foundation | 5 | 5 | 100% |
+| Self-Improvement | 4 | 4 | 100% |
+| User-Facing | 5 | 5 | 100% |
+| Final Validation | 2 | 2 | 100% |
+| **Total** | **16** | **16** | **100%** |

@@ -10,7 +10,6 @@ from pathlib import Path
 
 CONFIG_DIR = Path.home() / ".routingmagic"
 CONFIG_FILE = CONFIG_DIR / ".env"
-KEYS_FILE = "~/.routingmagic/.env"
 OR_SIGNUP = "https://openrouter.ai/keys"
 NV_SIGNUP = "https://build.nvidia.com/nim/dashboard"
 OAI_SIGNUP = "https://platform.openai.com/api-keys"
@@ -56,7 +55,6 @@ def _prompt_macos(title: str, message: str, secret: bool = False) -> str | None:
     """Native macOS dialog via osascript. Secret mode uses password field."""
     try:
         if secret:
-            # AppleScript has no native password dialog — use Python approach
             return None
         script = f'display dialog "{message}" default answer "" with title "{title}"'
         result = subprocess.run(
@@ -64,7 +62,6 @@ def _prompt_macos(title: str, message: str, secret: bool = False) -> str | None:
             capture_output=True, text=True, timeout=120
         )
         if result.returncode == 0:
-            # Parse: {textReturned:"xxx", buttonReturned:"OK"}
             out = result.stdout.strip()
             if 'textReturned:"' in out:
                 return out.split('textReturned:"')[1].split('"')[0]

@@ -1,0 +1,52 @@
+# Secrets - NEVER commit
+.env
+.env.*
+~/.routingmagic/.env
+**/.env
+**/.env.*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+.pytest_cache/
+.pytest_cache
+.mypy_cache/
+.dmypy.json
+pyproject.toml
+
+# Session data
+.rm_session_*.json
+sessions/
+*.jsonl
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Test artifacts
+test_clip_safe.png
+munger_prompts.md
+model-protocol.html
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Distribution
+dist/
+build/
+*.egg-info/

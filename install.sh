@@ -1,16 +1,27 @@
 #!/usr/bin/env bash
 # RoutingMagic installer — idempotent.
 # 1) sources aliases.zsh from ~/.zshrc   2) symlinks the skill for Claude Code.
-# 3) runs interactive API key setup if not configured.
+# 3) creates ~/.routingmagic/.env from template if missing.
+# 4) runs interactive API key setup if not configured.
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ZSHRC="${HOME}/.zshrc"
 SOURCE_LINE="source ${REPO_DIR}/aliases.zsh"
 SKILL_LINK="${HOME}/.claude/skills/RoutingMagic"
-RM_ENV="${HOME}/.routingmagic/.env"
+RM_DIR="${HOME}/.routingmagic"
+RM_ENV="${RM_DIR}/.env"
+ENV_EXAMPLE="${REPO_DIR}/.env.example"
 
 echo "RoutingMagic install — repo at: ${REPO_DIR}"
+
+# 0) Create ~/.routingmagic/.env from template if missing ------------
+mkdir -p "${RM_DIR}"
+if [ ! -f "${RM_ENV}" ] && [ -f "${ENV_EXAMPLE}" ]; then
+  cp "${ENV_EXAMPLE}" "${RM_ENV}"
+  chmod 600 "${RM_ENV}"
+  echo "  ✓ created ${RM_ENV} from template (chmod 600)"
+fi
 
 # 1) zshrc source line (idempotent) ----------------------------------
 if [ -f "${ZSHRC}" ] && grep -Fq "${SOURCE_LINE}" "${ZSHRC}"; then
@@ -38,7 +49,7 @@ else
 fi
 
 # 3) API key setup (interactive, skip if already configured) ---------
-if [ -f "${RM_ENV}" ]; then
+if [ -f "${RM_ENV}" ] && grep -q "OPENROUTER_API_KEY=sk-" "${RM_ENV}" 2>/dev/null; then
   echo "  ✓ API keys already configured (${RM_ENV})"
 else
   echo ""
@@ -62,4 +73,4 @@ fi
 
 echo ""
 echo "Done. Now run:  source ~/.zshrc  &&  cc-models"
-echo "(Free models need 9router running:  npm i -g 9router  then  9router)"
+echo "(Free models need 9router running:  npm i -g 9router  then  9router -t)"
