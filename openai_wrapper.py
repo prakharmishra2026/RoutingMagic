@@ -1064,6 +1064,14 @@ def chat_oneshot(model, prompt, use_deep_context=False):
             reasoning_start_time = None
             accumulated_reasoning = ""
             for chunk in resp:
+                if _check_user_interrupt():
+                    sys.stdout.write("\r\033[K")
+                    print("\n\033[91m🛑 [Interrupted] User typed /exit -> stopping response cleanly.\033[0m")
+                    try:
+                        resp.close()
+                    except Exception:
+                        pass
+                    return
                 if not getattr(chunk, "choices", None) or len(chunk.choices) == 0:
                     continue
                     
@@ -1302,6 +1310,18 @@ def _query_model_with_fallback_and_timing(model_name, messages, temperature=0.7,
     elapsed = time.time() - start_time
     return model_name, None, str(last_err), elapsed, failed_attempts
 
+def _check_user_interrupt():
+    """Checks if user typed /exit, /stop, or /cancel on stdin during a running query."""
+    try:
+        import select
+        if sys.stdin and select.select([sys.stdin], [], [], 0)[0]:
+            line = sys.stdin.readline()
+            if line and line.strip().lower() in ("/exit", "/quit", "/stop", "/cancel", "exit", "quit"):
+                return True
+    except Exception:
+        pass
+    return False
+
 def run_council(prompt, use_deep_context=False):
     """Executes Mythos-inspired LLM Council deliberation protocol:
     
@@ -1534,6 +1554,14 @@ def run_council(prompt, use_deep_context=False):
         completed_futures = set()
         slot_status = {m: "⏳ running" for m in council_models}
         while len(completed_futures) < len(futures):
+            if _check_user_interrupt():
+                sys.stdout.write("\r\033[K")
+                print("\n\033[91m🛑 [Interrupted] User typed /exit -> stopping Stage 1 deliberation cleanly.\033[0m")
+                try:
+                    executor.shutdown(wait=False, cancel_futures=True)
+                except TypeError:
+                    executor.shutdown(wait=False)
+                return
             for future, orig_model in list(futures.items()):
                 if future in completed_futures:
                     continue
@@ -1692,6 +1720,14 @@ def run_council(prompt, use_deep_context=False):
         completed_futures = set()
         slot_status = {m: "⏳ running" for m in opinions.keys()}
         while len(completed_futures) < len(futures):
+            if _check_user_interrupt():
+                sys.stdout.write("\r\033[K")
+                print("\n\033[91m🛑 [Interrupted] User typed /exit -> stopping Stage 2 peer review cleanly.\033[0m")
+                try:
+                    executor.shutdown(wait=False, cancel_futures=True)
+                except TypeError:
+                    executor.shutdown(wait=False)
+                return
             for future, orig_model in list(futures.items()):
                 if future in completed_futures:
                     continue
@@ -1800,6 +1836,14 @@ def run_council(prompt, use_deep_context=False):
     reasoning_start_time = None
     accumulated_reasoning = ""
     for chunk in resp:
+        if _check_user_interrupt():
+            sys.stdout.write("\r\033[K")
+            print("\n\033[91m🛑 [Interrupted] User typed /exit -> stopping Chairman synthesis cleanly.\033[0m")
+            try:
+                resp.close()
+            except Exception:
+                pass
+            return
         if not getattr(chunk, "choices", None) or len(chunk.choices) == 0:
             continue
         delta = chunk.choices[0].delta
@@ -2714,7 +2758,12 @@ def main():
             repl(model_id, use_deep_context=use_deep, session_context=session_context)
     else:
         prompt = " ".join(args)
-        chat_oneshot(model_id, prompt, use_deep_context=use_deep)
+        try:
+            chat_oneshot(model_id, prompt, use_deep_context=use_deep)
+        except KeyboardInterrupt:
+            sys.stdout.write("\r\033[K")
+            print("\n\033[91m🛑 [Interrupted] Process stopped by user (Ctrl+C). Exiting cleanly...\033[0m")
+            sys.exit(130)
 
 if __name__ == "__main__":
     main()
