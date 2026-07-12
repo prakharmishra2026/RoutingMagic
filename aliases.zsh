@@ -103,7 +103,7 @@ ask() {
   local args=("$@")
   # Check if first arg is "deep"
   if [[ ${#args[@]} -ge 1 && "${args[1]:l}" == "deep" ]]; then
-    local rest=("${args[@]:2}")
+    local rest=("${args[@]:1}")
     local normalized=()
     for arg in "${rest[@]}"; do
       if [[ "${arg:l}" == "mc" ]]; then
@@ -121,7 +121,7 @@ ask() {
     fi
   elif [[ ${#args[@]} -ge 1 && "${args[1]:l}" == "mc" ]]; then
     # ask MC ...
-    local rest=("${args[@]:2}")
+    local rest=("${args[@]:1}")
     local normalized=()
     for arg in "${rest[@]}"; do
       if [[ "${arg:l}" == "mc" ]]; then

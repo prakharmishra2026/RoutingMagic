@@ -967,6 +967,9 @@ def chat_oneshot(model, prompt, use_deep_context=False):
         _check_api_keys()
         sys.exit(1)
     
+    if model == "council":
+        return run_council(prompt, use_deep_context=use_deep_context)
+    
     if model == "smart":
         target_model, task_type = smart_route(prompt)
         print(f"\033[94m[Smart Router] Selected '{target_model}' for task type: {task_type}\033[0m")
@@ -1538,6 +1541,11 @@ def run_council(prompt, use_deep_context=False):
                 else:
                     print(f"  \033[92m✓ {succeeded_model} completed [{elapsed:.2f}s]\033[0m")
                 opinions[succeeded_model] = content
+                lines = [l.strip() for l in content.strip().split("\n") if l.strip()]
+                preview = " / ".join(lines[:2])
+                if len(preview) > 120:
+                    preview = preview[:117] + "..."
+                print(f"    \033[36m└─ Key takeaway: {preview}\033[0m")
                 
     stage1_duration = time.time() - stage1_start
     print(f"\033[94m[Stage 1] Completed in {stage1_duration:.2f}s\033[0m\n")
@@ -1675,6 +1683,11 @@ def run_council(prompt, use_deep_context=False):
                 else:
                     print(f"  \033[92m✓ {succeeded_model} review completed [{elapsed:.2f}s]\033[0m")
                 reviews[succeeded_model] = content
+                lines = [l.strip() for l in content.strip().split("\n") if l.strip()]
+                preview = " / ".join(lines[:2])
+                if len(preview) > 120:
+                    preview = preview[:117] + "..."
+                print(f"    \033[33m└─ Critique & Score: {preview}\033[0m")
                 
     stage2_duration = time.time() - stage2_start
     print(f"\033[94m[Stage 2] Completed in {stage2_duration:.2f}s\033[0m\n")
