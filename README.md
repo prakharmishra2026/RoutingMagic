@@ -77,31 +77,53 @@ ask MC deep "Design the auth system"
 
 ---
 
-## 📋 Effortless Copy-Paste (`--paste` / `/paste`) — For Non-Technical & IDE Users
+## 📋 Effortless Copy-Paste (`--paste` / `/paste`) — No Terminal Paste Errors!
 
-Pasting large, multi-line Markdown documents, plans, or code directly into a terminal prompt can cause shell errors (`zsh: command not found`). 
+Pasting large, multi-line Markdown files, plans, or code directly into a terminal prompt often causes confusing shell errors (like `zsh: command not found`).
 
-Instead of pasting directly into your terminal prompt, simply **Copy (`Cmd + C`)** any text or image and use `--paste`:
+With RoutingMagic, **you never paste into the terminal screen at all.** Instead, you use the `--paste` flag, which tells RoutingMagic to grab whatever is currently copied to your Mac clipboard.
+
+### How it works (Step-by-Step Example)
+
+#### Step 1: Copy any text or document (`Cmd + C`)
+Highlight your Markdown plan, code snippet, or error log in any editor or browser and press **`Cmd + C`** to copy it.
+
+#### Step 2: Type `--paste` in your terminal
+Do **not** press `Cmd + V` in your terminal. Instead, literally type `--paste` after your command:
 
 ```bash
-# Copy your plan/spec/logs with Cmd+C, then run:
+# Literally type this exact command and press Enter:
 ask MC --paste
-
-# You can also add an instruction along with your pasted text:
-ask MC --paste "Audit this plan and list 3 weaknesses"
-
-# Or with normal ask / deep context:
-ask --paste
-ask deep --paste "Find bugs in this snippet"
 ```
 
-### Inside the Interactive REPL (`>>>`)
-Type `/paste` anytime inside an interactive `ask` or `ask MC` session:
+RoutingMagic automatically reads the copied text straight from your clipboard:
+```text
+[Clipboard] Loaded 4,812 characters (142 lines) of text from clipboard.
+[LLM Council] Starting deliberation...
+```
+
+---
+
+### Adding Instructions to Your Copied Text
+Want the Model Council to review or audit the document you just copied? Just add your question in quotes after `--paste`:
+
+```bash
+# 1. Copy your plan/doc with Cmd + C
+# 2. Run:
+ask MC --paste "Audit this implementation plan and list 3 weaknesses"
+
+# Or with normal ask / deep context:
+ask --paste "Summarize this text"
+ask deep --paste "Find bugs in this code snippet"
+```
+
+### Inside Interactive Mode (`>>>`)
+If you are already inside an interactive chat session (`>>>`), simply type `/paste`:
 ```text
 >>> /paste
 [Clipboard] Loaded 4,812 characters (142 lines) of text from clipboard.
 ```
-`/paste` works automatically for **both Text and Images** copied to your macOS clipboard!
+*(Note: `/paste` works automatically for **both Text and Images** copied to your macOS clipboard!)*
 
 ---
 
