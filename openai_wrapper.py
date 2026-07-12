@@ -66,25 +66,27 @@ load_dotenv(_ROUTING_MAGIC_ENV)
 load_dotenv(os.path.expanduser("~/global.env"))
 
 def _has_any_api_access():
-    """Check if any API access method is available (keys or 9router)."""
+    """Check if any API access method is available."""
     has_or = bool(os.getenv("OPENROUTER_API_KEY"))
+    has_gem = bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
+    has_zai = bool(os.getenv("ZAI_API_KEY") or os.getenv("ZHIPUAI_API_KEY"))
     has_nv = bool(os.getenv("NVAPI_KEY") or os.getenv("NVIDIA_API_KEY"))
     has_oai = bool(os.getenv("OPENAI_API_KEY"))
-    has_9router = is_port_open("127.0.0.1", 20128)
-    return has_or or has_nv or has_oai or has_9router
+    return any([has_or, has_gem, has_zai, has_nv, has_oai])
 
 
 def _get_fallback_chain():
     """Build fallback chain dynamically based on available API keys."""
     has_or = bool(os.getenv("OPENROUTER_API_KEY"))
+    has_gem = bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
+    has_zai = bool(os.getenv("ZAI_API_KEY") or os.getenv("ZHIPUAI_API_KEY"))
     has_nv = bool(os.getenv("NVAPI_KEY") or os.getenv("NVIDIA_API_KEY"))
     has_oai = bool(os.getenv("OPENAI_API_KEY"))
-    has_9router = is_port_open("127.0.0.1", 20128)
     
     chain = []
     
-    # If 9router running or OpenRouter key available, add OpenRouter free models
-    if has_9router or has_or:
+    # Add OpenRouter free models
+    if has_or:
         chain.extend([
             "google/gemma-4-31b-it:free",
             "nvidia/nemotron-3-super-120b-a12b:free",
@@ -124,29 +126,46 @@ def _get_fallback_chain():
 
 
 def _get_council_fallback_models():
-    """Build council fallback models based on available API keys."""
+    """Build council fallback models spread across DIFFERENT providers for resilience.
+    
+    Key design: Each council member should ideally use a different provider's
+    API endpoint so that rate limits, outages, and 404s on one provider
+    cannot take down multiple members simultaneously.
+    """
     has_or = bool(os.getenv("OPENROUTER_API_KEY"))
+    has_gem = bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
+    has_zai = bool(os.getenv("ZAI_API_KEY") or os.getenv("ZHIPUAI_API_KEY"))
     has_nv = bool(os.getenv("NVAPI_KEY") or os.getenv("NVIDIA_API_KEY"))
     
+    # Priority: spread across providers first, then fill from OpenRouter
     chain = []
     
+    # Slot 1: Direct Gemini (own rate limits, fast, free tier)
+    if has_gem:
+        chain.append("gemini-2.5-flash")
+    
+    # Slot 2: Direct Z.ai (own rate limits, permanent free tier)
+    if has_zai:
+        chain.append("glm-4.5-flash")
+    
+    # Slot 3+: OpenRouter free models (shared rate limit bucket)
     if has_or:
         chain.extend([
-            "google/gemma-4-31b-it:free",
+            "google/gemma-4-27b-it:free",
             "qwen/qwen3-coder:free",
             "nvidia/nemotron-3-super-120b-a12b:free",
             "meta-llama/llama-3.3-70b-instruct:free",
         ])
     
+    # Slot 4+: NVIDIA NIM (own rate limits)
     if has_nv:
         chain.extend([
             "nvidia/nemotron-3-ultra-550b-a55b",
             "nvidia/llama-3.3-nemotron-super-49b-v1.5",
-            "google/gemma-4-31b-it",
         ])
     
     if not chain:
-        chain = ["gemini-2.5-pro"]
+        chain = ["gemini-2.5-flash"]
     
     # Remove duplicates while preserving order
     seen = set()
@@ -160,25 +179,23 @@ def _get_council_fallback_models():
 
 
 def _check_api_keys():
-    """Check API keys and 9router status. Returns True if any access method available."""
+    """Check API keys status. Returns True if any access method available."""
     has_or = bool(os.getenv("OPENROUTER_API_KEY"))
+    has_gem = bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
+    has_zai = bool(os.getenv("ZAI_API_KEY") or os.getenv("ZHIPUAI_API_KEY"))
     has_nv = bool(os.getenv("NVAPI_KEY") or os.getenv("NVIDIA_API_KEY"))
     has_oai = bool(os.getenv("OPENAI_API_KEY"))
-    has_9router = is_port_open("127.0.0.1", 20128)
     
-    if has_or or has_nv or has_oai or has_9router:
+    if any([has_or, has_gem, has_zai, has_nv, has_oai]):
         return True
     
     print("\033[91m┌──────────────────────────────────────────────────────────────┐")
-    print("│  ✗ No API keys found AND 9router not running.               │")
+    print("│  ✗ No API keys configured in ~/.routingmagic/.env            │")
     print("│                                                              │")
-    print("│  Option A: Start 9router (recommended for free models):      │")
-    print("│    9router                                                   │")
-    print("│                                                              │")
-    print("│  Option B: Add OpenRouter API key:                           │")
+    print("│  Run the interactive setup wizard to add your free keys:     │")
     print("│    python3 ~/Projects/RoutingMagic/setup_keys.py             │")
     print("│                                                              │")
-    print("│  Option C: Get free OpenRouter key:                          │")
+    print("│  Get free OpenRouter key:                                    │")
     print("│    https://openrouter.ai/keys                                │")
     print("└──────────────────────────────────────────────────────────────┘\033[0m")
     return False
@@ -334,24 +351,7 @@ def is_port_open(ip, port):
         except Exception:
             return False
 
-def _ensure_9router_running():
-    """Auto-start 9router in background if installed and not already running."""
-    if is_port_open("127.0.0.1", 20128):
-        return True
-    try:
-        subprocess.Popen(["9router", "-t"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        for _ in range(5):
-            if is_port_open("127.0.0.1", 20128):
-                return True
-            time.sleep(1)
-        return False
-    except FileNotFoundError:
-        return False
-    except Exception:
-        return False
-
-# Ensure 9router running, then check API keys
-_ensure_9router_running()
+# Check API keys
 _check_api_keys()
 
 class SessionContext:
@@ -858,9 +858,13 @@ def get_client_and_model(model_name, is_summarizer=False):
     req_timeout = 15 if is_summarizer else 25
     
     # NVIDIA NIM models — identified by presence in map, or by common vendor prefixes
+    # NOTE: glm-4.5-flash, glm-4-flash etc. are Z.ai models and must NOT match here.
+    # Only nvidia/-prefixed GLM models (nvidia/z-ai/glm-5.1) should match.
     nvidia_vendors = ("nvidia/", "deepseek-ai/", "moonshotai/", "mistralai/", "google/gemma",
-                      "minimaxai/", "stepfun-ai/", "glm")
-    if (model_name in NVIDIA_API_MAP or any(model_name.startswith(v) for v in nvidia_vendors) or "glm" in model_name) and not model_name.endswith(":free"):
+                      "minimaxai/", "stepfun-ai/")
+    _is_direct_zai = any(model_name.startswith(p) for p in ("glm-", "z-ai/glm-", "zhipu/"))
+    _is_nvidia_glm = model_name.startswith("nvidia/") and "glm" in model_name
+    if (model_name in NVIDIA_API_MAP or any(model_name.startswith(v) for v in nvidia_vendors) or _is_nvidia_glm) and not model_name.endswith(":free") and not _is_direct_zai:
         # Strip the top-level "nvidia/" org prefix if present (e.g. nvidia/z-ai/glm-5.1 → z-ai/glm-5.1)
         if model_name.startswith("nvidia/") and model_name.count("/") >= 2:
             # e.g. "nvidia/z-ai/glm-5.1" → "z-ai/glm-5.1"
@@ -881,8 +885,50 @@ def get_client_and_model(model_name, is_summarizer=False):
                 "Or add NVAPI_KEY to ~/.routingmagic/.env\n"
                 "Get a free key: https://build.nvidia.com/nim/dashboard"
             )
-        return OpenAI(api_key=api_key, base_url=base_url, timeout=req_timeout), clean_model
-    
+        return OpenAI(api_key=api_key, base_url=base_url, timeout=req_timeout, max_retries=0), clean_model
+
+    # Google Gemini direct models via native Google AI Studio OpenAI-compatible endpoint
+    gemini_prefixes = ("gemini-", "google/gemini-")
+    if any(model_name.startswith(p) for p in gemini_prefixes) and not model_name.endswith(":free"):
+        clean_model = model_name[len("google/"):] if model_name.startswith("google/") else model_name
+        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            raise RuntimeError(
+                "Google Gemini API key not found (looked for GEMINI_API_KEY).\n"
+                "Run: python3 ~/Projects/RoutingMagic/setup_keys.py\n"
+                "Get a free key: https://aistudio.google.com/apikey"
+            )
+        base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
+        return OpenAI(api_key=api_key, base_url=base_url, timeout=req_timeout, max_retries=0), clean_model
+
+    # Z.ai / Zhipu AI direct models (GLM-4.7-Flash, GLM-4.5-Flash free tier)
+    zai_prefixes = ("glm-", "z-ai/glm-", "zhipu/")
+    if any(model_name.startswith(p) for p in zai_prefixes) and not model_name.endswith(":free"):
+        clean_model = model_name.split("/")[-1]
+        api_key = os.getenv("ZAI_API_KEY") or os.getenv("ZHIPUAI_API_KEY")
+        if not api_key:
+            raise RuntimeError(
+                "Z.ai / Zhipu AI API key not found (looked for ZAI_API_KEY).\n"
+                "Run: python3 ~/Projects/RoutingMagic/setup_keys.py\n"
+                "Get a free key: https://open.bigmodel.cn"
+            )
+        base_url = "https://open.bigmodel.cn/api/paas/v4/"
+        return OpenAI(api_key=api_key, base_url=base_url, timeout=req_timeout, max_retries=0), clean_model
+
+    # DeepSeek direct models (deepseek-v4-flash, deepseek-chat, deepseek-reasoner)
+    deepseek_prefixes = ("deepseek-", "deepseek/")
+    if any(model_name.startswith(p) for p in deepseek_prefixes) and not model_name.endswith(":free"):
+        clean_model = model_name.split("/")[-1]
+        api_key = os.getenv("DEEPSEEK_API_KEY")
+        if not api_key:
+            raise RuntimeError(
+                "DeepSeek API key not found (looked for DEEPSEEK_API_KEY).\n"
+                "Run: python3 ~/Projects/RoutingMagic/setup_keys.py\n"
+                "Get an API key: https://platform.deepseek.com"
+            )
+        base_url = "https://api.deepseek.com/v1"
+        return OpenAI(api_key=api_key, base_url=base_url, timeout=req_timeout, max_retries=0), clean_model
+
     # OpenAI direct models (o3-mini, gpt-*, o1-*)
     if model_name.startswith("openai/") or model_name.startswith("gpt-") or model_name.startswith("o1") or model_name.startswith("o3"):
         if model_name.startswith("openai/"):
@@ -890,31 +936,24 @@ def get_client_and_model(model_name, is_summarizer=False):
         else:
             clean_model = model_name
         api_key = os.getenv("OPENAI_API_KEY") or "sk-placeholder-key"
-        return OpenAI(api_key=api_key, timeout=req_timeout), clean_model
+        return OpenAI(api_key=api_key, timeout=req_timeout, max_retries=0), clean_model
 
-    # OpenRouter / 9router — model IDs must NOT have an 'openrouter/' prefix
-    # Strip it if accidentally present (e.g. "openrouter/google/gemma..." → "google/gemma...")
+    # OpenRouter direct connection
     if model_name.startswith("openrouter/"):
         clean_model = model_name[len("openrouter/"):]
     else:
         clean_model = model_name
 
-    if is_port_open("127.0.0.1", 20128):
-        base_url = "http://127.0.0.1:20128/v1"
-        api_key = "9router-local"
-    else:
-        base_url = "https://openrouter.ai/api/v1"
-        api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("9ROUTER_API_KEY")
-        if not api_key:
-            raise RuntimeError(
-                "OpenRouter API key not found AND 9router not running.\n\n"
-                "Fix (choose one):\n"
-                "  1. Start 9router:     9router\n"
-                "  2. Add OpenRouter key: python3 ~/Projects/RoutingMagic/setup_keys.py\n"
-                "  3. Get free key:       https://openrouter.ai/keys\n"
-            )
+    base_url = "https://openrouter.ai/api/v1"
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "OpenRouter API key not found (OPENROUTER_API_KEY).\n"
+            "Run: python3 ~/Projects/RoutingMagic/setup_keys.py\n"
+            "Get a free key: https://openrouter.ai/keys"
+        )
         
-    return OpenAI(api_key=api_key, base_url=base_url, timeout=req_timeout), clean_model
+    return OpenAI(api_key=api_key, base_url=base_url, timeout=req_timeout, max_retries=0), clean_model
 
 def save_temp_memory(messages):
     try:
@@ -1002,11 +1041,13 @@ def chat_oneshot(model, prompt, use_deep_context=False):
         context_str = compressed_ctx
         print(f"\033[94m[Caveman] Context compressed: {ctx_stats['input_savings_pct']:.0f}% savings\033[0m")
 
+    caveman_rules = caveman.get_system_prompt_injection()
     system_instruction = (
         "You are a rigorous analytical assistant trained on Charlie Munger's mental models. "
         "1. INVERSION: Identify failure paths and how to avoid them.\n"
         "2. FIRST PRINCIPLES: Strip away assumptions; answer from the irreducible truth.\n"
         "3. NO FLUFF: Avoid generic advice. Give clear, specific, actionable insights.\n"
+        f"4. COMMUNICATION STYLE: {caveman_rules}\n"
         f"Context:\n{context_str}"
     )
     system_message = {"role": "system", "content": system_instruction}
@@ -1282,17 +1323,22 @@ def _query_model_with_fallback_and_timing(model_name, messages, temperature=0.7,
     # We will try the primary model first, and then fallback to other free models if it fails.
     attempts = [model_name]
     
-    # Standard free backup pool
+    # Dynamic multi-provider free backup pool across OpenRouter, Google Gemini, NVIDIA NIM, and OpenAI
     fallbacks = [
-        "google/gemma-4-31b-it:free",
-        "qwen/qwen3-coder:free",
-        "meta-llama/llama-3.3-70b-instruct:free",
-        "nvidia/nemotron-3-super-120b-a12b:free",
         "google/gemma-2-9b-it:free",
-        "qwen/qwen-2.5-coder-32b-instruct:free",
-        "meta-llama/llama-3-8b-instruct:free",
-        "microsoft/phi-3-medium-128k-instruct:free"
     ]
+    if os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"):
+        fallbacks.extend(["gemini-2.5-flash", "gemini-2.0-flash"])
+    if os.getenv("ZAI_API_KEY") or os.getenv("ZHIPUAI_API_KEY"):
+        fallbacks.extend(["glm-4.5-flash"])  # glm-4-flash removed upstream
+    if os.getenv("NVAPI_KEY") or os.getenv("NVIDIA_API_KEY"):
+        fallbacks.extend(["meta/llama-3.1-8b-instruct"])
+    fallbacks.extend([
+        "qwen/qwen-2.5-72b-instruct:free",
+        "meta-llama/llama-3.1-8b-instruct:free",
+        "mistralai/mistral-7b-instruct:free",
+        "microsoft/phi-3-mini-128k-instruct:free",
+    ])
     
     for f in fallbacks:
         if f not in attempts and f not in excluded_models:
@@ -1305,7 +1351,7 @@ def _query_model_with_fallback_and_timing(model_name, messages, temperature=0.7,
         pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         try:
             f = pool.submit(_query_model, attempt, messages, temperature, effort)
-            content = f.result(timeout=10.0)
+            content = f.result(timeout=35.0)
             try:
                 pool.shutdown(wait=False, cancel_futures=True)
             except TypeError:
@@ -1317,8 +1363,8 @@ def _query_model_with_fallback_and_timing(model_name, messages, temperature=0.7,
                 pool.shutdown(wait=False, cancel_futures=True)
             except TypeError:
                 pool.shutdown(wait=False)
-            failed_attempts.append((attempt, "Model froze (>10s timeout) -> auto-replacing"))
-            last_err = TimeoutError(f"Model {attempt} timed out after 10.0s")
+            failed_attempts.append((attempt, f"Model froze (>35s timeout) -> auto-replacing"))
+            last_err = TimeoutError(f"Model {attempt} timed out after 35.0s")
             continue
         except Exception as e:
             try:
@@ -1434,6 +1480,13 @@ def run_council(prompt, use_deep_context=False):
 
     FAST_FREE_PREFIXES = ("google/", "qwen/", "meta-llama/", "microsoft/", "nvidia/")
 
+    def _multi_provider_fallback(default_or, alt_gemini="gemini-2.5-flash", alt_nvidia="nvidia/nemotron-4-340b-instruct"):
+        if os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"):
+            return alt_gemini
+        if os.getenv("NVAPI_KEY") or os.getenv("NVIDIA_API_KEY"):
+            return alt_nvidia
+        return default_or
+
     def select_coder(models, excluded_set):
         for prefix in FAST_FREE_PREFIXES:
             for m in models:
@@ -1443,7 +1496,7 @@ def run_council(prompt, use_deep_context=False):
                 if "coder" in m_id or "code" in m_id or "qwen" in m_id:
                     if avg_price_per_m(m) == 0.0:
                         return m["id"]
-        return "qwen/qwen-2.5-coder-32b-instruct:free"
+        return _multi_provider_fallback("qwen/qwen-2.5-coder-32b-instruct:free", "gemini-2.5-flash", "nvidia/nemotron-4-340b-instruct")
 
     def select_reasoning(models, excluded_set):
         for prefix in FAST_FREE_PREFIXES:
@@ -1453,7 +1506,7 @@ def run_council(prompt, use_deep_context=False):
                     continue
                 if avg_price_per_m(m) == 0.0:
                     return m["id"]
-        return "meta-llama/llama-3.3-70b-instruct:free"
+        return _multi_provider_fallback("meta-llama/llama-3.3-70b-instruct:free", "gemini-2.5-flash", "nvidia/nemotron-4-340b-instruct")
 
     def select_agentic(models, excluded_set):
         for prefix in FAST_FREE_PREFIXES:
@@ -1463,7 +1516,7 @@ def run_council(prompt, use_deep_context=False):
                     continue
                 if avg_price_per_m(m) == 0.0:
                     return m["id"]
-        return "google/gemma-4-31b-it:free"
+        return _multi_provider_fallback("google/gemma-4-31b-it:free", "gemini-2.5-flash", "meta/llama-3.3-70b-instruct")
 
     def select_general(models, excluded_set):
         for prefix in FAST_FREE_PREFIXES:
@@ -1473,64 +1526,65 @@ def run_council(prompt, use_deep_context=False):
                     continue
                 if avg_price_per_m(m) == 0.0:
                     return m["id"]
-        return "google/gemma-4-31b-it:free"
+        return _multi_provider_fallback("google/gemma-4-31b-it:free", "gemini-2.0-flash", "meta/llama-3.3-70b-instruct")
 
-    # Dynamically select 3 distinct council models (MoE-style expert selection)
+    # ── Multi-Provider Council Selection ──────────────────────────────
+    # DESIGN INVARIANT: Spread council members across DIFFERENT providers
+    # so that rate limits, outages, and 404s on one provider cannot
+    # compromise multiple council members simultaneously.
+    #
+    # With all 5 keys configured, the council looks like:
+    #   Member 1: gemini-2.5-flash     (Direct Google Gemini API)
+    #   Member 2: glm-4.5-flash        (Direct Z.ai API)
+    #   Member 3: <best OpenRouter free model for task type>
+    #
+    # Each member uses a DIFFERENT API endpoint with its own rate limit.
+    # ─────────────────────────────────────────────────────────────────
+    has_gem = bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
+    has_zai = bool(os.getenv("ZAI_API_KEY") or os.getenv("ZHIPUAI_API_KEY"))
+    has_or = bool(os.getenv("OPENROUTER_API_KEY"))
+    
     council_models = []
     excluded = set()
-    if models_list:
+    
+    # Slot 1: Direct Gemini (isolated rate limits, fast, reliable)
+    if has_gem:
+        council_models.append("gemini-2.5-flash")
+        excluded.add("gemini-2.5-flash")
+    
+    # Slot 2: Direct Z.ai (isolated rate limits, permanent free tier)
+    if has_zai:
+        council_models.append("glm-4.5-flash")
+        excluded.add("glm-4.5-flash")
+    
+    # Slot 3: Best OpenRouter free model for the task type (adds model diversity)
+    if models_list and has_or and len(council_models) < 3:
         try:
             if task_type == "coding":
-                m1 = select_coder(models_list, excluded)
-                council_models.append(m1)
-                excluded.add(m1)
-                m2 = select_reasoning(models_list, excluded)
-                council_models.append(m2)
-                excluded.add(m2)
-                m3 = select_general(models_list, excluded)
-                council_models.append(m3)
-                excluded.add(m3)
+                or_model = select_coder(models_list, excluded)
             elif task_type == "reasoning":
-                m1 = select_reasoning(models_list, excluded)
-                council_models.append(m1)
-                excluded.add(m1)
-                m2 = select_general(models_list, excluded)
-                council_models.append(m2)
-                excluded.add(m2)
-                m3 = select_coder(models_list, excluded)
-                council_models.append(m3)
-                excluded.add(m3)
+                or_model = select_reasoning(models_list, excluded)
             elif task_type == "agentic":
-                m1 = select_agentic(models_list, excluded)
-                council_models.append(m1)
-                excluded.add(m1)
-                m2 = select_coder(models_list, excluded)
-                council_models.append(m2)
-                excluded.add(m2)
-                m3 = select_reasoning(models_list, excluded)
-                council_models.append(m3)
-                excluded.add(m3)
+                or_model = select_agentic(models_list, excluded)
             else:
-                m1 = select_general(models_list, excluded)
-                council_models.append(m1)
-                excluded.add(m1)
-                m2 = select_reasoning(models_list, excluded)
-                council_models.append(m2)
-                excluded.add(m2)
-                m3 = select_coder(models_list, excluded)
-                council_models.append(m3)
-                excluded.add(m3)
-                
-            fallback_options = _get_council_fallback_models()
-            for fb in fallback_options:
-                if len(council_models) >= 3:
-                    break
-                if fb not in council_models:
-                    council_models.append(fb)
-        except Exception as e:
-            print(f"\033[93m[LLM Council] Error selecting dynamic council models: {e}. Using defaults.\033[0m")
-            council_models = _get_council_fallback_models()[:3]
-    else:
+                or_model = select_general(models_list, excluded)
+            if or_model not in council_models:
+                council_models.append(or_model)
+                excluded.add(or_model)
+        except Exception:
+            pass
+    
+    # Fill remaining slots from the multi-provider fallback chain
+    if len(council_models) < 3:
+        fallback_options = _get_council_fallback_models()
+        for fb in fallback_options:
+            if len(council_models) >= 3:
+                break
+            if fb not in council_models:
+                council_models.append(fb)
+    
+    # Safety net: always have at least 1 model
+    if not council_models:
         council_models = _get_council_fallback_models()[:3]
 
     context_str = get_deep_context() if use_deep_context else get_instant_context()
@@ -1640,9 +1694,13 @@ def run_council(prompt, use_deep_context=False):
                 status_line = f"\r\033[K\033[96m[Stage 1 Deliberation • {elapsed_stage:.1f}s]\033[0m " + " | ".join(status_parts)
                 sys.stdout.write(status_line)
                 sys.stdout.flush()
-                if (len(opinions) >= 2 and elapsed_stage > 6.0) or (len(opinions) >= 1 and elapsed_stage > 11.0) or elapsed_stage > 14.0:
+                if (len(opinions) >= 2 and elapsed_stage > 45.0) or (len(opinions) >= 1 and elapsed_stage > 75.0) or elapsed_stage > 120.0:
                     sys.stdout.write("\r\033[K")
-                    print(f"\n\033[93m⚡ [Fast Quorum Reached • {elapsed_stage:.1f}s] Proceeding with {len(opinions)} completed council member(s) for speed.\033[0m")
+                    print(f"\n\033[93m⚡ [Fast Quorum Reached • {elapsed_stage:.1f}s] Proceeding with {len(opinions)} completed council member(s).\033[0m")
+                    # Report cancelled models
+                    for _f, _m in list(futures.items()):
+                        if _f not in completed_futures:
+                            print(f"  \033[90m⊘ [{_m}] cancelled (quorum reached)\033[0m")
                     try:
                         executor.shutdown(wait=False, cancel_futures=True)
                     except TypeError:
@@ -1651,8 +1709,9 @@ def run_council(prompt, use_deep_context=False):
                 time.sleep(0.15)
         sys.stdout.write("\r\033[K")
         sys.stdout.flush()
+        # Record stage duration INSIDE the with block before __exit__ blocks on stragglers
+        stage1_duration = time.time() - stage1_start
                 
-    stage1_duration = time.time() - stage1_start
     print(f"\033[94m[Stage 1] Completed in {stage1_duration:.2f}s\033[0m\n")
     
     if not opinions:
@@ -1815,9 +1874,13 @@ def run_council(prompt, use_deep_context=False):
                 status_line = f"\r\033[K\033[94m[Stage 2 Peer Review • {elapsed_stage:.1f}s]\033[0m " + " | ".join(status_parts)
                 sys.stdout.write(status_line)
                 sys.stdout.flush()
-                if (len(reviews) >= 2 and elapsed_stage > 6.0) or (len(reviews) >= 1 and elapsed_stage > 11.0) or elapsed_stage > 14.0:
+                if (len(reviews) >= 2 and elapsed_stage > 45.0) or (len(reviews) >= 1 and elapsed_stage > 75.0) or elapsed_stage > 120.0:
                     sys.stdout.write("\r\033[K")
-                    print(f"\n\033[93m⚡ [Fast Quorum Reached • {elapsed_stage:.1f}s] Proceeding with {len(reviews)} completed review(s) for speed.\033[0m")
+                    print(f"\n\033[93m⚡ [Fast Quorum Reached • {elapsed_stage:.1f}s] Proceeding with {len(reviews)} completed review(s).\033[0m")
+                    # Report cancelled reviewers
+                    for _f, _m in list(futures.items()):
+                        if _f not in completed_futures:
+                            print(f"  \033[90m⊘ [{_m}] cancelled (quorum reached)\033[0m")
                     try:
                         executor.shutdown(wait=False, cancel_futures=True)
                     except TypeError:
@@ -1826,8 +1889,9 @@ def run_council(prompt, use_deep_context=False):
                 time.sleep(0.15)
         sys.stdout.write("\r\033[K")
         sys.stdout.flush()
+        # Record stage duration INSIDE the with block before __exit__ blocks on stragglers
+        stage2_duration = time.time() - stage2_start
                 
-    stage2_duration = time.time() - stage2_start
     print(f"\033[94m[Stage 2] Completed in {stage2_duration:.2f}s\033[0m\n")
     
     # Stage 3: Synthesis by Chairman
@@ -2212,11 +2276,13 @@ def repl(model, use_deep_context=False, session_context=None):
             context_str = compressed_ctx
             print(f"\033[94m[Caveman] Context compressed: {ctx_stats['input_savings_pct']:.0f}% savings\033[0m")
 
+        caveman_rules = caveman.get_system_prompt_injection()
         system_instruction = (
             "You are a rigorous analytical assistant trained on Charlie Munger's mental models. "
             "1. INVERSION: Identify failure paths and how to avoid them.\n"
             "2. FIRST PRINCIPLES: Strip away assumptions; answer from the irreducible truth.\n"
             "3. NO FLUFF: Avoid generic advice. Give clear, specific, actionable insights.\n"
+            f"4. COMMUNICATION STYLE: {caveman_rules}\n"
             f"Context:\n{context_str}"
         )
         messages = [{"role": "system", "content": system_instruction}]

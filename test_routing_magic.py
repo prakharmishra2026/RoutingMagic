@@ -375,7 +375,7 @@ class TestRoutingMagic(unittest.TestCase):
         )
         
         # Succeeded model should be the first one in the standard fallback pool
-        self.assertEqual(succeeded_model, "google/gemma-4-31b-it:free")
+        self.assertEqual(succeeded_model, "google/gemma-2-9b-it:free")
         self.assertEqual(content, "Fallback Success Content")
         self.assertIsNone(err)
         self.assertEqual(len(failed_attempts), 1)

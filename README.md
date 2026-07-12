@@ -159,24 +159,32 @@ RoutingMagic gets better the more you use it:
 
 ---
 
-## Installation Details
+## 🔐 Universal Multi-Provider Free Models & Secure Key Setup
 
-### Prerequisites
-- Python 3.10+
-- Node.js (for optional 9router — auto-started if installed)
+RoutingMagic is **never locked into a single provider**. It dynamically pools and refreshes free models across **OpenRouter**, **Google Gemini**, **Z.ai (Zhipu AI)**, **NVIDIA NIM**, **DeepSeek**, and **OpenAI** so you always get the fastest, highest-quality free models available.
 
-### Manual key setup
+### Step-by-Step Interactive Key Setup
+Run the interactive setup script in your terminal:
 ```bash
 python3 ~/Projects/RoutingMagic/setup_keys.py
 ```
 
-Keys are stored in `~/.routingmagic/.env` — your config only, never shared.
+The wizard guides you through 5 optional/recommended API keys:
+1. **OpenRouter API Key (`OPENROUTER_API_KEY`)** — Recommended hub for dynamic `:free` models (including DeepSeek-R1 & V3 free pools) & Model Council. Get free key at [openrouter.ai/keys](https://openrouter.ai/keys).
+2. **Google Gemini API Key (`GEMINI_API_KEY`)** — Direct access to Google's fast free tier (`Gemini 2.5 Flash`, `Gemini 2.0 Flash`). Get free key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
+3. **Z.ai / Zhipu AI API Key (`ZAI_API_KEY`)** — Direct access to Zhipu AI's **permanent free tier** (`GLM-4.7-Flash`, `GLM-4.5-Flash`). Get free key at [open.bigmodel.cn](https://open.bigmodel.cn).
+4. **NVIDIA NIM API Key (`NVAPI_KEY`)** — Direct access to NVIDIA's free tier (`Nemotron Ultra 120B`, `Llama 3.3 70B`). Get free key at [build.nvidia.com](https://build.nvidia.com/nim/dashboard).
+5. **OpenAI API Key (`OPENAI_API_KEY`)** — Direct access to `GPT-5`, `o3-mini`, `GPT-4o-mini`. *(DeepSeek direct API key `DEEPSEEK_API_KEY` is also supported automatically)*.
 
-### Required: OpenRouter (free)
-Sign up at https://openrouter.ai/keys — most models are completely free.
+```text
+✓ Keys saved securely to ~/.routingmagic/.env
+  File permissions: 600 (owner read/write only)
+  Keys are NOT in any git repo or shared location.
+```
 
-### Optional: NVIDIA NIM
-For NVIDIA models (vision, OCR): https://build.nvidia.com/nim/dashboard
+### 🌐 Multi-Provider Free Model Pooling & Auto-Refresh
+* **Zero Provider Lock-In:** If OpenRouter rate-limits a model or returns a `404`, RoutingMagic automatically fails over to your direct **Google Gemini**, **Z.ai (`GLM-4.5-Flash`)**, or **NVIDIA NIM** free models in milliseconds.
+* **Timely Auto-Refresh:** RoutingMagic automatically fetches and updates live model registries on a weekly schedule (`[ModelRegistry] Weekly update needed...`) so your Model Council always utilizes the latest working free models across all supported providers.
 
 ---
 

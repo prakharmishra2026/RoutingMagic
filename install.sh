@@ -73,4 +73,4 @@ fi
 
 echo ""
 echo "Done. Now run:  source ~/.zshrc  &&  cc-models"
-echo "(Free models need 9router running:  npm i -g 9router  then  9router -t)"
+echo "(Configure multi-provider free keys anytime: python3 ~/Projects/RoutingMagic/setup_keys.py)"

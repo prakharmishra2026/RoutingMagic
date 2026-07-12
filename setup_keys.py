@@ -11,12 +11,14 @@ from pathlib import Path
 CONFIG_DIR = Path.home() / ".routingmagic"
 CONFIG_FILE = CONFIG_DIR / ".env"
 OR_SIGNUP = "https://openrouter.ai/keys"
+GEM_SIGNUP = "https://aistudio.google.com/apikey"
+ZAI_SIGNUP = "https://open.bigmodel.cn"
 NV_SIGNUP = "https://build.nvidia.com/nim/dashboard"
 OAI_SIGNUP = "https://platform.openai.com/api-keys"
 
 
 def _mask(k: str) -> str:
-    return k[:4] + "*" * max(0, len(k) - 8) + k[-4:] if len(k) >= 8 else "***"
+    return k[:4] + "•" * min(16, max(0, len(k) - 8)) + k[-4:] if len(k) >= 8 else "••••"
 
 
 def _load_existing() -> dict:
@@ -38,6 +40,8 @@ def _save(keys: dict):
         f.write("# Re-run setup: python3 setup_keys.py\n\n")
         for section, env_vars in [
             ("Required: OpenRouter (free models + Model Council)", ["OPENROUTER_API_KEY"]),
+            ("Optional: Google Gemini (direct free models via Google AI Studio)", ["GEMINI_API_KEY"]),
+            ("Optional: Z.ai / Zhipu AI (permanent free GLM-4.5-Flash tier)", ["ZAI_API_KEY"]),
             ("Optional: NVIDIA NIM (GLM-5.1, Vision, OCR)", ["NVAPI_KEY"]),
             ("Optional: OpenAI (GPT-5, o3-mini)", ["OPENAI_API_KEY"]),
         ]:
@@ -90,7 +94,7 @@ def _prompt_key(label: str, env_name: str, existing: dict, is_secret: bool = Tru
     suffix = " (Enter=keep)" if cur else ""
 
     if platform.system() == "Darwin" and not is_secret:
-        val = _prompt_macos("RoutingMagic Setup", f"{label}{hint}{suffix}")
+        val = _prompt_macos("✨ RoutingMagic Key Configuration", f"{label}{hint}{suffix}")
         if val is not None:
             return val
 
@@ -98,43 +102,60 @@ def _prompt_key(label: str, env_name: str, existing: dict, is_secret: bool = Tru
 
 
 def run_setup():
-    print("\n\033[95m╔══════════════════════════════════════════════════════╗")
-    print("║       RoutingMagic — Secure API Key Setup            ║")
-    print("╚══════════════════════════════════════════════════════╝\033[0m\n")
+    print("\n\033[38;5;141m╭────────────────────────────────────────────────────────╮")
+    print("│         ✨ RoutingMagic — Secure Key Manager           │")
+    print("╰────────────────────────────────────────────────────────╯\033[0m\n")
 
     existing = _load_existing()
     if existing:
-        print(f"  Found existing config: {CONFIG_FILE}")
-        print("  Press Enter to keep current values, paste new key to update.\n")
+        print(f"  \033[38;5;244m◆ Loaded config: {CONFIG_FILE}\033[0m")
+        print("  \033[38;5;244m◆ Press Enter to keep current values, paste new key to update.\033[0m\n")
 
-    print("  \033[96m┌──────────────────────────────────────────────────────┐")
-    print("  │  RECOMMENDATION: OpenRouter first                   │")
+    print("  \033[38;5;81m╭──────────────────────────────────────────────────────╮")
+    print("  │  🚀 MULTI-PROVIDER FREE TIER ADVANTAGE              │")
     print("  │                                                      │")
-    print("  │  Free models + full Model Council (/council, /mc).  │")
-    print("  │  No credit card needed for free tier.               │")
-    print(f"  │  Sign up: \033[4m{OR_SIGNUP}\033[0m\033[96m                   │")
-    print("  └──────────────────────────────────────────────────────┘\033[0m\n")
+    print("  │  RoutingMagic combines free models across providers  │")
+    print("  │  for instant zero-latency failover and fast Council. │")
+    print("  ╰──────────────────────────────────────────────────────╯\033[0m\n")
 
     keys = {}
 
     # OpenRouter
-    print("  \033[93mStep 1/3: OpenRouter API Key (RECOMMENDED)\033[0m")
-    print("  Required for: free models (cc*, ask), Model Council (/mc)")
+    print("  \033[1;38;5;221m◆ Step 1/5  OpenRouter API Key [RECOMMENDED]\033[0m")
+    print("    Enables: Model Council (/mc), community free models")
+    print(f"    Get free key: \033[4m{OR_SIGNUP}\033[0m")
     val = _prompt_key("OpenRouter key (sk-or-...)", "OPENROUTER_API_KEY", existing)
     if val:
         keys["OPENROUTER_API_KEY"] = val
 
+    # Google Gemini
+    print(f"\n  \033[1;38;5;221m◆ Step 2/5  Google Gemini API Key [RECOMMENDED]\033[0m")
+    print(f"    Enables: direct fast free tier (Gemini 2.5 Flash, 2.0 Flash)")
+    print(f"    Get free key: \033[4m{GEM_SIGNUP}\033[0m")
+    val = _prompt_key("Google Gemini key (AIza...)", "GEMINI_API_KEY", existing)
+    if val:
+        keys["GEMINI_API_KEY"] = val
+
+    # Z.ai / Zhipu AI
+    print(f"\n  \033[1;38;5;221m◆ Step 3/5  Z.ai / Zhipu AI API Key [RECOMMENDED]\033[0m")
+    print(f"    Enables: permanent free tier (GLM-4.7-Flash, GLM-4.5-Flash)")
+    print(f"    Get free key: \033[4m{ZAI_SIGNUP}\033[0m")
+    val = _prompt_key("Z.ai / Zhipu key", "ZAI_API_KEY", existing)
+    if val:
+        keys["ZAI_API_KEY"] = val
+
     # NVIDIA NIM
-    print(f"\n  \033[93mStep 2/3: NVIDIA NIM API Key (OPTIONAL)\033[0m")
-    print(f"  Enables: GLM-5.1, Nemotron Ultra, Vision, OCR")
-    print(f"  Skip if you only need free OpenRouter models.")
+    print(f"\n  \033[1;38;5;221m◆ Step 4/5  NVIDIA NIM API Key [OPTIONAL]\033[0m")
+    print(f"    Enables: Nemotron Ultra 120B, Llama 3.3 70B, OCR & Vision")
+    print(f"    Get free key: \033[4m{NV_SIGNUP}\033[0m")
     val = _prompt_key("NVIDIA NIM key (nvapi-...)", "NVAPI_KEY", existing)
     if val:
         keys["NVAPI_KEY"] = val
 
     # OpenAI
-    print(f"\n  \033[93mStep 3/3: OpenAI API Key (OPTIONAL)\033[0m")
-    print(f"  Enables: GPT-5, o3-mini, GPT-4-Turbo (paid)")
+    print(f"\n  \033[1;38;5;221m◆ Step 5/5  OpenAI API Key [OPTIONAL]\033[0m")
+    print(f"    Enables: GPT-5, o3-mini, GPT-4o")
+    print(f"    Get API key: \033[4m{OAI_SIGNUP}\033[0m")
     val = _prompt_key("OpenAI key (sk-...)", "OPENAI_API_KEY", existing)
     if val:
         keys["OPENAI_API_KEY"] = val
@@ -142,24 +163,41 @@ def run_setup():
     merged = {**existing, **keys}
     _save(merged)
 
-    print(f"\n  \033[92m✓ Keys saved securely to {CONFIG_FILE}\033[0m")
-    print(f"    File permissions: 600 (owner read/write only)")
-    print(f"    Keys are NOT in any git repo or shared location.\n")
+    print(f"\n  \033[1;38;5;82m✔ Keys saved securely to {CONFIG_FILE}\033[0m")
+    print(f"    \033[38;5;244mFile permissions: 0600 (owner read/write only)\033[0m")
+    print(f"    \033[38;5;244mKeys are isolated from git and shared folders.\033[0m\n")
 
     has_or = bool(merged.get("OPENROUTER_API_KEY"))
+    has_gem = bool(merged.get("GEMINI_API_KEY"))
+    has_zai = bool(merged.get("ZAI_API_KEY"))
     has_nv = bool(merged.get("NVAPI_KEY"))
     has_oai = bool(merged.get("OPENAI_API_KEY"))
 
-    print("  \033[96mStatus:\033[0m")
-    print(f"    OpenRouter : {'✓' if has_or else '✗ not set — free models unavailable'}")
-    print(f"    NVIDIA NIM : {'✓' if has_nv else '○ skipped'}")
-    print(f"    OpenAI     : {'✓' if has_oai else '○ skipped'}")
+    print("  \033[1;38;5;81mProvider Configuration Status:\033[0m")
+    print(f"    OpenRouter  : {'\033[38;5;82m✔ Active\033[0m' if has_or else '\033[38;5;240m○ Skipped\033[0m'}")
+    print(f"    Google Gem  : {'\033[38;5;82m✔ Active\033[0m' if has_gem else '\033[38;5;240m○ Skipped\033[0m'}")
+    print(f"    Z.ai (GLM)  : {'\033[38;5;82m✔ Active\033[0m' if has_zai else '\033[38;5;240m○ Skipped\033[0m'}")
+    print(f"    NVIDIA NIM  : {'\033[38;5;82m✔ Active\033[0m' if has_nv else '\033[38;5;240m○ Skipped\033[0m'}")
+    print(f"    OpenAI      : {'\033[38;5;82m✔ Active\033[0m' if has_oai else '\033[38;5;240m○ Skipped\033[0m'}")
 
-    if not has_or:
-        print(f"\n  \033[93m⚠ OpenRouter strongly recommended for Model Council.\033[0m")
-        print(f"  Re-run: python3 ~/Projects/RoutingMagic/setup_keys.py")
+    if not any([has_or, has_gem, has_zai, has_nv, has_oai]):
+        print(f"\n  \033[38;5;214m⚠ Please configure at least one free API key.\033[0m")
 
-    print(f"\n  \033[92mNext:\033[0m source ~/.zshrc && cc-models\n")
+    print("\n  ╭────────────────────────────────────────────────────────╮")
+    print("  │  🎉 SETUP COMPLETE! Try these commands right now:      │")
+    print("  ├────────────────────────────────────────────────────────┤")
+    print("  │  1. Reload your shell aliases:                         │")
+    print("  │       \033[1;38;5;82msource ~/.zshrc\033[0m                                  │")
+    print("  │                                                        │")
+    print("  │  2. Start LLM Council Deliberation (Multi-Model REPL): │")
+    print("  │       \033[1;38;5;81mask MC\033[0m    or    \033[1;38;5;81m/mc\033[0m                              │")
+    print("  │                                                        │")
+    print("  │  3. Ask Smart Router a question:                       │")
+    print("  │       \033[1;38;5;81mask \"How do I write a Python decorator?\"\033[0m           │")
+    print("  │                                                        │")
+    print("  │  4. View all available model shortcuts & cheatsheet:   │")
+    print("  │       \033[1;38;5;214mcc-models\033[0m                                        │")
+    print("  ╰────────────────────────────────────────────────────────╯\n")
 
 
 if __name__ == "__main__":

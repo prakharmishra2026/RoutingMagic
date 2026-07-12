@@ -13,6 +13,7 @@ def test_get_client_and_model():
     assert "nvidia" in client.base_url.host
 
     # Test OpenRouter routing
+    os.environ.setdefault("OPENROUTER_API_KEY", "sk-or-test-key")
     client, model = get_client_and_model("google/gemma-4-31b-it:free")
     assert model == "google/gemma-4-31b-it:free"
     assert "openrouter" in client.base_url.host or "127.0.0.1" in client.base_url.host
