@@ -524,6 +524,16 @@ def extract_clipboard_image(dest_path):
         print(f"\033[91m[Vision Debug] extract_clipboard exception: {e}\033[0m")
     return None
 
+def get_clipboard_text():
+    """Extract plain text from macOS clipboard using pbpaste."""
+    try:
+        res = subprocess.run(["pbpaste"], capture_output=True, text=True, timeout=5)
+        if res.returncode == 0:
+            return res.stdout.strip()
+    except Exception:
+        pass
+    return ""
+
 def run_vision_query(image_paths, prompt, model_name=None, detail="auto"):
     """Base64-encodes multiple images and queries a vision-capable model
     with a fallback chain.
@@ -1202,7 +1212,7 @@ def get_dynamic_model(models_list, free=True, price_ceiling=None, required_param
     return passers[0]["id"]
 
 
-def _query_model(model_name, messages, temperature=0.7, effort="medium"):
+def _query_model(model_name, messages, temperature=0.7, effort="medium", timeout=45):
     """Query a model with Mythos-inspired reasoning parameters.
     
     Enhanced with ACT-inspired effort selection for Council deliberation.
@@ -2316,7 +2326,20 @@ def repl(model, use_deep_context=False, session_context=None):
                                 else:
                                     print("\033[91m[Vision] Error extracting image from clipboard.\033[0m")
                         else:
-                            print("\033[91m[Vision] No image found in macOS clipboard. Copy an image first (Command+C).\033[0m")
+                            clip_txt = get_clipboard_text()
+                            if clip_txt:
+                                print(f"\033[92m[Clipboard] Loaded {len(clip_txt):,} characters ({len(clip_txt.splitlines())} lines) of text.\033[0m")
+                                full_prompt = f"{user_prompt}\n\n{clip_txt}".strip() if user_prompt else clip_txt
+                                if model == "council":
+                                    reply = run_council(full_prompt, use_deep_context=use_deep_context)
+                                else:
+                                    reply = chat_with_history(messages, model, full_prompt, use_deep_context=use_deep_context)
+                                if reply:
+                                    messages.append({"role": "user", "content": f"[Clipboard pasted] {user_prompt or ''}"})
+                                    messages.append({"role": "assistant", "content": reply})
+                                    save_temp_memory(messages)
+                            else:
+                                print("\033[91m[Clipboard] No image or text found in macOS clipboard. Copy something first (Command+C).\033[0m")
                 continue
 
         # Council Deliberation Command
@@ -2726,16 +2749,46 @@ def main():
     args = sys.argv[2:]
     
     # Map 'smart council' argument structure to 'council' model mode
-    if model_id == "smart" and args and args[0] == "council":
+    if model_id == "smart" and args and args[0] in ["council", "MC", "mc"]:
         model_id = "council"
         args.pop(0)
         
+    if model_id == "council" and args and args[0] in ["MC", "mc", "council"]:
+        args.pop(0)
+
     # Map 'smart /paste' argument structure
-    if model_id == "smart" and args and args[0] in ["/paste", "/image", "/img", "/v"]:
+    if model_id == "smart" and args and args[0] in ["/paste", "--paste", "-p", "/image", "/img", "/v"]:
         model_id = args[0]
         args.pop(0)
         
-    if model_id in ["/paste", "/image", "/img", "/v"]:
+    use_paste = False
+    if args and args[0] in ["--paste", "-p", "/paste"]:
+        use_paste = True
+        args.pop(0)
+    elif model_id in ["--paste", "-p", "/paste"]:
+        use_paste = True
+        model_id = "smart"
+
+    use_deep = False
+    if args and args[0] in ["deep", "--deep"]:
+        use_deep = True
+        args.pop(0)
+
+    if use_paste:
+        clip_txt = get_clipboard_text()
+        if clip_txt:
+            print(f"\033[92m[Clipboard] Loaded {len(clip_txt):,} characters ({len(clip_txt.splitlines())} lines) of text from clipboard.\033[0m")
+            extra_prompt = " ".join(args).strip()
+            prompt = f"{extra_prompt}\n\n{clip_txt}".strip() if extra_prompt else clip_txt
+            try:
+                chat_oneshot(model_id, prompt, use_deep_context=use_deep)
+            except KeyboardInterrupt:
+                sys.stdout.write("\r\033[K")
+                print("\n\033[91m🛑 [Interrupted] Process stopped by user (Ctrl+C). Exiting cleanly...\033[0m")
+                sys.exit(130)
+            sys.exit(0)
+
+    if model_id in ["/image", "/img", "/v"]:
         image_paths, prompt = parse_image_args(args)
         if not prompt:
             prompt = "Describe this image in detail and summarize the key information shown." if len(image_paths) == 1 else "Describe these images in detail and summarize the key information shown."

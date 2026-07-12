@@ -77,6 +77,34 @@ ask MC deep "Design the auth system"
 
 ---
 
+## 📋 Effortless Copy-Paste (`--paste` / `/paste`) — For Non-Technical & IDE Users
+
+Pasting large, multi-line Markdown documents, plans, or code directly into a terminal prompt can cause shell errors (`zsh: command not found`). 
+
+Instead of pasting directly into your terminal prompt, simply **Copy (`Cmd + C`)** any text or image and use `--paste`:
+
+```bash
+# Copy your plan/spec/logs with Cmd+C, then run:
+ask MC --paste
+
+# You can also add an instruction along with your pasted text:
+ask MC --paste "Audit this plan and list 3 weaknesses"
+
+# Or with normal ask / deep context:
+ask --paste
+ask deep --paste "Find bugs in this snippet"
+```
+
+### Inside the Interactive REPL (`>>>`)
+Type `/paste` anytime inside an interactive `ask` or `ask MC` session:
+```text
+>>> /paste
+[Clipboard] Loaded 4,812 characters (142 lines) of text from clipboard.
+```
+`/paste` works automatically for **both Text and Images** copied to your macOS clipboard!
+
+---
+
 ## 🪨 Caveman Compression (Token Savings)
 
 RoutingMagic compresses AI responses automatically to save tokens and money — while **never** breaking code, error messages, or file paths.

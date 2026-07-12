@@ -5,6 +5,10 @@
 
 ### What was done this session
 - Integrated Caveman compression into openai_wrapper.py (surgical edits)
+- **Self-Improvement Phase Completed**
+- **Model Council UX & Speed Overhaul Completed**: Live progress bar, auto-failover, clean `/exit` and Ctrl+C interruption, Fast Quorum racing (~2 seconds total deliberation).
+- **warpdotdev/common-skills Integration Completed**: 3 specialist personas, 7-point evidence protocol, blind A/B/C proposal cross-critique, Executive Decision Memo output format.
+- **Effortless Copy-Paste UX Completed**: Added `--paste` / `-p` CLI flags (`ask MC --paste`, `ask --paste`) and `/paste` REPL command to load multi-line Markdown specs/plans directly from macOS clipboard without shell syntax errors. Updated README.md for non-technical users.
 - Fixed broken `get_metrics` import in caveman_quality_loop.py  
 - Added non-blocking 9router auto-start (`_ensure_9router_running()`)
 - Added confusion signal detection with module-level `_CONFUSION_PATTERNS`

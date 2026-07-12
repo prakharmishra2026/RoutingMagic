@@ -37,6 +37,7 @@
 - [x] Model Council UX & Reliability Upgrades (Live Parallel Agent Progress Bar, 10.0s Freeze Auto-Failover, clean `/exit` and `Ctrl+C` interruption across all queries)
 - [x] High-Speed Free Model Council Architecture (Fast Free Provider Pool prioritization, Direct SDK timeouts, Non-blocking ThreadPool fallback, and Fast Quorum racing)
 - [x] Integrated `warpdotdev/common-skills` Council Architecture (3 Specialist Personas, 7-Point Evidence Protocol, Blind `Proposal A/B/C` Cross-Critique, and Executive Decision Memo Chairman output)
+- [x] Effortless Clipboard Paste UX (`ask MC --paste`, `ask --paste`, `/paste` REPL command) for Non-Technical & IDE Users to paste multi-line specs/plans without terminal syntax errors
 
 ---
 

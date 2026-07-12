@@ -13,13 +13,13 @@ class TestRoutingMagic(unittest.TestCase):
     # 1. Exact keyword 'math' -> nemotron-3-super-120b
     def test_smart_route_math(self):
         model, role = smart_route("Help me solve this math problem")
-        self.assertEqual(model, "nvidia/nemotron-3-super-120b-a12b:free")
-        self.assertEqual(role, "financial_math_reasoning")
+        self.assertEqual(model, "nvidia/nemotron-3-ultra-550b-a55b:free")
+        self.assertEqual(role, "mythos_deep_reasoning")
 
     # 2. Phrasing 'financial analysis' -> nemotron-3-super-120b
     def test_smart_route_financial_analysis(self):
         model, role = smart_route("Can you do a financial analysis?")
-        self.assertEqual(model, "nvidia/nemotron-3-super-120b-a12b:free")
+        self.assertEqual(model, "nvidia/nemotron-3-ultra-550b-a55b:free")
 
     # 3. Planning 'large repo' -> nemotron-3-super-120b
     def test_smart_route_large_repo(self):
@@ -66,7 +66,7 @@ class TestRoutingMagic(unittest.TestCase):
         model, role = smart_route("can you parse this PDF please?")
         self.assertEqual(model, "nvidia/nemotron-ocr-v1")
         model2, role2 = smart_route("MATH tradeoffs")
-        self.assertEqual(model2, "nvidia/nemotron-3-super-120b-a12b:free")
+        self.assertEqual(model2, "nvidia/nemotron-3-ultra-550b-a55b:free")
 
     # 12. Context missing package.json
     @patch('openai_wrapper.os.path.exists')
