@@ -1235,7 +1235,7 @@ def _query_model(model_name, messages, temperature=0.7, effort="medium"):
     if extra_body:
         kwargs["extra_body"] = extra_body
         
-    resp = client.chat.completions.create(**kwargs)
+    resp = client.chat.completions.create(**kwargs, timeout=timeout)
     if resp is None:
         raise RuntimeError("OpenRouter returned None response.")
     choices = getattr(resp, "choices", None)
@@ -1292,17 +1292,29 @@ def _query_model_with_fallback_and_timing(model_name, messages, temperature=0.7,
     failed_attempts = []
     
     for attempt in attempts:
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                f = pool.submit(_query_model, attempt, messages, temperature, effort)
-                content = f.result(timeout=10.0)
+            f = pool.submit(_query_model, attempt, messages, temperature, effort)
+            content = f.result(timeout=10.0)
+            try:
+                pool.shutdown(wait=False, cancel_futures=True)
+            except TypeError:
+                pool.shutdown(wait=False)
             elapsed = time.time() - start_time
             return attempt, content, None, elapsed, failed_attempts
         except concurrent.futures.TimeoutError:
+            try:
+                pool.shutdown(wait=False, cancel_futures=True)
+            except TypeError:
+                pool.shutdown(wait=False)
             failed_attempts.append((attempt, "Model froze (>10s timeout) -> auto-replacing"))
             last_err = TimeoutError(f"Model {attempt} timed out after 10.0s")
             continue
         except Exception as e:
+            try:
+                pool.shutdown(wait=False, cancel_futures=True)
+            except TypeError:
+                pool.shutdown(wait=False)
             failed_attempts.append((attempt, str(e)))
             last_err = e
             continue
@@ -1410,51 +1422,48 @@ def run_council(prompt, use_deep_context=False):
         # Fallback to default for this task type
         return preferences["fallback"]
 
+    FAST_FREE_PREFIXES = ("google/", "qwen/", "meta-llama/", "microsoft/", "nvidia/")
+
     def select_coder(models, excluded_set):
-        for m in models:
-            m_id = m.get("id", "").lower()
-            if m_id in excluded_set:
-                continue
-            if "coder" in m_id or "code" in m_id or "qwen" in m_id:
-                if avg_price_per_m(m) == 0.0:
-                    return m["id"]
-        filtered = [m for m in models if m.get("id") not in excluded_set]
-        return get_dynamic_model(filtered, free=True, required_params=["structured_outputs"], fallback_default="qwen/qwen3-coder:free")
+        for prefix in FAST_FREE_PREFIXES:
+            for m in models:
+                m_id = m.get("id", "").lower()
+                if m_id in excluded_set or not m_id.startswith(prefix):
+                    continue
+                if "coder" in m_id or "code" in m_id or "qwen" in m_id:
+                    if avg_price_per_m(m) == 0.0:
+                        return m["id"]
+        return "qwen/qwen-2.5-coder-32b-instruct:free"
 
     def select_reasoning(models, excluded_set):
-        for m in models:
-            m_id = m.get("id", "").lower()
-            if m_id in excluded_set:
-                continue
-            sp = set(m.get("supported_parameters", []) or [])
-            if "reasoning" in sp:
+        for prefix in FAST_FREE_PREFIXES:
+            for m in models:
+                m_id = m.get("id", "").lower()
+                if m_id in excluded_set or not m_id.startswith(prefix):
+                    continue
                 if avg_price_per_m(m) == 0.0:
                     return m["id"]
-        filtered = [m for m in models if m.get("id") not in excluded_set]
-        return get_dynamic_model(filtered, free=True, required_params=["reasoning"], fallback_default="openai/gpt-oss-120b:free")
+        return "meta-llama/llama-3.3-70b-instruct:free"
 
     def select_agentic(models, excluded_set):
-        for m in models:
-            m_id = m.get("id", "").lower()
-            if m_id in excluded_set:
-                continue
-            sp = set(m.get("supported_parameters", []) or [])
-            if "structured_outputs" in sp or "tools" in sp:
+        for prefix in FAST_FREE_PREFIXES:
+            for m in models:
+                m_id = m.get("id", "").lower()
+                if m_id in excluded_set or not m_id.startswith(prefix):
+                    continue
                 if avg_price_per_m(m) == 0.0:
                     return m["id"]
-        filtered = [m for m in models if m.get("id") not in excluded_set]
-        return get_dynamic_model(filtered, free=True, fallback_default="meta-llama/llama-3.3-70b-instruct:free")
+        return "google/gemma-4-31b-it:free"
 
     def select_general(models, excluded_set):
-        for m in models:
-            m_id = m.get("id", "").lower()
-            if m_id in excluded_set:
-                continue
-            if "gemma" in m_id or "llama" in m_id or "nemotron" in m_id:
+        for prefix in FAST_FREE_PREFIXES:
+            for m in models:
+                m_id = m.get("id", "").lower()
+                if m_id in excluded_set or not m_id.startswith(prefix):
+                    continue
                 if avg_price_per_m(m) == 0.0:
                     return m["id"]
-        filtered = [m for m in models if m.get("id") not in excluded_set]
-        return get_dynamic_model(filtered, free=True, fallback_default="google/gemma-4-31b-it:free")
+        return "google/gemma-4-31b-it:free"
 
     # Dynamically select 3 distinct council models (MoE-style expert selection)
     council_models = []
@@ -1520,6 +1529,7 @@ def run_council(prompt, use_deep_context=False):
         "1. INVERSION: Identify failure paths and how to avoid them.\n"
         "2. FIRST PRINCIPLES: Strip away assumptions; answer from the irreducible truth.\n"
         "3. NO FLUFF: Avoid generic advice. Give clear, specific, actionable insights.\n"
+        "4. SPEED & DENSITY: Be extremely concise, direct, and rigorous. Keep your opinion under 250 words so deliberation completes rapidly.\n"
         f"Context:\n{context_str}"
     )
     
@@ -1593,6 +1603,14 @@ def run_council(prompt, use_deep_context=False):
                 status_line = f"\r\033[K\033[96m[Stage 1 Deliberation • {elapsed_stage:.1f}s]\033[0m " + " | ".join(status_parts)
                 sys.stdout.write(status_line)
                 sys.stdout.flush()
+                if (len(opinions) >= 2 and elapsed_stage > 6.0) or (len(opinions) >= 1 and elapsed_stage > 11.0) or elapsed_stage > 14.0:
+                    sys.stdout.write("\r\033[K")
+                    print(f"\n\033[93m⚡ [Fast Quorum Reached • {elapsed_stage:.1f}s] Proceeding with {len(opinions)} completed council member(s) for speed.\033[0m")
+                    try:
+                        executor.shutdown(wait=False, cancel_futures=True)
+                    except TypeError:
+                        executor.shutdown(wait=False)
+                    break
                 time.sleep(0.15)
         sys.stdout.write("\r\033[K")
         sys.stdout.flush()
@@ -1759,6 +1777,14 @@ def run_council(prompt, use_deep_context=False):
                 status_line = f"\r\033[K\033[94m[Stage 2 Peer Review • {elapsed_stage:.1f}s]\033[0m " + " | ".join(status_parts)
                 sys.stdout.write(status_line)
                 sys.stdout.flush()
+                if (len(reviews) >= 2 and elapsed_stage > 6.0) or (len(reviews) >= 1 and elapsed_stage > 11.0) or elapsed_stage > 14.0:
+                    sys.stdout.write("\r\033[K")
+                    print(f"\n\033[93m⚡ [Fast Quorum Reached • {elapsed_stage:.1f}s] Proceeding with {len(reviews)} completed review(s) for speed.\033[0m")
+                    try:
+                        executor.shutdown(wait=False, cancel_futures=True)
+                    except TypeError:
+                        executor.shutdown(wait=False)
+                    break
                 time.sleep(0.15)
         sys.stdout.write("\r\033[K")
         sys.stdout.flush()
