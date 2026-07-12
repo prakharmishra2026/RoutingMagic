@@ -34,6 +34,7 @@
 
 - [x] Test full flow — syntax check, import, pytest (11/11 pass, 100% test passing!)
 - [x] Fixed all audit bugs (SQL 19-placeholder mismatch, `/savings session` crash, module-level confusion patterns, wired `record_session` / `record_outcome`)
+- [x] Model Council UX & Reliability Upgrades (Live Parallel Agent Progress Bar, 10.0s Freeze Auto-Failover, clean `/exit` and `Ctrl+C` interruption across all queries)
 
 ---
 
