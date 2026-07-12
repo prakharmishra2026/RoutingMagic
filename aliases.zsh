@@ -21,23 +21,22 @@ _9r() {
 
 # ── FREE models (via 9router → OpenRouter) ────────────────────────
 # Each comment shows: ROLE · context · provider-count (429 resilience)
+# Updated July 2026: GLM models no longer free, Kimi removed
 cc()  { _9r openrouter/poolside/laguna-m.1:free "$@"; }                       # general coding (default) · 262k
-cch() { _9r openrouter/poolside/laguna-xs.2:free "$@"; }                      # quick edits / one-liners · 262k
+cch() { _9r openrouter/poolside/laguna-xs-2.1:free "$@"; }                    # quick edits / one-liners · 262k
 cca() { _9r openrouter/nvidia/nemotron-3-super-120b-a12b:free "$@"; }         # large context · 1M
-cck() { _9r openrouter/moonshotai/kimi-k2.6:free "$@"; }                      # UI (Kimi) · 262k · ⚠ 429s often — prefer ccc
 ccc() { _9r openrouter/qwen/qwen3-coder:free "$@"; }                          # UI / frontend / coder (DEFAULT) · 1M · 7 providers
 ccg() { _9r openrouter/openai/gpt-oss-120b:free "$@"; }                       # reasoning + tools · 131k · 19 providers (MOST reliable)
 ccx() { _9r openrouter/qwen/qwen3-next-80b-a3b-instruct:free "$@"; }          # general / agentic · 262k · 6 providers
-ccz() { _9r openrouter/z-ai/glm-4.5-air:free "$@"; }                          # fast all-rounder · 131k · 4 providers · 🧠 THINKING MODE
 ccm() { _9r openrouter/google/gemma-4-31b-it:free "$@"; }                     # resilient general · 262k · 11 providers
 ccu() { _9r openrouter/nvidia/nemotron-3-ultra-550b-a55b:free "$@"; }         # 550B flagship reasoning · 1M · ⚠ single provider
 ccb() { _9r Builder "$@"; }                                                   # Builder combo (auto-route)
 
 # ── MYTHOS-INSPIRED DEEP REASONING ─────────────────────────────────────────
 # Inspired by OpenMythos recurrent-depth transformer architecture
-myth()  { _9r openrouter/z-ai/glm-4.5-air:free "$@"; }                        # 🧠 Mythos-style deep reasoning (thinking mode)
-myth3() { _9r openrouter/openai/gpt-oss-120b:free "$@"; }                     # 🧠 Mythos reasoning with effort control
-myth5() { _9r openrouter/nvidia/nemotron-3-ultra-550b-a55b:free "$@"; }       # 🧠 Mythos 550B flagship reasoning
+myth()  { _9r openrouter/openai/gpt-oss-120b:free "$@"; }                     # 🧠 Mythos reasoning with effort control
+myth3() { _9r openrouter/nvidia/nemotron-3-ultra-550b-a55b:free "$@"; }       # 🧠 Mythos 550B flagship reasoning
+myth5() { _9r openrouter/microsoft/phi-4-mini-reasoning:free "$@"; }          # 🧠 Mythos focused reasoning (Phi-4)
 
 # ── NVIDIA GLM‑5.1 (via 9router) ───────────────────────────────────────────
 glm() { _9r nvidia/z-ai/glm-5.1 "$@"; }                                       # GLM‑5.1 model via NVIDIA NIM
@@ -58,44 +57,42 @@ ccq() { claude --model claude-haiku-4-5-20251001 "$@"; }                      # 
 cc-models() {
   cat <<'EOF'
 
-╔══════════════════════════════════════════════════════════════════════╗
+╔═══════════════════════════════════════════════════════════════════════╗
 ║              ROUTINGMAGIC — MODEL ROUTER (v2 Mythos)               ║
-╠══════════════════════════════════════════════════════════════════════╣
-║ FREE (9router → OpenRouter, :20128)                                  ║
-║  cc   Laguna M.1        general coding   262k                        ║
-║  cch  Laguna XS.2       quick edits      262k                        ║
-║  cca  Nemotron 3 Super  large context    1M                          ║
-║  ccc  Qwen3-Coder       UI/frontend      1M   7prov DEFAULT          ║
-║  cck  Kimi K2.6         UI (kept) ⚠ 429s — prefer ccc                ║
-║  ccg  GPT-OSS-120B      reasoning+tools  131k 19prov ★safe           ║
-║  ccx  Qwen3-Next-80B    general/agentic  262k 6prov                  ║
-║  ccz  GLM-4.5-Air       fast allround    131k 4prov 🧠 THINKING      ║
-║  ccm  Gemma-4-31B       resilient gen    262k 11prov                 ║
-║  ccu  Nemotron Ultra    flagship reason  1M   ⚠ 1prov                ║
-║  ccb  Builder combo     auto multi-model                             ║
-╠══════════════════════════════════════════════════════════════════════╣
+╠═══════════════════════════════════════════════════════════════════════╣
+║ FREE (9router → OpenRouter, :20128) — July 2026                      ║
+║  cc   Poolside Laguna M.1   general coding    262k                   ║
+║  cch  Poolside Laguna XS.2  quick edits       262k                   ║
+║  cca  Nemotron 3 Super      large context     1M                     ║
+║  ccc  Qwen3-Coder           UI/frontend/coder 1M   7prov DEFAULT    ║
+║  ccg  GPT-OSS-120B          reasoning+tools   131k 19prov ★safe      ║
+║  ccx  Qwen3-Next-80B        general/agentic   262k 6prov             ║
+║  ccm  Gemma-4-31B           resilient gen     262k 11prov            ║
+║  ccu  Nemotron 3 Ultra      flagship reason   1M   ⚠ 1prov           ║
+║  ccb  Builder combo         auto multi-model                         ║
+╠═══════════════════════════════════════════════════════════════════════╣
 ║ 🧠 MYTHOS DEEP REASONING (inspired by OpenMythos)                    ║
-║  myth   GLM 4.5 Air     thinking mode    131k  (deep reasoning)      ║
-║  myth3  GPT-OSS-120B    reasoning effort 131k  (effort control)      ║
-║  myth5  Nemotron Ultra  550B reasoning   1M    (flagship deep)       ║
-╠══════════════════════════════════════════════════════════════════════╣
+║  myth   GPT-OSS-120B        reasoning effort  131k  (deep reasoning) ║
+║  myth3  Nemotron 3 Ultra    550B reasoning    1M    (flagship deep)  ║
+║  myth5  Phi-4 Mini Reason   focused reasoning  32k  (precise)        ║
+╠═══════════════════════════════════════════════════════════════════════╣
 ║ OPENAI & NVIDIA (9router)                                            ║
 ║  op   GPT-5   opt  GPT-4-Turbo   opo3  o3-mini   glm  GLM-5.1      ║
-╠══════════════════════════════════════════════════════════════════════╣
+╠═══════════════════════════════════════════════════════════════════════╣
 ║ NATIVE (api.anthropic.com, keychain)                                 ║
 ║  ccs  Sonnet 4.6   cco  Opus 4.8   ccq  Haiku 4.5                   ║
-╠══════════════════════════════════════════════════════════════════════╣
+╠═══════════════════════════════════════════════════════════════════════╣
 ║ 🧠 ACT EFFORT LEVELS (Adaptive Computation Time)                     ║
 ║  low    = fast, cheap (simple questions)                             ║
 ║  medium = standard (explanations, comparisons)                       ║
 ║  high   = deep reasoning (proofs, algorithms, analysis)              ║
-╠══════════════════════════════════════════════════════════════════════╣
+╠═══════════════════════════════════════════════════════════════════════╣
 ║ 429 FALLBACK CHAINS (next → if rate-limited)                         ║
-║  UI:     ccc→ccz→ccm   Gen:  cc→ccg→ccx   Reason: myth→ccg→ccu      ║
-║  Quick:  cch→ccz        Large: cca→ccc→ccu  Agent: ccg→ccx→cc        ║
-╠══════════════════════════════════════════════════════════════════════╣
+║  UI:     ccc→ccm→ccx   Gen:  cc→ccg→ccx   Reason: ccg→ccu→ccx       ║
+║  Quick:  cch→ccm        Large: cca→ccc→ccu  Agent: ccg→ccx→cc        ║
+╠═══════════════════════════════════════════════════════════════════════╣
 ║  cc-route "task"  → analyze → pick best + effort → launch             ║
-╚══════════════════════════════════════════════════════════════════════╝
+╚═══════════════════════════════════════════════════════════════════════╝
 
 EOF
 }
@@ -122,12 +119,12 @@ _cc_route_match() {
   # ── FREE: Mythos Deep Reasoning (high effort) ────────────────────
   elif echo "$t" | grep -qiE \
     "(prove|derive|formal|axiom|theorem|recursive|latent|multi.?hop|deep reasoning|complex logic|step.?by.?step|chain.?of.?thought)"; then
-    echo "openrouter/z-ai/glm-4.5-air:free|🧠 MYTHOS|Deep Reasoning → GLM 4.5 Air (thinking mode)|9r"
+    echo "openrouter/openai/gpt-oss-120b:free|🧠 MYTHOS|Deep Reasoning → GPT-OSS-120B (reasoning effort)|9r"
 
   # ── FREE: Mythos Reasoning with Effort (high effort) ─────────────
   elif echo "$t" | grep -qiE \
     "(reason|think through|math|analy[sz]e deeply|algorithm|optimi[sz]e|proof|derive|equation|derivation|critically|audit)"; then
-    echo "openrouter/openai/gpt-oss-120b:free|🧠 MYTHOS|Reasoning → GPT-OSS-120B (reasoning effort)|9r"
+    echo "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free|🧠 MYTHOS|Reasoning → Nemotron 3 Ultra (550B deep reasoning)|9r"
 
   # ── FREE: UI / Frontend / Design System ──────────────────────────
   elif echo "$t" | grep -qiE \

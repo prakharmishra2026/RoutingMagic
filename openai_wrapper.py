@@ -63,6 +63,92 @@ def _has_any_api_access():
     has_9router = is_port_open("127.0.0.1", 20128)
     return has_or or has_nv or has_oai or has_9router
 
+
+def _get_fallback_chain():
+    """Build fallback chain dynamically based on available API keys."""
+    has_or = bool(os.getenv("OPENROUTER_API_KEY"))
+    has_nv = bool(os.getenv("NVAPI_KEY") or os.getenv("NVIDIA_API_KEY"))
+    has_oai = bool(os.getenv("OPENAI_API_KEY"))
+    has_9router = is_port_open("127.0.0.1", 20128)
+    
+    chain = []
+    
+    # If 9router running or OpenRouter key available, add OpenRouter free models
+    if has_9router or has_or:
+        chain.extend([
+            "google/gemma-4-31b-it:free",
+            "nvidia/nemotron-3-super-120b-a12b:free",
+            "openai/gpt-oss-120b:free",
+            "qwen/qwen3-coder:free",
+            "meta-llama/llama-3.3-70b-instruct:free",
+        ])
+    
+    # If NVIDIA key available, add NVIDIA NIM models
+    if has_nv:
+        chain.extend([
+            "nvidia/nemotron-3-ultra-550b-a55b",
+            "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+            "google/gemma-4-31b-it",
+        ])
+    
+    # If OpenAI key available, add OpenAI models
+    if has_oai:
+        chain.extend([
+            "openai/gpt-5",
+            "openai/gpt-4-turbo",
+            "openai/o3-mini",
+        ])
+    
+    # Add paid fallback as last resort
+    chain.append("gemini-2.5-pro")
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_chain = []
+    for m in chain:
+        if m not in seen:
+            seen.add(m)
+            unique_chain.append(m)
+    
+    return unique_chain
+
+
+def _get_council_fallback_models():
+    """Build council fallback models based on available API keys."""
+    has_or = bool(os.getenv("OPENROUTER_API_KEY"))
+    has_nv = bool(os.getenv("NVAPI_KEY") or os.getenv("NVIDIA_API_KEY"))
+    
+    chain = []
+    
+    if has_or:
+        chain.extend([
+            "google/gemma-4-31b-it:free",
+            "qwen/qwen3-coder:free",
+            "nvidia/nemotron-3-super-120b-a12b:free",
+            "meta-llama/llama-3.3-70b-instruct:free",
+        ])
+    
+    if has_nv:
+        chain.extend([
+            "nvidia/nemotron-3-ultra-550b-a55b",
+            "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+            "google/gemma-4-31b-it",
+        ])
+    
+    if not chain:
+        chain = ["gemini-2.5-pro"]
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_chain = []
+    for m in chain:
+        if m not in seen:
+            seen.add(m)
+            unique_chain.append(m)
+    
+    return unique_chain
+
+
 def _check_api_keys():
     """Check API keys and 9router status. Returns True if any access method available."""
     has_or = bool(os.getenv("OPENROUTER_API_KEY"))
@@ -644,6 +730,7 @@ def smart_route(prompt):
     Enhanced with Mythos-inspired techniques:
     - ACT: Effort-aware routing (high-effort tasks get reasoning models)
     - MoE-style: Task-specific specialist selection
+    Updated July 2026: GLM models no longer free on OpenRouter.
     """
     prompt_lower = prompt.lower()
     
@@ -661,18 +748,18 @@ def smart_route(prompt):
     if effort == "high":
         # Prefer models with reasoning tokens
         if re.search(r'\b(prove|derive|formal|axiom|theorem|recursive|latent|multi.?hop|deep reasoning|complex logic)\b', prompt_lower):
-            # GLM 4.5 Air has "thinking mode" for reasoning
-            return "zhipu/glm-4.5-air:free", "mythos_reasoning_thinking"
+            # GPT-OSS-120B has reasoning effort support, most reliable
+            return "openai/gpt-oss-120b:free", "mythos_reasoning_effort"
         
         if re.search(r'\b(math|financial analysis|tradeoffs|trade-offs|step-by-step|chain of thought|deep analysis)\b', prompt_lower):
             # Nemotron Ultra for deep reasoning
             return "nvidia/nemotron-3-ultra-550b-a55b:free", "mythos_deep_reasoning"
         
-        # GPT-OSS-120B with reasoning effort
+        # Phi-4 Mini Reasoning for focused reasoning
         if re.search(r'\b(analyze|critically|audit|algorithm|proof|equation|derivation)\b', prompt_lower):
-            return "openai/gpt-oss-120b:free", "mythos_reasoning_effort"
+            return "microsoft/phi-4-mini-reasoning:free", "mythos_reasoning_focused"
         
-        # Default high-effort: GPT-OSS-120B (most reliable reasoning model)
+        # Default high-effort: GPT-OSS-120B (most reliable reasoning model, 19 providers)
         return "openai/gpt-oss-120b:free", "mythos_high_effort"
     
     # 2. Long Document RAG & Heavy Agentic Planning -> Nemotron 3 Super 120B (1M context)
@@ -687,23 +774,23 @@ def smart_route(prompt):
     if re.search(r'\b(n8n|tool call|json extraction|workflow|extract data|structure this|json)\b', prompt_lower):
         return "meta-llama/llama-3.3-70b-instruct:free", "n8n_tool_calling"
         
-    # 5. Vision / Chart Parsing -> Nemotron VL 8B
+    # 5. Vision / Chart Parsing -> Nemotron VL 8B (NVIDIA NIM)
     if re.search(r'\b(image|chart|graph|vision|parse screenshot|look at this picture)\b', prompt_lower):
         return "nvidia/llama-3.1-nemotron-nano-vl-8b-v1", "stock_chart_vision"
         
-    # 6. Financial Document OCR -> Nemotron OCR v1
+    # 6. Financial Document OCR -> Nemotron OCR v1 (NVIDIA NIM)
     if re.search(r'\b(ocr|pdf|annual report|bse filing|table extraction|scan document)\b', prompt_lower):
         return "nvidia/nemotron-ocr-v1", "financial_doc_ocr"
         
-    # 7. Voice / Audio -> Nemotron Voicechat
+    # 7. Voice / Audio -> Nemotron Voicechat (NVIDIA NIM)
     if re.search(r'\b(voice|audio|speech|listen|transcribe)\b', prompt_lower):
         return "nvidia/nemotron-voicechat", "voice_trigger"
 
-    # 8. Omni-modal fallback -> Nemotron Nano Omni 30B
+    # 8. Omni-modal fallback -> Nemotron Nano Omni 30B (NVIDIA NIM)
     if re.search(r'\b(video|multimodal|omni)\b', prompt_lower):
         return "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", "multimodal_omni"
         
-    # Default General Tasks -> Gemma 4 31B (highest free quality score)
+    # Default General Tasks -> Gemma 4 31B (highest free quality, 11 providers)
     return "google/gemma-4-31b-it:free", "default_general"
 
 
@@ -821,7 +908,7 @@ def compress_context(messages):
     
     prompt = f"Summarize the key technical decisions, bugs fixed, and current goal of this chat history. Be concise.\n\n{hist}"
     
-    fallback_chain = ["google/gemma-4-31b-it:free", "nvidia/nemotron-3-super-120b-a12b:free", "qwen/qwen3-coder:free"]
+    fallback_chain = ["google/gemma-4-31b-it:free", "nvidia/nemotron-3-super-120b-a12b:free", "openai/gpt-oss-120b:free", "qwen/qwen3-coder:free"]
     summary = None
     
     for target_model in fallback_chain:
@@ -886,7 +973,8 @@ def chat_oneshot(model, prompt, use_deep_context=False):
     else:
         user_message = {"role": "user", "content": prompt}
 
-    fallback_chain = [target_model, "google/gemma-4-31b-it:free", "nvidia/nemotron-3-super-120b-a12b:free", "openai/gpt-oss-120b:free", "qwen/qwen3-coder:free", "meta-llama/llama-3.3-70b-instruct:free", "gemini-2.5-pro"]
+    # Dynamic fallback chain based on available API keys
+    fallback_chain = [target_model] + _get_fallback_chain()
     seen = set()
     fallback_chain = [x for x in fallback_chain if not (x in seen or seen.add(x))]
 
@@ -1182,25 +1270,26 @@ def run_council(prompt, use_deep_context=False):
         """Select specialist model based on task domain (MoE-style routing)."""
         
         # Task-specific model preferences (MoE-style: sparse expert activation)
+        # Updated July 2026 - current free models on OpenRouter
         task_model_preferences = {
             "reasoning": {
-                "keywords": ["reason", "thinking", "thought"],
+                "keywords": ["reasoning", "reason", "thinking", "thought", "oss"],
                 "fallback": "openai/gpt-oss-120b:free"
             },
             "coding": {
-                "keywords": ["coder", "code"],
+                "keywords": ["coder", "code", "qwen"],
                 "fallback": "qwen/qwen3-coder:free"
             },
             "agentic": {
-                "keywords": ["tool", "function", "structured"],
+                "keywords": ["tool", "function", "structured", "llama"],
                 "fallback": "meta-llama/llama-3.3-70b-instruct:free"
             },
             "analysis": {
-                "keywords": ["analysis", "summarize"],
+                "keywords": ["analysis", "summarize", "gemma", "nemotron"],
                 "fallback": "google/gemma-4-31b-it:free"
             },
             "general": {
-                "keywords": ["gemma", "llama"],
+                "keywords": ["gemma", "llama", "nemotron"],
                 "fallback": "google/gemma-4-31b-it:free"
             }
         }
@@ -1238,7 +1327,7 @@ def run_council(prompt, use_deep_context=False):
             m_id = m.get("id", "").lower()
             if m_id in excluded_set:
                 continue
-            if "coder" in m_id or "code" in m_id:
+            if "coder" in m_id or "code" in m_id or "qwen" in m_id:
                 if avg_price_per_m(m) == 0.0:
                     return m["id"]
         filtered = [m for m in models if m.get("id") not in excluded_set]
@@ -1254,7 +1343,7 @@ def run_council(prompt, use_deep_context=False):
                 if avg_price_per_m(m) == 0.0:
                     return m["id"]
         filtered = [m for m in models if m.get("id") not in excluded_set]
-        return get_dynamic_model(filtered, free=True, required_params=["reasoning"], fallback_default="nvidia/nemotron-3-super-120b-a12b:free")
+        return get_dynamic_model(filtered, free=True, required_params=["reasoning"], fallback_default="openai/gpt-oss-120b:free")
 
     def select_agentic(models, excluded_set):
         for m in models:
@@ -1273,7 +1362,7 @@ def run_council(prompt, use_deep_context=False):
             m_id = m.get("id", "").lower()
             if m_id in excluded_set:
                 continue
-            if "gemma" in m_id or "llama" in m_id:
+            if "gemma" in m_id or "llama" in m_id or "nemotron" in m_id:
                 if avg_price_per_m(m) == 0.0:
                     return m["id"]
         filtered = [m for m in models if m.get("id") not in excluded_set]
@@ -1325,13 +1414,7 @@ def run_council(prompt, use_deep_context=False):
                 council_models.append(m3)
                 excluded.add(m3)
                 
-            fallback_options = [
-                "google/gemma-4-31b-it:free",
-                "qwen/qwen3-coder:free",
-                "nvidia/nemotron-3-super-120b-a12b:free",
-                "meta-llama/llama-3.3-70b-instruct:free",
-                "google/gemma-2-9b-it:free"
-            ]
+            fallback_options = _get_council_fallback_models()
             for fb in fallback_options:
                 if len(council_models) >= 3:
                     break
@@ -1339,17 +1422,9 @@ def run_council(prompt, use_deep_context=False):
                     council_models.append(fb)
         except Exception as e:
             print(f"\033[93m[LLM Council] Error selecting dynamic council models: {e}. Using defaults.\033[0m")
-            council_models = [
-                "google/gemma-4-31b-it:free",
-                "qwen/qwen3-coder:free",
-                "nvidia/nemotron-3-super-120b-a12b:free"
-            ]
+            council_models = _get_council_fallback_models()[:3]
     else:
-        council_models = [
-            "google/gemma-4-31b-it:free",
-            "qwen/qwen3-coder:free",
-            "nvidia/nemotron-3-super-120b-a12b:free"
-        ]
+        council_models = _get_council_fallback_models()[:3]
 
     context_str = get_deep_context() if use_deep_context else get_instant_context()
     system_instruction = (
@@ -1881,7 +1956,19 @@ def repl(model, use_deep_context=False, session_context=None):
         if model == "smart":
             target_model, task_type = smart_route(messages[-1]["content"] if len(messages)>1 else "resume")
             if target_model != "council":
-                client, target_model = get_client_and_model(target_model)
+                # Use fallback chain to find available model
+                fallback_chain = [target_model] + _get_fallback_chain()
+                seen = set()
+                fallback_chain = [x for x in fallback_chain if not (x in seen or seen.add(x))]
+                client = None
+                for attempt_model in fallback_chain:
+                    try:
+                        client, target_model = get_client_and_model(attempt_model)
+                        break
+                    except Exception:
+                        continue
+                if client is None:
+                    client, target_model = None, None
             else:
                 client, target_model = None, None
             
@@ -2187,9 +2274,8 @@ def repl(model, use_deep_context=False, session_context=None):
         # Track the originally smart-routed model to avoid stale fallback bleeding
         smart_routed_model = target_model if model == "smart" else None
 
-        # Priority Fallback Chain
-        # OpenRouter model IDs must NOT have an "openrouter/" prefix — use vendor/model:free format directly
-        fallback_chain = [target_model, "google/gemma-4-31b-it:free", "nvidia/nemotron-3-super-120b-a12b:free", "openai/gpt-oss-120b:free", "qwen/qwen3-coder:free", "meta-llama/llama-3.3-70b-instruct:free", "gemini-2.5-pro"]
+        # Dynamic Priority Fallback Chain based on available API keys
+        fallback_chain = [target_model] + _get_fallback_chain()
         # Remove duplicates while preserving order
         seen = set()
         fallback_chain = [x for x in fallback_chain if not (x in seen or seen.add(x))]
