@@ -370,8 +370,6 @@ def auto_update_if_needed() -> bool:
     return True
 
 
-# Initialize on import
-auto_update_if_needed()
 
 
 # Export key functions

@@ -1285,9 +1285,15 @@ def _query_model_with_fallback_and_timing(model_name, messages, temperature=0.7,
     
     for attempt in attempts:
         try:
-            content = _query_model(attempt, messages, temperature, effort)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                f = pool.submit(_query_model, attempt, messages, temperature, effort)
+                content = f.result(timeout=10.0)
             elapsed = time.time() - start_time
             return attempt, content, None, elapsed, failed_attempts
+        except concurrent.futures.TimeoutError:
+            failed_attempts.append((attempt, "Model froze (>10s timeout) -> auto-replacing"))
+            last_err = TimeoutError(f"Model {attempt} timed out after 10.0s")
+            continue
         except Exception as e:
             failed_attempts.append((attempt, str(e)))
             last_err = e
@@ -1525,27 +1531,43 @@ def run_council(prompt, use_deep_context=False):
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(council_models)) as executor:
         futures = {executor.submit(_query_model_with_fallback_and_timing, m, stage1_messages, 0.7, set(council_models), effort): m for m in council_models}
-        for future in concurrent.futures.as_completed(futures):
-            orig_model = futures[future]
-            succeeded_model, content, err, elapsed, failed_attempts = future.result()
-            
-            # Print failures for this slot
-            for failed_m, failed_e in failed_attempts:
-                print(f"  \033[91m✗ {failed_m} failed to reply: {failed_e}\033[0m")
-                
-            if err:
-                print(f"  \033[91m✗ All fallbacks failed for slot {orig_model} [{elapsed:.2f}s]\033[0m")
-            else:
-                if succeeded_model != orig_model:
-                    print(f"  \033[92m✓ {orig_model} failed, successfully fell back to {succeeded_model} [{elapsed:.2f}s]\033[0m")
-                else:
-                    print(f"  \033[92m✓ {succeeded_model} completed [{elapsed:.2f}s]\033[0m")
-                opinions[succeeded_model] = content
-                lines = [l.strip() for l in content.strip().split("\n") if l.strip()]
-                preview = " / ".join(lines[:2])
-                if len(preview) > 120:
-                    preview = preview[:117] + "..."
-                print(f"    \033[36m└─ Key takeaway: {preview}\033[0m")
+        completed_futures = set()
+        slot_status = {m: "⏳ running" for m in council_models}
+        while len(completed_futures) < len(futures):
+            for future, orig_model in list(futures.items()):
+                if future in completed_futures:
+                    continue
+                if future.done():
+                    completed_futures.add(future)
+                    sys.stdout.write("\r\033[K")
+                    sys.stdout.flush()
+                    succeeded_model, content, err, elapsed, failed_attempts = future.result()
+                    for failed_m, failed_e in failed_attempts:
+                        print(f"  \033[93m⚡ [{orig_model}] auto-replaced {failed_m} -> {failed_e}\033[0m")
+                    if err:
+                        print(f"  \033[91m✗ [{orig_model}] All fallbacks failed [{elapsed:.1f}s]\033[0m")
+                        slot_status[orig_model] = "✗ failed"
+                    else:
+                        if succeeded_model != orig_model:
+                            print(f"  \033[92m✓ [{orig_model} -> {succeeded_model}] completed [{elapsed:.1f}s]\033[0m")
+                        else:
+                            print(f"  \033[92m✓ [{succeeded_model}] completed [{elapsed:.1f}s]\033[0m")
+                        opinions[succeeded_model] = content
+                        lines = [l.strip() for l in content.strip().split("\n") if l.strip()]
+                        preview = " / ".join(lines[:2])
+                        if len(preview) > 120:
+                            preview = preview[:117] + "..."
+                        print(f"    \033[36m└─ Key takeaway: {preview}\033[0m")
+                        slot_status[orig_model] = "✓ done"
+            if len(completed_futures) < len(futures):
+                elapsed_stage = time.time() - stage1_start
+                status_parts = [f"{m.split('/')[-1].split(':')[0]}: {status}" for m, status in slot_status.items()]
+                status_line = f"\r\033[K\033[96m[Stage 1 Deliberation • {elapsed_stage:.1f}s]\033[0m " + " | ".join(status_parts)
+                sys.stdout.write(status_line)
+                sys.stdout.flush()
+                time.sleep(0.15)
+        sys.stdout.write("\r\033[K")
+        sys.stdout.flush()
                 
     stage1_duration = time.time() - stage1_start
     print(f"\033[94m[Stage 1] Completed in {stage1_duration:.2f}s\033[0m\n")
@@ -1667,27 +1689,43 @@ def run_council(prompt, use_deep_context=False):
     reviews = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(opinions)) as executor:
         futures = {executor.submit(_query_model_with_fallback_and_timing, m, peer_review_messages, 0.7, set(opinions.keys()), effort): m for m in opinions.keys()}
-        for future in concurrent.futures.as_completed(futures):
-            orig_model = futures[future]
-            succeeded_model, content, err, elapsed, failed_attempts = future.result()
-            
-            # Print failures for this review slot
-            for failed_m, failed_e in failed_attempts:
-                print(f"  \033[91m✗ {failed_m} review failed: {failed_e}\033[0m")
-                
-            if err:
-                print(f"  \033[91m✗ All fallbacks failed for review by {orig_model} [{elapsed:.2f}s]\033[0m")
-            else:
-                if succeeded_model != orig_model:
-                    print(f"  \033[92m✓ {orig_model} review failed, successfully fell back to {succeeded_model} [{elapsed:.2f}s]\033[0m")
-                else:
-                    print(f"  \033[92m✓ {succeeded_model} review completed [{elapsed:.2f}s]\033[0m")
-                reviews[succeeded_model] = content
-                lines = [l.strip() for l in content.strip().split("\n") if l.strip()]
-                preview = " / ".join(lines[:2])
-                if len(preview) > 120:
-                    preview = preview[:117] + "..."
-                print(f"    \033[33m└─ Critique & Score: {preview}\033[0m")
+        completed_futures = set()
+        slot_status = {m: "⏳ running" for m in opinions.keys()}
+        while len(completed_futures) < len(futures):
+            for future, orig_model in list(futures.items()):
+                if future in completed_futures:
+                    continue
+                if future.done():
+                    completed_futures.add(future)
+                    sys.stdout.write("\r\033[K")
+                    sys.stdout.flush()
+                    succeeded_model, content, err, elapsed, failed_attempts = future.result()
+                    for failed_m, failed_e in failed_attempts:
+                        print(f"  \033[93m⚡ [{orig_model}] auto-replaced {failed_m} -> {failed_e}\033[0m")
+                    if err:
+                        print(f"  \033[91m✗ [{orig_model}] All fallbacks failed [{elapsed:.1f}s]\033[0m")
+                        slot_status[orig_model] = "✗ failed"
+                    else:
+                        if succeeded_model != orig_model:
+                            print(f"  \033[92m✓ [{orig_model} -> {succeeded_model}] review completed [{elapsed:.1f}s]\033[0m")
+                        else:
+                            print(f"  \033[92m✓ [{succeeded_model}] review completed [{elapsed:.1f}s]\033[0m")
+                        reviews[succeeded_model] = content
+                        lines = [l.strip() for l in content.strip().split("\n") if l.strip()]
+                        preview = " / ".join(lines[:2])
+                        if len(preview) > 120:
+                            preview = preview[:117] + "..."
+                        print(f"    \033[33m└─ Critique & Score: {preview}\033[0m")
+                        slot_status[orig_model] = "✓ done"
+            if len(completed_futures) < len(futures):
+                elapsed_stage = time.time() - stage2_start
+                status_parts = [f"{m.split('/')[-1].split(':')[0]}: {status}" for m, status in slot_status.items()]
+                status_line = f"\r\033[K\033[94m[Stage 2 Peer Review • {elapsed_stage:.1f}s]\033[0m " + " | ".join(status_parts)
+                sys.stdout.write(status_line)
+                sys.stdout.flush()
+                time.sleep(0.15)
+        sys.stdout.write("\r\033[K")
+        sys.stdout.flush()
                 
     stage2_duration = time.time() - stage2_start
     print(f"\033[94m[Stage 2] Completed in {stage2_duration:.2f}s\033[0m\n")
