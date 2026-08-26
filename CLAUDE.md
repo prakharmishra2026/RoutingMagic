@@ -16,8 +16,9 @@
 ## Project
 
 RoutingMagic — zero-cost LLM router for terminal. Routes prompts to free models via
-OpenRouter/NVIDIA NIM with fallback chains. Key features: smart_route heuristic,
-Model Council (3-model deliberation), git snapshot failsafe, vision paste.
+NVIDIA NIM (Tier 1) → OpenRouter Free (Tier 2) → opencode Built-in (Tier 3) with fallback chains.
+Key features: smart_route heuristic, Model Council (3-model deliberation), git snapshot failsafe, vision paste.
+**Daily auto-updates** via GitHub Action (1 AM UTC) keep model registry fresh.
 
 **v2 Mythos**: Enhanced with OpenMythos-inspired techniques:
 - ACT (Adaptive Computation Time): Dynamic effort selection (low/medium/high)
@@ -27,17 +28,22 @@ Model Council (3-model deliberation), git snapshot failsafe, vision paste.
 
 ## Structure
 
-- `openai_wrapper.py` — core: routing, REPL, council, vision, fallback chains, 9router auto-start
+- `openai_wrapper.py` — core: routing, REPL, council, vision, fallback chains (now registry-driven)
 - `aliases.zsh` — 4-core-alias system (ask, ask deep, ask MC, ask deep MC), power-user cc* aliases
 - `setup_keys.py` — interactive API key setup (stores in ~/.routingmagic/.env, 0600 perms)
 - `caveman_integration.py` — Caveman compression pipeline (65% output savings, quality guardrails)
 - `metrics_collector.py` — SQLite token metrics + savings dashboard (/savings commands)
 - `caveman_quality_loop.py` — auto-downgrade on confusion, feedback collection, self-improving prompts
-- `model_registry_updater.py` — weekly OpenRouter model fetch, free model filtering, changelog
+- `model_registry_updater.py` — **daily dual-source fetch** (NVIDIA NIM + OpenRouter), free model filtering, health checks, changelog
 - `routing_learner.py` — per-task success rate tracking, model quality DB, lesson generation
 - `save_handler.py` — auto-updates project memory files after sessions
 - `glm5.py` — direct NVIDIA GLM-5.1 fallback script
-- `install.sh` — installer: zshrc + skill symlink + key setup
+- `dashboard_adapters.py` — source-specific SQLite adapters (Claude, OpenCode, Hermes, Codex, 9router, RoutingMagic)
+- `unified_scanner.py` — orchestrates adapters → unified usage_unified.db
+- `dashboard_server.py` — unified web dashboard on localhost:9898 (/dashboard command)
+- `install.sh` — installer: zshrc + skill symlink + key setup + dashboard init
+- `.github/workflows/update-models.yml` — daily GitHub Action for registry updates
+- `registry/` — versioned model registry (committed by GitHub Action)
 
 ## API key flow
 
@@ -46,8 +52,27 @@ No hardcoded paths. Users own their keys.
 
 ## Build/test
 
-No build step. Python 3.10+, `pip install openai python-dotenv`.
+No build step. Python 3.10+, `pip install openai python-dotenv aiohttp`.
 Tests in `tests/`: `python3 -m pytest tests/ -v`
+
+## Model Priority (Zero-Cost)
+
+**Tier 1 — NVIDIA NIM Direct (Primary)**: ~50 models, ~40 RPM, no credit card. Same models that cost $ on OpenRouter.
+- `nvidia/deepseek-ai/deepseek-v4-flash` — Coding
+- `nvidia/z-ai/glm-5.2` — Agent/Coding (1M ctx)
+- `nvidia/nvidia/nemotron-3-ultra-550b-a55b` — Flagship reasoning
+- `nvidia/qwen/qwen3-coder-480b-a35b-instruct` — Agentic coding
+- `nvidia/minimaxai/minimax-m2.7` — Financial modeling
+
+**Tier 2 — OpenRouter Free (Fallback)**: When NIM rate-limited
+- `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free`
+- `openrouter/poolside/laguna-s-2.1:free` — Best free coding (70.2% Terminal-Bench)
+- `openrouter/z-ai/glm-5.2:free`
+- `openrouter/cohere/north-mini-code:free`
+
+**Tier 3 — opencode Built-in (Last Resort)**
+- `opencode/nemotron-3-ultra-free`
+- `opencode/nemotron-3.5-lightning-free`
 
 ## Mythos-Inspired Features
 

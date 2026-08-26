@@ -1,8 +1,6 @@
 # RoutingMagic 🪄
 
-**Your AI coding assistant, right in the terminal.**
-
-No more copy-pasting code into browser tabs. RoutingMagic sits in your project directory, understands your codebase, and routes your questions to the best free AI model automatically.
+**Zero-cost AI routing for your terminal.** Routes prompts to the best free models across NVIDIA NIM (Tier 1), OpenRouter Free (Tier 2), and opencode Built-in (Tier 3) with automatic fallback chains, Model Council deliberation, token compression, and unified usage dashboard.
 
 ---
 
@@ -14,18 +12,46 @@ git clone https://github.com/prakharmishra2026/RoutingMagic.git ~/Projects/Routi
 cd ~/Projects/RoutingMagic
 chmod +x install.sh && ./install.sh
 
-# 2. Set up your API key (free)
-python3 setup_keys.py
+# 2. Add your API keys (auto-opens ~/.routingmagic/.env in your editor)
+# The installer creates ~/.routingmagic/.env with placeholders — just fill them in
 
 # 3. Start using it
 ask "What does this project do?"
 ```
 
-That's it. You only need one free [OpenRouter](https://openrouter.ai/keys) key.
+**That's it.** You only need one free key (NVIDIA NIM or OpenRouter).
 
 ---
 
-## The 4 Commands
+## Model Priority (Zero-Cost)
+
+| Tier | Source | Models | Rate Limit | Use Case |
+|------|--------|--------|------------|----------|
+| **1** | **NVIDIA NIM Direct** | 50+ | ~40 RPM | **Primary** — same models that cost $ on OpenRouter |
+| **2** | **OpenRouter Free** | 20+ | Shared bucket | Fallback when NIM rate-limited |
+| **3** | **opencode Built-in** | 2 | No key needed | Last resort |
+
+### Tier 1: NVIDIA NIM (Recommended — No credit card)
+- `deepseek-ai/deepseek-v4-flash` — **Coding**
+- `z-ai/glm-5.2` — **Agent/Coding (1M context)**
+- `nvidia/nemotron-3-ultra-550b-a55b` — **Flagship reasoning**
+- `qwen/qwen3-coder-480b-a35b-instruct` — **Agentic coding (256K)**
+- `minimaxai/minimax-m2.7` — **Financial modeling**
+- `google/gemma-4-31b-it` — **General + vision**
+
+### Tier 2: OpenRouter Free (When NIM rate-limited)
+- `poolside/laguna-s-2.1:free` — Best free coding (70.2% Terminal-Bench)
+- `nvidia/nemotron-3-ultra-550b-a55b:free`
+- `z-ai/glm-5.2:free`
+- `cohere/north-mini-code:free`
+
+### Tier 3: opencode Built-in (No API key)
+- `nemotron-3-ultra-free`
+- `nemotron-3.5-lightning-free`
+
+---
+
+## The 4 Core Commands
 
 | Command | What it does |
 |---------|-------------|
@@ -36,9 +62,9 @@ That's it. You only need one free [OpenRouter](https://openrouter.ai/keys) key.
 
 All MC variants work case-insensitively: `ask mc`, `ask MC`, `ask Mc`, `ask mC` all work.
 
-### REPL mode (conversations)
+### REPL Mode (Conversations)
 
-Just type `ask` (or any of the above without a question) to enter interactive mode:
+Just type `ask` (or any variant without a question) to enter interactive mode:
 ```
 >>> What does this function do?
 >>> /savings          # see your token savings
@@ -46,7 +72,7 @@ Just type `ask` (or any of the above without a question) to enter interactive mo
 >>> exit
 ```
 
-### Slash commands (inside REPL)
+### Slash Commands (Inside REPL)
 
 | Command | What it does |
 |---------|-------------|
@@ -56,6 +82,7 @@ Just type `ask` (or any of the above without a question) to enter interactive mo
 | `/savings breakdown` | Breakdown by component |
 | `/savings models` | Model efficiency ranking |
 | `/savings export` | Export as CSV |
+| `/dashboard` | Open unified usage dashboard (localhost:9898) |
 | `/cost` | Session cost and rate limits |
 | `/model` | Switch active model |
 | `/safe` | Git snapshot (undo point) |
@@ -66,7 +93,7 @@ Just type `ask` (or any of the above without a question) to enter interactive mo
 | `/paste` | Paste clipboard images for analysis |
 | `/caveman-feedback <good\|terse\|...>` | Report compression quality |
 
-### One-shot mode (single answers)
+### One-Shot Mode (Single Answers)
 
 ```
 ask "Explain this error"
@@ -77,59 +104,25 @@ ask MC deep "Design the auth system"
 
 ---
 
-## 📋 Effortless Copy-Paste (`--paste` / `/paste`) — No Terminal Paste Errors!
+## 📊 Unified Usage Dashboard
 
-Pasting large, multi-line Markdown files, plans, or code directly into a terminal prompt often causes confusing shell errors (like `zsh: command not found`).
-
-With RoutingMagic, **you never paste into the terminal screen at all.** Instead, you use the `--paste` flag, which tells RoutingMagic to grab whatever is currently copied to your Mac clipboard.
-
-### How it works (Step-by-Step Example)
-
-#### Step 1: Copy any text or document (`Cmd + C`)
-Highlight your Markdown plan, code snippet, or error log in any editor or browser and press **`Cmd + C`** to copy it.
-
-#### Step 2: Type `--paste` in your terminal
-Do **not** press `Cmd + V` in your terminal. Instead, literally type `--paste` after your command:
+Track usage across **all your AI tools** in one place:
 
 ```bash
-# Literally type this exact command and press Enter:
-ask MC --paste
+dashboard open      # Scan + open browser at localhost:9898
+dashboard scan      # Scan all sources (Claude, OpenCode, Hermes, Codex, 9router, RoutingMagic)
+dashboard stop      # Stop the dashboard server
 ```
 
-RoutingMagic automatically reads the copied text straight from your clipboard:
-```text
-[Clipboard] Loaded 4,812 characters (142 lines) of text from clipboard.
-[LLM Council] Starting deliberation...
-```
+Or from inside REPL: `/dashboard`
 
----
-
-### Adding Instructions to Your Copied Text
-Want the Model Council to review or audit the document you just copied? Just add your question in quotes after `--paste`:
-
-```bash
-# 1. Copy your plan/doc with Cmd + C
-# 2. Run:
-ask MC --paste "Audit this implementation plan and list 3 weaknesses"
-
-# Or with normal ask / deep context:
-ask --paste "Summarize this text"
-ask deep --paste "Find bugs in this code snippet"
-```
-
-### Inside Interactive Mode (`>>>`)
-If you are already inside an interactive chat session (`>>>`), simply type `/paste`:
-```text
->>> /paste
-[Clipboard] Loaded 4,812 characters (142 lines) of text from clipboard.
-```
-*(Note: `/paste` works automatically for **both Text and Images** copied to your macOS clipboard!)*
+**Sources tracked:** Claude Code, OpenCode, Hermes, Codex CLI, 9router, RoutingMagic internal metrics
 
 ---
 
 ## 🪨 Caveman Compression (Token Savings)
 
-RoutingMagic compresses AI responses automatically to save tokens and money — while **never** breaking code, error messages, or file paths.
+Automatically compresses AI responses to save tokens — **never breaks code, errors, or file paths**.
 
 | Level | Output Savings | Best For |
 |-------|---------------|----------|
@@ -148,43 +141,150 @@ Type `/savings` in any session to see your token savings dashboard.
 
 ---
 
-## 🔄 Self-Improving System
+## 🧠 Model Council (3-Model Deliberation)
 
-RoutingMagic gets better the more you use it:
+`ask MC "your question"` triggers **three diverse models** to debate your question:
 
-- **Model registry**: Auto-fetches latest free models from OpenRouter every week
-- **Routing learner**: Tracks which models work best for your tasks
-- **Quality loop**: Detects when compression is too aggressive and adjusts
-- **Lesson persistence**: Records what works and what doesn't
+- **Models selected from different providers** (NIM, OpenRouter, direct APIs)
+- **Health-checked** — never picks degraded models
+- **Synthesized answer** — best insights from all three
+
+```bash
+ask MC "Should we use Postgres or SQLite for this project?"
+ask deep MC "Design the authentication system"
+```
 
 ---
 
-## 🔐 Universal Multi-Provider Free Models & Secure Key Setup
+## ⚡ Power User Aliases
 
-RoutingMagic is **never locked into a single provider**. It dynamically pools and refreshes free models across **OpenRouter**, **Google Gemini**, **Z.ai (Zhipu AI)**, **NVIDIA NIM**, **DeepSeek**, and **OpenAI** so you always get the fastest, highest-quality free models available.
-
-### Step-by-Step Interactive Key Setup
-Run the interactive setup script in your terminal:
+### NVIDIA NIM Direct (Tier 1 — Primary)
 ```bash
-python3 ~/Projects/RoutingMagic/setup_keys.py
+nd   # DeepSeek-V4-Flash (coding)
+ng   # GLM-5.2 (agent/coding 1M ctx)
+nm   # MiniMax-M2.7 (financial)
+nk   # Qwen3-Coder-480B (agentic coding)
+nl   # Nemotron-3-Ultra-550B (flagship reasoning)
+nu   # Nemotron-3-Super-120B (agent/multi-step)
+ngg  # Gemma-4-31B-IT (general + vision)
 ```
 
-The wizard guides you through 5 optional/recommended API keys:
-1. **OpenRouter API Key (`OPENROUTER_API_KEY`)** — Recommended hub for dynamic `:free` models (including DeepSeek-R1 & V3 free pools) & Model Council. Get free key at [openrouter.ai/keys](https://openrouter.ai/keys).
-2. **Google Gemini API Key (`GEMINI_API_KEY`)** — Direct access to Google's fast free tier (`Gemini 2.5 Flash`, `Gemini 2.0 Flash`). Get free key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
-3. **Z.ai / Zhipu AI API Key (`ZAI_API_KEY`)** — Direct access to Zhipu AI's **permanent free tier** (`GLM-4.7-Flash`, `GLM-4.5-Flash`). Get free key at [open.bigmodel.cn](https://open.bigmodel.cn).
-4. **NVIDIA NIM API Key (`NVAPI_KEY`)** — Direct access to NVIDIA's free tier (`Nemotron Ultra 120B`, `Llama 3.3 70B`). Get free key at [build.nvidia.com](https://build.nvidia.com/nim/dashboard).
-5. **OpenAI API Key (`OPENAI_API_KEY`)** — Direct access to `GPT-5`, `o3-mini`, `GPT-4o-mini`. *(DeepSeek direct API key `DEEPSEEK_API_KEY` is also supported automatically)*.
-
-```text
-✓ Keys saved securely to ~/.routingmagic/.env
-  File permissions: 600 (owner read/write only)
-  Keys are NOT in any git repo or shared location.
+### OpenRouter Free (Tier 2 — Fallback)
+```bash
+cc   # Poolside Laguna S 2.1 (best free coding)
+ccc  # Qwen3-Coder (UI/frontend/coder)
+ccz  # GLM-5.2 (agent/coding)
+ccg  # GPT-OSS-120B (reasoning + tools)
+ccx  # Qwen3-Next-80B (general/agentic)
+ccm  # Gemma-4-31B-IT (resilient general)
+ccu  # Nemotron-3-Ultra-550B (flagship)
+cca  # Nemotron-3-Super-120B (large context)
+cch  # Laguna XS 2.1 (quick edits)
+ccb  # Smart auto-route
 ```
 
-### 🌐 Multi-Provider Free Model Pooling & Auto-Refresh
-* **Zero Provider Lock-In:** If OpenRouter rate-limits a model or returns a `404`, RoutingMagic automatically fails over to your direct **Google Gemini**, **Z.ai (`GLM-4.5-Flash`)**, or **NVIDIA NIM** free models in milliseconds.
-* **Timely Auto-Refresh:** RoutingMagic automatically fetches and updates live model registries on a weekly schedule (`[ModelRegistry] Weekly update needed...`) so your Model Council always utilizes the latest working free models across all supported providers.
+### Direct Fast Free (Gemini, Z.ai)
+```bash
+ccgem  # Google Gemini 2.5 Flash (direct)
+ccglm  # Z.ai GLM-4.5 Flash (direct)
+```
+
+### Native & OpenAI
+```bash
+ccs  # Claude Sonnet 4.6 (native)
+cco  # Claude Opus 4.8 (native)
+ccq  # Claude Haiku 4.5 (native)
+op   # GPT-5 (OpenAI direct)
+opt  # GPT-4-Turbo (OpenAI direct)
+opo3 # o3-mini (OpenAI direct)
+```
+
+---
+
+## 🔄 Daily Auto-Updates
+
+**GitHub Action runs daily at 1 AM UTC** to fetch latest free models:
+
+1. Fetches NVIDIA NIM models (using `NVAPI_KEY` secret)
+2. Fetches OpenRouter free models (using `OPENROUTER_API_KEY` secret)
+3. Merges with priority: NIM → OpenRouter → opencode
+4. Runs health checks on all models
+5. Commits updated `registry/` to repo
+
+**To enable for your fork:**
+1. Go to Settings → Secrets and variables → Actions
+2. Add: `NVAPI_KEY` (from https://build.nvidia.com/nim/dashboard)
+3. Add: `OPENROUTER_API_KEY` (from https://openrouter.ai/keys)
+
+---
+
+## 🔐 Secure Key Setup
+
+On first install, `~/.routingmagic/.env` is **auto-created with placeholders** and **auto-opens in your editor**:
+
+```bash
+# TIER 1: NVIDIA NIM (Primary — get at build.nvidia.com/nim/dashboard)
+NVAPI_KEY=nvapi-YOUR_KEY_HERE
+
+# TIER 2: OpenRouter Free (Fallback — get at openrouter.ai/keys)
+OPENROUTER_API_KEY=sk-or-v1-YOUR_KEY_HERE
+
+# OPTIONAL: Direct providers
+GEMINI_API_KEY=AIza-YOUR_KEY_HERE
+ZAI_API_KEY=YOUR_KEY_HERE
+OPENAI_API_KEY=sk-YOUR_KEY_HERE
+```
+
+**File permissions:** 600 (owner read/write only) — never in git.
+
+### Get Your Keys
+
+| Provider | Free Tier | Get Key |
+|----------|-----------|---------|
+| **NVIDIA NIM** | 50+ models, 40 RPM | https://build.nvidia.com/nim/dashboard |
+| **OpenRouter** | 20+ free models | https://openrouter.ai/keys |
+| **Google Gemini** | Flash models | https://aistudio.google.com/apikey |
+| **Z.ai / Zhipu** | GLM-4.5-Flash permanent | https://open.bigmodel.cn |
+| **OpenAI** | GPT-5, o3-mini | https://platform.openai.com/api-keys |
+
+---
+
+## 🛠️ Advanced Features
+
+### Vision Paste
+Copy an image/screenshot (`Cmd+C`), then:
+```bash
+ask "Analyze this chart" --paste
+```
+
+### Git Snapshot Failsafe
+```bash
+/safe        # Creates git snapshot before risky operations
+/restore     # Undo to last /safe
+```
+
+### Run/Test Auto-Fix
+```bash
+/run pytest tests/        # If fails, AI fixes and retries
+/test npm test            # Same for tests
+```
+
+### Smart Routing (MoE-Style)
+Automatically selects best model for task type:
+- **Coding** → Qwen3-Coder / DeepSeek-V4-Flash
+- **Reasoning** → Nemotron Ultra / GPT-OSS-120B
+- **Long Context** → Nemotron 3 Super 120B (1M)
+- **Financial** → MiniMax-M2.7
+- **General** → Gemma 4 31B
+
+---
+
+## 🔄 Self-Improving System
+
+- **Daily model registry updates** via GitHub Action
+- **Routing learner** tracks which models work best for your tasks
+- **Quality loop** detects when compression is too aggressive
+- **Lesson persistence** records what works and what doesn't
 
 ---
 
@@ -193,32 +293,25 @@ The wizard guides you through 5 optional/recommended API keys:
 | Problem | Fix |
 |---------|-----|
 | "No API keys found" | Run `python3 ~/Projects/RoutingMagic/setup_keys.py` |
-| "OpenRouter key not found" | Get a free key at https://openrouter.ai/keys |
-| Council not working | Council requires OpenRouter key |
-| Output too terse | Type `/caveman-feedback too terse` to lower compression |
-| Want more savings | Install Caveman skill: `npx skills@latest add JuliusBrussee/skills/caveman` |
-
----
-
-## Power User Aliases
-
-Direct model access (bypasses smart routing):
-
-| Alias | Model |
-|-------|-------|
-| `cc` | Qwen3-Coder (best free code) |
-| `ccc` | Model Council |
-| `ccg` | Gemma-4-31B (best free general) |
-| `ccm` | Nemotron Super 120B (reasoning) |
-| `ccu` | Nemotron Ultra 550B (flagship) |
+| "OpenRouter key not found" | Get free key at https://openrouter.ai/keys |
+| Council not working | Council requires OpenRouter or NIM key |
+| Output too terse | Type `/caveman-feedback too terse` |
+| Model failed | Auto-fallback to next in chain (never blocks) |
 
 ---
 
 ## Why RoutingMagic?
 
-- **Zero cost**: All models are free via OpenRouter
-- **Automatic fallback**: If one model fails, the next one takes over
-- **Context-aware**: Reads your project files for relevant context
+- **Zero cost**: All models free via NVIDIA NIM + OpenRouter
+- **Automatic fallback**: Never blocks — chains through 37+ models
+- **Context-aware**: Reads project files for relevant context
 - **Token-efficient**: Caveman compression saves 65% on output
-- **Self-improving**: Learns from your usage patterns
-- **Your keys, your control**: No shared API keys, no cloud dependency
+- **Self-improving**: Daily model updates, learns from usage
+- **Your keys, your control**: Local `.env`, 600 perms, no cloud dependency
+- **Unified dashboard**: Track all AI tools (Claude, OpenCode, Codex, etc.) in one view
+
+---
+
+## License
+
+MIT — Use freely, modify, distribute.

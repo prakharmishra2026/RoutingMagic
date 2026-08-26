@@ -11,7 +11,6 @@ Supports:
 """
 import os
 import sys
-import socket
 import re
 import json
 import subprocess
@@ -27,12 +26,14 @@ import termios
 import concurrent.futures
 import urllib.request
 from pathlib import Path
+from datetime import datetime, timezone
 from openai import OpenAI
 from dotenv import load_dotenv
 from caveman_integration import get_caveman
 from metrics_collector import record_session, format_savings_dashboard, get_savings_summary, get_savings_breakdown, get_model_efficiency_ranking, export_savings_csv, get_current_session_savings, SessionMetrics
 from caveman_quality_loop import get_quality_loop
 from routing_learner import get_routing_learner
+from model_registry_updater import get_fallback_chain as get_dynamic_fallback_chain, load_registry, get_reasoning_models, get_coding_models, get_long_context_models
 
 # --- Shell command security helpers ---
 # Characters that enable subshell execution or command chaining.
@@ -76,106 +77,97 @@ def _has_any_api_access():
 
 
 def _get_fallback_chain():
-    """Build fallback chain dynamically based on available API keys."""
-    has_or = bool(os.getenv("OPENROUTER_API_KEY"))
-    has_gem = bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
-    has_zai = bool(os.getenv("ZAI_API_KEY") or os.getenv("ZHIPUAI_API_KEY"))
-    has_nv = bool(os.getenv("NVAPI_KEY") or os.getenv("NVIDIA_API_KEY"))
-    has_oai = bool(os.getenv("OPENAI_API_KEY"))
+    """Get dynamic fallback chain from model registry (NIM → OpenRouter → opencode → paid)."""
+    try:
+        # Use registry directory from repo (versioned) or fallback to home
+        repo_registry = Path(__file__).parent / "registry"
+        home_registry = Path.home() / ".routingmagic" / "registry"
+        registry_dir = repo_registry if repo_registry.exists() else home_registry
+        
+        chain = get_dynamic_fallback_chain("general", registry_dir)
+        if chain:
+            return chain
+    except Exception as e:
+        print(f"[Fallback] Registry unavailable, using hardcoded: {e}")
     
-    chain = []
-    
-    # Add OpenRouter free models
-    if has_or:
-        chain.extend([
-            "google/gemma-4-31b-it:free",
-            "nvidia/nemotron-3-super-120b-a12b:free",
-            "openai/gpt-oss-120b:free",
-            "qwen/qwen3-coder:free",
-            "meta-llama/llama-3.3-70b-instruct:free",
-        ])
-    
-    # If NVIDIA key available, add NVIDIA NIM models
-    if has_nv:
-        chain.extend([
-            "nvidia/nemotron-3-ultra-550b-a55b",
-            "nvidia/llama-3.3-nemotron-super-49b-v1.5",
-            "google/gemma-4-31b-it",
-        ])
-    
-    # If OpenAI key available, add OpenAI models
-    if has_oai:
-        chain.extend([
-            "openai/gpt-5",
-            "openai/gpt-4-turbo",
-            "openai/o3-mini",
-        ])
-    
-    # Add paid fallback as last resort
-    chain.append("gemini-2.5-pro")
-    
-    # Remove duplicates while preserving order
-    seen = set()
-    unique_chain = []
-    for m in chain:
-        if m not in seen:
-            seen.add(m)
-            unique_chain.append(m)
-    
-    return unique_chain
+    # Ultimate hardcoded fallback
+    return [
+        "nvidia/deepseek-ai/deepseek-v4-flash",
+        "nvidia/z-ai/glm-5.2",
+        "nvidia/nvidia/nemotron-3-ultra-550b-a55b",
+        "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
+        "openrouter/poolside/laguna-s-2.1:free",
+        "opencode/nemotron-3-ultra-free",
+        "gemini-2.5-pro",
+    ]
 
 
 def _get_council_fallback_models():
-    """Build council fallback models spread across DIFFERENT providers for resilience.
+    """Get council fallback models from registry, spread across providers for resilience."""
+    try:
+        repo_registry = Path(__file__).parent / "registry"
+        home_registry = Path.home() / ".routingmagic" / "registry"
+        registry_dir = repo_registry if repo_registry.exists() else home_registry
+        
+        registry = load_registry(registry_dir)
+        all_models = registry.nim_models + registry.openrouter_models + registry.opencode_models
+        
+        # Filter out degraded models
+        now = datetime.now(timezone.utc)
+        healthy_models = [
+            m for m in all_models
+            if not m.degraded_until or datetime.fromisoformat(m.degraded_until.replace("Z", "+00:00")) < now
+        ]
+        
+        if not healthy_models:
+            raise ValueError("No healthy models in registry")
+        
+        # Spread across sources: NIM, OpenRouter, opencode
+        chain = []
+        seen = set()
+        
+        # Priority: NIM direct (different provider), then OpenRouter, then opencode
+        for source in ["nim", "openrouter", "opencode"]:
+            for m in healthy_models:
+                if m.source == source and m.id not in seen:
+                    chain.append(m.id)
+                    seen.add(m.id)
+                    if len(chain) >= 6:
+                        break
+            if len(chain) >= 6:
+                break
+        
+        # Add direct provider models if API keys available (Gemini, Z.ai)
+        has_gem = bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
+        has_zai = bool(os.getenv("ZAI_API_KEY") or os.getenv("ZHIPUAI_API_KEY"))
+        
+        if has_gem and "gemini-2.5-flash" not in seen:
+            chain.insert(0, "gemini-2.5-flash")
+        if has_zai and "glm-4.5-flash" not in seen:
+            chain.insert(1 if has_gem else 0, "glm-4.5-flash")
+        
+        if chain:
+            return chain[:6]
+    except Exception as e:
+        print(f"[Council] Registry unavailable, using hardcoded: {e}")
     
-    Key design: Each council member should ideally use a different provider's
-    API endpoint so that rate limits, outages, and 404s on one provider
-    cannot take down multiple members simultaneously.
-    """
-    has_or = bool(os.getenv("OPENROUTER_API_KEY"))
+    # Hardcoded fallback
+    chain = []
     has_gem = bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
     has_zai = bool(os.getenv("ZAI_API_KEY") or os.getenv("ZHIPUAI_API_KEY"))
+    has_or = bool(os.getenv("OPENROUTER_API_KEY"))
     has_nv = bool(os.getenv("NVAPI_KEY") or os.getenv("NVIDIA_API_KEY"))
     
-    # Priority: spread across providers first, then fill from OpenRouter
-    chain = []
-    
-    # Slot 1: Direct Gemini (own rate limits, fast, free tier)
     if has_gem:
         chain.append("gemini-2.5-flash")
-    
-    # Slot 2: Direct Z.ai (own rate limits, permanent free tier)
     if has_zai:
         chain.append("glm-4.5-flash")
-    
-    # Slot 3+: OpenRouter free models (shared rate limit bucket)
     if has_or:
-        chain.extend([
-            "google/gemma-4-27b-it:free",
-            "qwen/qwen3-coder:free",
-            "nvidia/nemotron-3-super-120b-a12b:free",
-            "meta-llama/llama-3.3-70b-instruct:free",
-        ])
-    
-    # Slot 4+: NVIDIA NIM (own rate limits)
+        chain.extend(["google/gemma-4-31b-it:free", "nvidia/nemotron-3-super-120b-a12b:free"])
     if has_nv:
-        chain.extend([
-            "nvidia/nemotron-3-ultra-550b-a55b",
-            "nvidia/llama-3.3-nemotron-super-49b-v1.5",
-        ])
+        chain.extend(["nvidia/nemotron-3-ultra-550b-a55b", "nvidia/llama-3.3-nemotron-super-49b-v1.5"])
     
-    if not chain:
-        chain = ["gemini-2.5-flash"]
-    
-    # Remove duplicates while preserving order
-    seen = set()
-    unique_chain = []
-    for m in chain:
-        if m not in seen:
-            seen.add(m)
-            unique_chain.append(m)
-    
-    return unique_chain
+    return chain[:6] if chain else ["gemini-2.5-flash"]
 
 
 def _check_api_keys():
@@ -340,16 +332,6 @@ def get_deep_context():
             
     print("\033[91m[Smart Router] All summarizer models failed. Falling back to instant context.\033[0m")
     return get_instant_context()
-
-def is_port_open(ip, port):
-    """Check if a TCP port is open. Uses context manager to ensure socket is always closed."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.settimeout(0.2)
-        try:
-            s.connect((ip, int(port)))
-            return True
-        except Exception:
-            return False
 
 # Check API keys
 _check_api_keys()
@@ -774,60 +756,141 @@ def smart_route(prompt):
     # Classify task type for MoE-style routing
     task_type = classify_task(prompt)
     
+def smart_route(prompt):
+    """Intelligently routes the prompt to the best available free model.
+    
+    Enhanced with Mythos-inspired techniques:
+    - ACT: Effort-aware routing (high-effort tasks get reasoning models)
+    - MoE-style: Task-specific specialist selection
+    - Registry-driven: Uses dynamic model registry for latest models
+    Updated August 2026: Uses NIM direct + OpenRouter free + opencode built-in
+    """
+    prompt_lower = prompt.lower()
+    
+    # Classify task type for MoE-style routing
+    task_type = classify_task(prompt)
+    
     # Get effort level (ACT-inspired)
     effort = select_reasoning_effort(prompt, task_type)
     
     # 0. Council Deliberation -> Multi-agent council protocol
     if re.search(r'\b(council|deliberate|critically? audit|council-deliberation|llm-council|council deliberation)\b', prompt_lower):
         return "council", "llm_council_deliberation"
-        
+    
+    # Try to get dynamic models from registry
+    dynamic_models = None
+    try:
+        repo_registry = Path(__file__).parent / "registry"
+        home_registry = Path.home() / ".routingmagic" / "registry"
+        registry_dir = repo_registry if repo_registry.exists() else home_registry
+        registry = load_registry(registry_dir)
+        all_models = registry.nim_models + registry.openrouter_models + registry.opencode_models
+        dynamic_models = all_models
+    except Exception:
+        pass
+    
+    # Helper to find best model from registry for a category
+    def find_best_model(category, prefer_reasoning=False):
+        if not dynamic_models:
+            return None
+        candidates = [m for m in dynamic_models if m.category == category]
+        if not candidates:
+            return None
+        if prefer_reasoning:
+            candidates = [m for m in candidates if m.has_reasoning]
+        if not candidates:
+            candidates = [m for m in dynamic_models if m.category == category]
+        if not candidates:
+            return None
+        candidates.sort(key=lambda x: x.score, reverse=True)
+        return candidates[0].id
+    
     # 1. Deep Reasoning (high effort) -> Reasoning-capable models
     if effort == "high":
         # Prefer models with reasoning tokens
         if re.search(r'\b(prove|derive|formal|axiom|theorem|recursive|latent|multi.?hop|deep reasoning|complex logic)\b', prompt_lower):
-            # GPT-OSS-120B has reasoning effort support, most reliable
+            model = find_best_model("reasoning_flagship", prefer_reasoning=True) or find_best_model("reasoning", prefer_reasoning=True)
+            if model:
+                return model, "mythos_reasoning_effort"
             return "openai/gpt-oss-120b:free", "mythos_reasoning_effort"
         
         if re.search(r'\b(math|financial analysis|tradeoffs|trade-offs|step-by-step|chain of thought|deep analysis)\b', prompt_lower):
-            # Nemotron Ultra for deep reasoning
+            model = find_best_model("reasoning_flagship", prefer_reasoning=True) or find_best_model("reasoning", prefer_reasoning=True)
+            if model:
+                return model, "mythos_deep_reasoning"
             return "nvidia/nemotron-3-ultra-550b-a55b:free", "mythos_deep_reasoning"
         
         # Phi-4 Mini Reasoning for focused reasoning
         if re.search(r'\b(analyze|critically|audit|algorithm|proof|equation|derivation)\b', prompt_lower):
+            model = find_best_model("reasoning", prefer_reasoning=True)
+            if model:
+                return model, "mythos_reasoning_focused"
             return "microsoft/phi-4-mini-reasoning:free", "mythos_reasoning_focused"
         
-        # Default high-effort: GPT-OSS-120B (most reliable reasoning model, 19 providers)
+        # Default high-effort: best reasoning model
+        model = find_best_model("reasoning_flagship") or find_best_model("reasoning")
+        if model:
+            return model, "mythos_high_effort"
         return "openai/gpt-oss-120b:free", "mythos_high_effort"
     
-    # 2. Long Document RAG & Heavy Agentic Planning -> Nemotron 3 Super 120B (1M context)
+    # 2. Long Document RAG & Heavy Agentic Planning -> Best long-context model
     if re.search(r'\b(large repo|long doc|architecture|strategy|plan|tool orchestration|codebase reasoning|massive context|rag|planning)\b', prompt_lower):
+        model = find_best_model("long_context")
+        if model:
+            return model, "long_context_agentic"
         return "nvidia/nemotron-3-super-120b-a12b:free", "long_context_agentic"
-        
+    
     # 3. Code Generation & Fixing -> Qwen3 Coder (MoE-style: coding specialist)
     if re.search(r'\b(code|fix bug|refactor|write function|regex|sql|snippet|debug|react|css|html|typescript|python|script)\b', prompt_lower):
+        model = find_best_model("coding")
+        if model:
+            return model, "fast_coding"
         return "qwen/qwen3-coder:free", "fast_coding"
-        
-    # 4. Agentic Workflows & Tool Use -> Llama 3.3 70B (MoE-style: tool specialist)
+    
+    # 4. Agentic Workflows & Tool Use -> Best agentic model
     if re.search(r'\b(n8n|tool call|json extraction|workflow|extract data|structure this|json)\b', prompt_lower):
+        model = find_best_model("agentic")
+        if model:
+            return model, "n8n_tool_calling"
         return "meta-llama/llama-3.3-70b-instruct:free", "n8n_tool_calling"
-        
+    
     # 5. Vision / Chart Parsing -> Nemotron VL 8B (NVIDIA NIM)
     if re.search(r'\b(image|chart|graph|vision|parse screenshot|look at this picture)\b', prompt_lower):
+        model = find_best_model("vision")
+        if model:
+            return model, "stock_chart_vision"
         return "nvidia/llama-3.1-nemotron-nano-vl-8b-v1", "stock_chart_vision"
-        
+    
     # 6. Financial Document OCR -> Nemotron OCR v1 (NVIDIA NIM)
     if re.search(r'\b(ocr|pdf|annual report|bse filing|table extraction|scan document)\b', prompt_lower):
         return "nvidia/nemotron-ocr-v1", "financial_doc_ocr"
-        
+    
     # 7. Voice / Audio -> Nemotron Voicechat (NVIDIA NIM)
     if re.search(r'\b(voice|audio|speech|listen|transcribe)\b', prompt_lower):
         return "nvidia/nemotron-voicechat", "voice_trigger"
-
+    
     # 8. Omni-modal fallback -> Nemotron Nano Omni 30B (NVIDIA NIM)
     if re.search(r'\b(video|multimodal|omni)\b', prompt_lower):
         return "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", "multimodal_omni"
-        
-    # Default General Tasks -> Gemma 4 31B (highest free quality, 11 providers)
+    
+    # 9. Financial modeling -> MiniMax-M2.7 (NVIDIA NIM)
+    if re.search(r'\b(financial|stock|valuation|portfolio|trading|quant|model)\b', prompt_lower):
+        model = find_best_model("long_context")  # MiniMax-M2.7 is long_context
+        if model and "minimax" in model:
+            return model, "financial_modeling"
+        return "minimaxai/minimax-m2.7", "financial_modeling"
+    
+    # 10. Security / Audit -> Best reasoning model
+    if re.search(r'\b(security|audit|vulnerability|threat|pentest|secure)\b', prompt_lower):
+        model = find_best_model("reasoning_flagship") or find_best_model("reasoning")
+        if model:
+            return model, "security_audit"
+        return "nvidia/nemotron-3-ultra-550b-a55b:free", "security_audit"
+    
+    # Default General Tasks -> Best general model
+    model = find_best_model("general")
+    if model:
+        return model, "default_general"
     return "google/gemma-4-31b-it:free", "default_general"
 
 
@@ -1533,59 +1596,111 @@ def run_council(prompt, use_deep_context=False):
     # so that rate limits, outages, and 404s on one provider cannot
     # compromise multiple council members simultaneously.
     #
-    # With all 5 keys configured, the council looks like:
-    #   Member 1: gemini-2.5-flash     (Direct Google Gemini API)
-    #   Member 2: glm-4.5-flash        (Direct Z.ai API)
-    #   Member 3: <best OpenRouter free model for task type>
-    #
-    # Each member uses a DIFFERENT API endpoint with its own rate limit.
+    # Selection strategy: Randomly pick 3 models from different providers
+    # Priority: NIM direct, OpenRouter free, direct providers (Gemini, Z.ai)
     # ─────────────────────────────────────────────────────────────────
+    import random
+    
     has_gem = bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
     has_zai = bool(os.getenv("ZAI_API_KEY") or os.getenv("ZHIPUAI_API_KEY"))
     has_or = bool(os.getenv("OPENROUTER_API_KEY"))
+    has_nv = bool(os.getenv("NVAPI_KEY") or os.getenv("NVIDIA_API_KEY"))
     
+    # Load registry for dynamic model selection
     council_models = []
-    excluded = set()
+    try:
+        repo_registry = Path(__file__).parent / "registry"
+        home_registry = Path.home() / ".routingmagic" / "registry"
+        registry_dir = repo_registry if repo_registry.exists() else home_registry
+        
+        registry = load_registry(registry_dir)
+        all_models = registry.nim_models + registry.openrouter_models + registry.opencode_models
+        
+        # Filter out degraded models
+        now = datetime.now(timezone.utc)
+        healthy_models = [
+            m for m in all_models
+            if not m.degraded_until or datetime.fromisoformat(m.degraded_until.replace("Z", "+00:00")) < now
+        ]
+        
+        if healthy_models:
+            # Group by source for provider diversity
+            by_source = {"nim": [], "openrouter": [], "opencode": []}
+            for m in healthy_models:
+                if m.source in by_source:
+                    by_source[m.source].append(m)
+            
+            # Score and sort within each source
+            for src in by_source:
+                by_source[src].sort(key=lambda x: x.score, reverse=True)
+            
+            # Randomly select from top 5 of each source for diversity
+            candidates = []
+            for src in ["nim", "openrouter", "opencode"]:
+                top_models = by_source[src][:5]
+                if top_models:
+                    candidates.append(random.choice(top_models))
+            
+            # Add direct provider models if keys available
+            if has_gem:
+                candidates.append("gemini-2.5-flash")  # Direct Google
+            if has_zai:
+                candidates.append("glm-4.5-flash")     # Direct Z.ai
+            
+            # Shuffle and pick up to 3 ensuring provider diversity
+            random.shuffle(candidates)
+            selected = []
+            seen_sources = set()
+            
+            for c in candidates:
+                if len(selected) >= 3:
+                    break
+                src = "direct"
+                if c in [m.id for m in healthy_models if m.source == "nim"]:
+                    src = "nim"
+                elif c in [m.id for m in healthy_models if m.source == "openrouter"]:
+                    src = "openrouter"
+                elif c in [m.id for m in healthy_models if m.source == "opencode"]:
+                    src = "opencode"
+                elif c == "gemini-2.5-flash":
+                    src = "google"
+                elif c == "glm-4.5-flash":
+                    src = "zai"
+                
+                if src not in seen_sources:
+                    selected.append(c)
+                    seen_sources.add(src)
+            
+            # If we have less than 3, fill from fallback chain
+            if len(selected) < 3:
+                fallback_chain = _get_council_fallback_models()
+                for fb in fallback_chain:
+                    if len(selected) >= 3:
+                        break
+                    if fb not in selected:
+                        selected.append(fb)
+            
+            council_models = selected[:3]
     
-    # Slot 1: Direct Gemini (isolated rate limits, fast, reliable)
-    if has_gem:
-        council_models.append("gemini-2.5-flash")
-        excluded.add("gemini-2.5-flash")
-    
-    # Slot 2: Direct Z.ai (isolated rate limits, permanent free tier)
-    if has_zai:
-        council_models.append("glm-4.5-flash")
-        excluded.add("glm-4.5-flash")
-    
-    # Slot 3: Best OpenRouter free model for the task type (adds model diversity)
-    if models_list and has_or and len(council_models) < 3:
-        try:
-            if task_type == "coding":
-                or_model = select_coder(models_list, excluded)
-            elif task_type == "reasoning":
-                or_model = select_reasoning(models_list, excluded)
-            elif task_type == "agentic":
-                or_model = select_agentic(models_list, excluded)
-            else:
-                or_model = select_general(models_list, excluded)
-            if or_model not in council_models:
-                council_models.append(or_model)
-                excluded.add(or_model)
-        except Exception:
-            pass
-    
-    # Fill remaining slots from the multi-provider fallback chain
-    if len(council_models) < 3:
-        fallback_options = _get_council_fallback_models()
-        for fb in fallback_options:
-            if len(council_models) >= 3:
-                break
-            if fb not in council_models:
-                council_models.append(fb)
+    except Exception as e:
+        print(f"[Council] Registry selection failed ({e}), using fallback chain")
+        fallback_chain = _get_council_fallback_models()
+        council_models = fallback_chain[:3]
     
     # Safety net: always have at least 1 model
     if not council_models:
-        council_models = _get_council_fallback_models()[:3]
+        fallback_chain = _get_council_fallback_models()
+        council_models = fallback_chain[:3]
+    
+    # Ensure exactly 3 models (pad if needed)
+    while len(council_models) < 3:
+        fallback_chain = _get_council_fallback_models()
+        for fb in fallback_chain:
+            if fb not in council_models:
+                council_models.append(fb)
+                break
+        if len(council_models) >= 3:
+            break
 
     context_str = get_deep_context() if use_deep_context else get_instant_context()
     system_instruction = (
@@ -2508,6 +2623,32 @@ def repl(model, use_deep_context=False, session_context=None):
                 print(get_current_session_savings("current"))
             else:
                 print("Usage: /savings [total|breakdown|models|export|session]")
+            continue
+
+        # Unified Dashboard (multi-tool usage)
+        if line_stripped.startswith("/dashboard"):
+            import subprocess as _sp
+            parts = line_stripped.split()
+            subcmd = parts[1] if len(parts) > 1 else "open"
+            script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dashboard_server.py")
+            if subcmd == "scan":
+                print("\033[96m[Dashboard] Scanning all sources...\033[0m")
+                _sp.run([sys.executable, script, "scan"])
+                print("\033[92m[Dashboard] Scan complete.\033[0m")
+            elif subcmd in ("open", "start"):
+                import webbrowser as _wb
+                def _open_dash():
+                    import time as _t
+                    _t.sleep(1.5)
+                    _wb.open("http://localhost:9898")
+                _sp.Popen([sys.executable, script], stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
+                import threading as _th
+                _th.Thread(target=_open_dash, daemon=True).start()
+                print("\033[92m[Dashboard] Running at http://localhost:9898\033[0m")
+            elif subcmd == "stop":
+                print("\033[93m[Dashboard] Kill with: pkill -f dashboard_server.py\033[0m")
+            else:
+                print("Usage: /dashboard [open|scan|stop]")
             continue
 
         if line_stripped.startswith("/caveman-feedback"):
