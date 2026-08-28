@@ -39,12 +39,22 @@ jobs:
           python -m pip install --upgrade pip
           pip install aiohttp python-dotenv openai --break-system-packages
       
+      - name: Check API keys availability
+        id: keys
+        run: |
+          if [ -z "${{ secrets.NVAPI_KEY }}" ]; then
+            echo "has_nvidia_key=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_nvidia_key=true" >> $GITHUB_OUTPUT
+          fi
+      
       - name: Update model registry
         run: |
           python model_registry_updater.py --daily --output-dir ./registry
         env:
           NVAPI_KEY: ${{ secrets.NVAPI_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          SKIP_HEALTH_CHECKS: ${{ steps.keys.outputs.has_nvidia_key == 'false' && 'true' || 'false' }}
       
       - name: Check for changes
         id: changes
@@ -102,12 +112,22 @@ jobs:
           python -m pip install --upgrade pip
           pip install aiohttp python-dotenv openai --break-system-packages
       
+      - name: Check API keys availability
+        id: keys
+        run: |
+          if [ -z "${{ secrets.NVAPI_KEY }}" ]; then
+            echo "has_nvidia_key=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_nvidia_key=true" >> $GITHUB_OUTPUT
+          fi
+      
       - name: Run full health check
         run: |
           python model_registry_updater.py --daily --output-dir ./registry
         env:
           NVAPI_KEY: ${{ secrets.NVAPI_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          SKIP_HEALTH_CHECKS: ${{ steps.keys.outputs.has_nvidia_key == 'false' && 'true' || 'false' }}
       
       - name: Commit health check results
         run: |

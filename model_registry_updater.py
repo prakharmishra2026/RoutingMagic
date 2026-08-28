@@ -585,9 +585,15 @@ def apply_health_degradation(registry: Registry, degraded: Dict[str, str]):
 
 
 # ─── Main Update Flow ───────────────────────────────────────────────────
-def update_registry(registry_dir: Path = REGISTRY_DIR, run_health_checks: bool = False) -> Dict:
+def update_registry(registry_dir: Path = REGISTRY_DIR, do_health_checks: bool = False) -> Dict:
     """Main update function - fetch, process, and save."""
     global REGISTRY_DIR, MODEL_REGISTRY_FILE, MODEL_CHANGELOG_FILE, LAST_UPDATE_FILE, HEALTH_CACHE_FILE
+    
+    # Check for SKIP_HEALTH_CHECKS env var (set by GitHub Actions when NVIDIA key missing)
+    skip_health_env = os.getenv("SKIP_HEALTH_CHECKS", "false").lower() == "true"
+    if skip_health_env:
+        do_health_checks = False
+        print("[ModelRegistry] SKIP_HEALTH_CHECKS=true, skipping health checks")
     
     # Update global paths if registry_dir changed
     REGISTRY_DIR = registry_dir
@@ -628,7 +634,7 @@ def update_registry(registry_dir: Path = REGISTRY_DIR, run_health_checks: bool =
     log_changes(old_registry, new_registry)
     
     # Run health checks if requested
-    if run_health_checks:
+    if do_health_checks:
         degraded = asyncio.run(run_health_checks(new_registry))
         if degraded:
             apply_health_degradation(new_registry, degraded)
@@ -750,7 +756,7 @@ def main():
     
     if args.daily or args.force:
         run_health = not args.no_health_check and args.daily
-        result = update_registry(output_dir, run_health_checks=run_health)
+        result = update_registry(output_dir, do_health_checks=run_health)
         print(json.dumps(result, indent=2))
     else:
         # Just check if update needed
