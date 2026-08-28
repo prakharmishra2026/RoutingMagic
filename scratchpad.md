@@ -16,3 +16,42 @@
 
 ### Open issues
 - None! The Model Council is now highly resilient and fast.
+
+---
+
+## Session: GitHub Actions CI Fix & Dashboard Plan
+**Date**: Sat Aug 29 2026
+
+### What was done this session
+- **Fixed GitHub Actions workflow failure**: Workflow failed in 4 seconds due to two issues:
+  1. `actions/setup-python@v5` with `cache: 'pip'` requires `requirements.txt` or `pyproject.toml` — repo had neither
+  2. Health checks crashed when `NVAPI_KEY` secret not configured in GitHub repo settings
+- **Fixes applied**:
+  - Added `requirements.txt` for pip cache
+  - Removed `cache: 'pip'` temporarily (re-enabled with requirements.txt)
+  - Added "Check API keys availability" step in workflow
+  - Sets `SKIP_HEALTH_CHECKS=true` env var when NVAPI_KEY secret missing
+  - `model_registry_updater.py` now respects `SKIP_HEALTH_CHECKS` env var
+  - Renamed `run_health_checks` parameter to `do_health_checks` to avoid function shadowing bug
+- **Created Unified Dashboard Plan** (`UNIFIED_DASHBOARD_PLAN.md`):
+  - Adaptive scanner: auto-discovers active tools (8+ sources)
+  - Quota engine: multi-dimensional (rate limits, subscriptions, credits, custom caps)
+  - Ollama proxy for token tracking (middleware server)
+  - Antigravity CLI adapter (`agy /usage --json`)
+  - ChatGPT adapter (OpenAI API)
+  - Competitor adapters (Cursor, Windsurf, Copilot, etc.)
+  - Dashboard UI: budget header, quota panel, WebSocket alerts
+  - Standalone package: `pipx install routingmagic-dashboard`
+  - RoutingMagic REPL integration
+
+### Key decisions
+- Health checks are optional — registry update runs daily regardless, health checks only when NVIDIA key available
+- Adaptive discovery: only deep-track tools actually installed/active
+- Finite token budgets: monthly $ cap, daily token cap, per-provider quotas
+- Standalone package + RoutingMagic integration (not either/or)
+
+### Open issues
+- Need to verify Antigravity CLI JSON output: `agy /usage --json` and `agy /credits --json`
+- Need to test Ollama proxy approach
+- Add GitHub Secrets: NVAPI_KEY, OPENROUTER_API_KEY
+- Begin Phase 1 of dashboard: adaptive_scanner.py + schema extensions + daemon mode

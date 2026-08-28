@@ -46,6 +46,26 @@
 - [x] Refresh Fallback Model Pool (removed dead `glm-4-flash`, `gemma-4-31b`, added `qwen-2.5-72b:free`, `mistral-7b:free`, `phi-3-mini:free`).
 - [x] Update `.agents/skills/routingmagic-self-improvement/SKILL.md` with new architectural invariants.
 
+## Phase 6: GitHub Actions CI Fix
+
+- [x] Fix workflow failure: remove pip cache (no requirements.txt)
+- [x] Add requirements.txt for pip cache
+- [x] Add API key detection step (skip health checks when NVAPI_KEY missing)
+- [x] Graceful health check skip via SKIP_HEALTH_CHECKS env var
+- [x] Rename run_health_checks -> do_health_checks (avoid function shadowing)
+
+## Phase 7: Unified Token Dashboard (Planned)
+
+- [ ] Adaptive scanner (auto-discover active tools)
+- [ ] Quota engine (multi-dimensional: rate limits, subscriptions, credits, custom caps)
+- [ ] Ollama proxy for token tracking
+- [ ] Antigravity CLI adapter (agy /usage --json)
+- [ ] ChatGPT/OpenAI API adapter
+- [ ] Competitor adapters (Cursor, Windsurf, Copilot, etc.)
+- [ ] Dashboard UI: budget header, quota panel, WebSocket alerts
+- [ ] Standalone package: routingmagic-dashboard (pipx installable)
+- [ ] RoutingMagic REPL integration (auto-start daemon, /quota, /sources)
+
 ---
 
 ## Progress Summary
@@ -57,4 +77,6 @@
 | User-Facing | 5 | 5 | 100% |
 | Final Validation | 6 | 6 | 100% |
 | Resilience | 4 | 4 | 100% |
-| **Total** | **24** | **24** | **100%** |
+| CI Fix | 5 | 5 | 100% |
+| Unified Dashboard | 10 | 0 | 0% |
+| **Total** | **39** | **29** | **74%** |

@@ -55,3 +55,20 @@
 | `/savings models` | Model efficiency ranking |
 | `/savings export` | CSV export |
 | `/caveman-feedback` | Report compression quality |
+
+## GitHub Actions CI Fix (2026-08-27)
+- Workflow failed in 4s: pip cache error (no requirements.txt) + health checks crashed without NVAPI_KEY secret
+- Fix: requirements.txt, SKIP_HEALTH_CHECKS env var, API key detection step
+- Now runs daily at 1 AM UTC; health checks only when NVAPI_KEY configured
+- File: `.github/workflows/update-models.yml`, `model_registry_updater.py`
+
+## Unified Dashboard Plan (Next)
+- Adaptive scanner: auto-discovers active tools (Claude, OpenCode, Codex, Ollama, Antigravity, ChatGPT, 9router, Hermes, RoutingMagic)
+- Quota engine: multi-dimensional (rate limits, subscriptions, credits, custom caps)
+- Ollama proxy: middleware server logging tokens to SQLite
+- Antigravity adapter: parses `agy /usage --json` and `agy /credits --json`
+- ChatGPT adapter: OpenAI API /v1/usage endpoint
+- Dashboard UI: budget header, quota panel, WebSocket alerts
+- Standalone package: `pipx install routingmagic-dashboard`
+- REPL integration: auto-start daemon, `/quota`, `/sources` commands
+- Plan doc: `UNIFIED_DASHBOARD_PLAN.md`

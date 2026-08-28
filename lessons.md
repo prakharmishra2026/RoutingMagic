@@ -52,3 +52,18 @@
 **What broke**: Attempted to use a non-existent `caveman-compress` CLI binary via `subprocess.run()`, which always failed and fell through to simple truncation.
 **Root cause**: Caveman is actually implemented as a SYSTEM PROMPT INJECTION (instructing the LLM to output caveman-speak), not a post-processing binary.
 **Rule**: Always inspect the upstream project (like Caveman's `SKILL.md`) to understand its architecture before implementing an integration. Do not hallucinate CLI tools.
+
+## 013 — GitHub Actions pip Cache Requires requirements.txt
+**What broke**: `actions/setup-python@v5` with `cache: 'pip'` failed immediately with "no file in requirements.txt or pyproject.toml" — workflow died in 4 seconds.
+**Root cause**: Pip cache action requires a dependency file to compute cache key. Standalone script projects without `requirements.txt` cannot use this cache.
+**Rule**: Either add minimal `requirements.txt` for cache, or remove `cache: 'pip'`. For single-script projects, adding `requirements.txt` is trivial and enables caching.
+
+## 014 — Health Checks Must Be Optional When Secrets Missing
+**What broke**: Model registry health checks crashed in GitHub Actions because `NVAPI_KEY` secret wasn't configured, but workflow unconditionally ran `asyncio.run(run_health_checks(...))` which tried to call NVIDIA API without auth.
+**Root cause**: Workflow assumed secrets exist; health check function had no graceful degradation for missing credentials.
+**Rule**: Make health checks conditional on secret availability. Add workflow step to detect missing secrets, set env var (e.g., `SKIP_HEALTH_CHECKS=true`), and have code respect it.
+
+## 015 — Parameter Shadowing Function Name
+**What broke**: Renamed `run_health_checks` parameter to `do_health_checks` to avoid shadowing the `run_health_checks()` function, but forgot to update the call site — got `TypeError: 'bool' object is not callable` when `asyncio.run(run_health_checks(...))` tried to call the boolean parameter.
+**Root cause**: Parameter name matched function name; inside function scope, parameter shadows outer function.
+**Rule**: Never name parameters the same as functions they call. Use `do_` prefix for boolean action parameters (e.g., `do_health_checks`, `run_health_checks` → `do_health_checks`).
