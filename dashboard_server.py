@@ -233,21 +233,60 @@ ZERO_PRICING = {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0}
 # Provider tokens that indicate ALWAYS zero-cost (built-in free)
 FREE_PROVIDER_TOKENS = {"opencode"}
 # Provider tokens that have a FREE TIER (use :free suffix check)
-FREE_TIER_PROVIDERS = {"nvidia", "nim", "openrouter"}
+FREE_TIER_PROVIDERS = {"nvidia", "nim", "openrouter", "deepseek-ai", "openai"}
 # Model families always free regardless of provider
 FREE_MODEL_TOKENS = {"gpt-oss", "big-pickle", "laguna", "nemotron-3-ultra-free", "nemotron-3.5-lightning-free"}
-# NIM models that are free (no :free suffix in registry; known from NVIDIA NIM free tier)
-# All lowercase for case-insensitive matching
-FREE_NIM_MODELS = {
-    "deepseek-ai/deepseek-v4-flash-0731",
-    "nvidia/nemotron-3-super-120b-a12b",
-    "nvidia/nemotron-3.5-lightning-30b-a3b",
-    "nvidia/nemotron-3.5-content-safety",
-    "openai/gpt-oss-120b",
-    "nvidia/cosmos-reason2-8b",
-    "poolside/laguna-xs-2.1",
-    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
-}
+# Dynamically loaded free model sets from registry (updated daily)
+_freemodel_cache = {"nim": set(), "openrouter": set(), "mtime": 0}
+
+def _load_free_models_from_registry() -> tuple[set, set]:
+    """Load free model sets from registry JSON. Returns (nim_free, openrouter_free).
+    
+    Registry format (from model_registry_updater) has:
+    - nim_free_models: list of free NIM model IDs
+    - openrouter_free_models: list of free OpenRouter model IDs
+    - all_free_models: list of all free models (legacy format)
+    - Categories: free_models, reasoning_models, etc.
+    """
+    global _freemodel_cache
+    registry_path = Path.home() / ".routingmagic" / "registry" / "model_registry.json"
+    if not registry_path.exists():
+        return set(), set()
+    
+    mtime = registry_path.stat().st_mtime
+    if _freemodel_cache["mtime"] == mtime and (_freemodel_cache["nim"] or _freemodel_cache["openrouter"]):
+        return _freemodel_cache["nim"], _freemodel_cache["openrouter"]
+    
+    try:
+        with open(registry_path) as f:
+            data = json.load(f)
+        
+        # Parse new format: nim_free_models and openrouter_free_models
+        nim_free = set()
+        or_free = set()
+        
+        if "nim_free_models" in data:
+            nim_free = set(m.lower() for m in data.get("nim_free_models", []))
+        if "openrouter_free_models" in data:
+            or_free = set(m.lower() for m in data.get("openrouter_free_models", []))
+        
+        # Fallback: parse all_free_models (legacy format)
+        if not nim_free and not or_free and "all_free_models" in data:
+            for m in data.get("all_free_models", []):
+                mid = m.get("id")
+                if mid:
+                    mid_lower = mid.lower()
+                    # Heuristic: NIM models don't have :free suffix
+                    if mid_lower.startswith(("nvidia/", "deepseek-ai/", "openai/", "poolside/", "minimaxai/", "moonshotai/", "google/", "stepfun-ai/", "z-ai/")):
+                        nim_free.add(mid_lower)
+                    else:
+                        or_free.add(mid_lower)
+        
+        _freemodel_cache = {"nim": nim_free, "openrouter": or_free, "mtime": mtime}
+        return nim_free, or_free
+    except Exception:
+        return set(), set()
+
 
 PRICING_KEYS = {k.lower(): v for k, v in PRICING.items()}
 
@@ -297,10 +336,14 @@ def is_free(model: str, source: str = None) -> bool:
         if provider in FREE_PROVIDER_TOKENS:
             return True
         if provider in FREE_TIER_PROVIDERS:
-            # Check if this specific model is a known-free NIM model (case-insensitive)
-            if m in FREE_NIM_MODELS:
+            # Load free models from registry (cached, updated daily)
+            nim_free, or_free = _load_free_models_from_registry()
+            if m in nim_free or m in or_free:
                 return True
-            return False  # free-tier providers need :free suffix
+            return False  # free-tier providers need :free suffix or registry entry
+    if tokens & FREE_MODEL_TOKENS:
+        return True
+    return False  # free-tier providers need :free suffix
     if tokens & FREE_MODEL_TOKENS:
         return True
     return False
@@ -600,6 +643,34 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(data).encode())
             return
 
+        if parsed.path == "/api/export":
+            data = export_data()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            _apply_cors(self)
+            self.end_headers()
+            self.wfile.write(json.dumps(data).encode())
+            return
+
+        if parsed.path == "/api/export/csv":
+            data = export_csv()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv")
+            self.send_header("Content-Disposition", 'attachment; filename="routingmagic-usage.csv"')
+            _apply_cors(self)
+            self.end_headers()
+            self.wfile.write(data.encode())
+            return
+
+        if parsed.path == "/api/insights":
+            data = get_insights()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            _apply_cors(self)
+            self.end_headers()
+            self.wfile.write(json.dumps(data).encode())
+            return
+
 
         if parsed.path == "/" or parsed.path == "/index.html":
             self.send_response(200)
@@ -701,9 +772,15 @@ tr:hover td{background:var(--raised);}
 </head>
 <body>
 <header>
-  <div><h1>RoutingMagic Usage Dashboard</h1></div>
+  <div><h1>RoutingMagic Desk</h1></div>
   <div class="meta" id="meta">Loading...</div>
-  <button id="rescan-btn" onclick="rescan()" title="Rescan all sources">&#x21bb; Rescan</button>
+  <div class="header-actions">
+    <button class="btn" id="export-json-btn" onclick="exportJSON()" title="Export all data as JSON">Export JSON</button>
+    <button class="btn" id="export-csv-btn" onclick="exportCSV()" title="Export sessions as CSV">Export CSV</button>
+    <button class="btn" id="insights-btn" onclick="showInsights()">Insights</button>
+    <button class="btn" id="council-btn" onclick="openCouncil()">Model Council</button>
+    <button class="btn" id="rescan-btn" onclick="rescan()" title="Rescan all sources">Rescan</button>
+  </div>
 </header>
 <div id="filter-bar">
   <span class="filter-label">Sources</span>
@@ -757,6 +834,117 @@ const C={text:'#BFBFBF',muted:'#4F4F50',axis:'#6F6F70',border:'#2C2D2E',accent:'
 const SOURCE_COLORS={claude:'#d97757',opencode:'#48A0C7','9router':'#9B7EC7',hermes:'#5BB8A3',codex:'#D9A84E',routingmagic:'#74C991'};
 const SOURCE_NAMES={claude:'Claude Code',opencode:'OpenCode','9router':'9router',hermes:'Hermes',codex:'Codex CLI',routingmagic:'RoutingMagic'};
 let rawData=null,selectedSources=new Set(),selectedModels=new Set(),allModelsList=[],selectedRange='30d',charts={},sessionsLimit=10;
+
+// Export & Insights functions
+function exportJSON(){
+  const btn=document.getElementById('export-json-btn');
+  btn.disabled=true;btn.textContent='Exporting...';
+  fetch('/api/export').then(r=>r.json()).then(data=>{
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;a.download='routingmagic-usage-'+new Date().toISOString().slice(0,10)+'.json';
+    a.click();URL.revokeObjectURL(url);
+    btn.disabled=false;btn.textContent='Export JSON';
+  }).catch(e=>{btn.disabled=false;btn.textContent='Export JSON';alert('Export failed: '+e);});
+}
+
+function exportCSV(){
+  const btn=document.getElementById('export-csv-btn');
+  btn.disabled=true;btn.textContent='Exporting...';
+  fetch('/api/export/csv').then(r=>r.text()).then(csv=>{
+    const blob=new Blob([csv],{type:'text/csv'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;a.download='routingmagic-sessions-'+new Date().toISOString().slice(0,10)+'.csv';
+    a.click();URL.revokeObjectURL(url);
+    btn.disabled=false;btn.textContent='Export CSV';
+  }).catch(e=>{btn.disabled=false;btn.textContent='Export CSV';alert('Export failed: '+e);});
+}
+
+function showInsights(){
+  document.getElementById('insights-modal').classList.add('open');
+  document.getElementById('insights-loading').style.display='inline-flex';
+  document.getElementById('insights-content').style.display='none';
+  fetch('/api/insights').then(r=>r.json()).then(data=>{
+    renderInsights(data);
+    document.getElementById('insights-loading').style.display='none';
+    document.getElementById('insights-content').style.display='block';
+  }).catch(e=>{
+    document.getElementById('insights-loading').style.display='none';
+    document.getElementById('insights-content').innerHTML='<div style="color:var(--red);padding:16px;">Error loading insights: '+e+'</div>';
+    document.getElementById('insights-content').style.display='block';
+  });
+  document.getElementById('insights-modal').classList.add('open');
+}
+
+function closeInsights(){
+  document.getElementById('insights-modal').classList.remove('open');
+}
+
+function renderInsights(data){
+  const container=document.getElementById('insights-content');
+  if(!data.insights || data.insights.length===0){
+    container.innerHTML='<div style="padding:20px;color:var(--muted);text-align:center;">No insights available</div>';
+    return;
+  }
+  let html='';
+  data.insights.forEach(insight=>{
+    html+='<div class="insight-card" style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px;">';
+    html+='<h4 style="font-size:14px;font-weight:600;margin-bottom:12px;color:var(--accent);">'+esc(insight.title)+'</h4>';
+    if(insight.type==='top_cost_models' || insight.type==='top_projects' || insight.type==='model_efficiency'){
+      html+='<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr>';
+      const keys=Object.keys(insight.data[0]||{});
+      keys.forEach(k=>html+='<th style="text-align:left;padding:4px 8px;font-size:10px;text-transform:uppercase;color:var(--muted);">'+esc(k)+'</th>');
+      html+='</tr></thead><tbody>';
+      insight.data.forEach(row=>{
+        html+='<tr>';
+        keys.forEach(k=>{
+          let v=row[k];
+          if(k==='cost' || k==='cost_per_dollar')v=typeof v==='number'?'$'+v.toFixed(2):v;
+          if(k==='tokens_per_dollar')v=typeof v==='number'?v.toLocaleString():v;
+          if(k==='tokens' || k==='free_tokens' || k==='paid_tokens')v=typeof v==='number'?v.toLocaleString():v;
+          html+='<td style="padding:4px 8px;border-bottom:1px solid var(--border);">'+esc(v)+'</td>';
+        });
+        html+='</tr>';
+      });
+      html+='</tbody></table>';
+    }else if(insight.type==='free_ratio'){
+      const d=insight.data;
+      html+='<div style="display:flex;gap:16px;margin-top:8px;">';
+      html+='<div style="flex:1;background:rgba(110,224,163,0.1);border:1px solid var(--green);border-radius:8px;padding:12px;text-align:center;">';
+      html+='<div style="font-size:24px;font-weight:700;color:var(--green);">'+d.free_pct+'%</div>';
+      html+='<div style="font-size:11px;color:var(--muted);">Free Usage</div>';
+      html+='<div style="font-size:12px;font-family:monospace;">'+d.free_tokens.toLocaleString()+' tokens</div>';
+      html+='</div>';
+      html+='<div style="flex:1;background:rgba(232,92,78,0.1);border:1px solid var(--red);border-radius:8px;padding:12px;text-align:center;">';
+      html+='<div style="font-size:24px;font-weight:700;color:var(--red);">'+(100-d.free_pct).toFixed(1)+'%</div>';
+      html+='<div style="font-size:11px;color:var(--muted);">Paid Usage</div>';
+      html+='<div style="font-size:12px;font-family:monospace;">'+d.paid_tokens.toLocaleString()+' tokens</div>';
+      html+='</div>';
+      html+='</div>';
+    }else if(insight.type==='daily_trend'){
+      html+='<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr>';
+      html+='<th style="text-align:left;padding:4px 8px;font-size:10px;text-transform:uppercase;color:var(--muted);">Day</th>';
+      html+='<th style="text-align:left;padding:4px 8px;font-size:10px;text-transform:uppercase;color:var(--muted);">Tokens</th>';
+      html+='<th style="text-align:left;padding:4px 8px;font-size:10px;text-transform:uppercase;color:var(--muted);">Cost</th>';
+      html+='</tr></thead><tbody>';
+      insight.data.forEach(r=>html+='<tr><td style="padding:4px 8px;border-bottom:1px solid var(--border);">'+esc(r.day)+'</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);font-family:monospace;">'+r.tokens.toLocaleString()+'</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);color:var(--green);">$'+r.cost.toFixed(2)+'</td></tr>');
+      html+='</tbody></table>';
+    }else if(insight.type==='budget_health'){
+      const statusColors={'healthy':'var(--green)','warning':'var(--amber)','critical':'var(--red)'};
+      const c=statusColors[d.status]||'var(--muted)';
+      html+='<div style="display:flex;align-items:center;gap:12px;">';
+      html+='<div style="width:12px;height:12px;border-radius:50%;background:'+c+';"></div>';
+      html+='<div><div style="font-size:14px;font-weight:600;color:'+c+';">'+d.status.toUpperCase()+'</div>';
+      html+='<div style="font-size:12px;color:var(--muted);">Monthly: '+d.monthly_pct+'% | Daily: '+d.daily_pct+'%</div></div></div>';
+    }
+    html+='</div>';
+  });
+  document.getElementById('insights-content').innerHTML=html;
+  document.getElementById('insights-content').style.display='block';
+}
+
 
 function esc(s){const d=document.createElement('div');d.textContent=String(s);return d.innerHTML;}
 function fmt(n){if(n>=1e9)return(n/1e9).toFixed(1)+'B';if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'K';return String(n);}
@@ -981,6 +1169,24 @@ function loadData(){
 setInterval(loadData,30000);
 loadData();
 </script>
+
+<!-- Insights Modal -->
+<div class="modal-overlay" id="insights-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Insights</span>
+      <button class="modal-close" onclick="closeInsights()">&times;</button>
+    </div>
+    <div class="modal-body" id="insights-body">
+      <div class="loading" id="insights-loading"><div class="spinner"></div>Loading insights...</div>
+      <div id="insights-content" style="display:none;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeInsights()">Close</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>"""
 
@@ -988,6 +1194,196 @@ loadData();
 # ═══════════════════════════════════════════════════════════════════════════════
 #  CLI entry point
 # ═══════════════════════════════════════════════════════════════════════════════
+
+def serve(host="localhost", port=9898):
+    server = ThreadingHTTPServer((host, port), DashboardHandler)
+    print(f"Dashboard running at http://{host}:{port}")
+    server.serve_forever()
+
+
+
+
+def export_data() -> dict:
+    """Export all usage data as JSON for sharing/collaboration."""
+    from unified_scanner import get_db, init_db, DB_PATH
+    import json
+    
+    if not DB_PATH.exists():
+        return {"error": "Database not found"}
+    
+    conn = get_db(DB_PATH)
+    init_db(conn)
+    
+    turns = conn.execute("SELECT * FROM unified_turns ORDER BY timestamp").fetchall()
+    sessions = conn.execute("SELECT * FROM unified_sessions ORDER BY last_timestamp").fetchall()
+    scan_state = conn.execute("SELECT * FROM scan_state").fetchall()
+    adapter_state = conn.execute("SELECT * FROM adapter_state").fetchall()
+    quota_snapshots = conn.execute("SELECT * FROM quota_snapshots ORDER BY timestamp DESC LIMIT 100").fetchall()
+    budget_alerts = conn.execute("SELECT * FROM budget_alerts ORDER BY timestamp DESC LIMIT 100").fetchall()
+    
+    conn.close()
+    
+    def row_to_dict(row):
+        return {k: row[k] for k in row.keys()}
+    
+    return {
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "version": "2.0",
+        "turns": [row_to_dict(r) for r in turns],
+        "sessions": [row_to_dict(r) for r in sessions],
+        "scan_state": [row_to_dict(r) for r in scan_state],
+        "adapter_state": [row_to_dict(r) for r in adapter_state],
+        "quota_snapshots": [row_to_dict(r) for r in quota_snapshots],
+        "budget_alerts": [row_to_dict(r) for r in budget_alerts],
+    }
+
+
+def export_csv() -> str:
+    """Export usage data as CSV for spreadsheet analysis."""
+    from unified_scanner import get_db, init_db, DB_PATH
+    import csv
+    import io
+    
+    if not DB_PATH.exists():
+        return "error,Database not found\n"
+    
+    conn = get_db(DB_PATH)
+    init_db(conn)
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    writer.writerow(["session_id", "source", "project", "first_timestamp", "last_timestamp",
+                     "model", "turns", "input_tokens", "output_tokens", 
+                     "cache_read", "cache_write", "reasoning_tokens", "cost", "topic"])
+    
+    rows = conn.execute("""
+        SELECT session_id, source, project, first_timestamp, last_timestamp,
+               model, turn_count, total_input, total_output,
+               total_cache_read, total_cache_write, total_reasoning, total_cost, topic
+        FROM unified_sessions ORDER BY last_timestamp DESC
+    """).fetchall()
+    
+    for r in rows:
+        writer.writerow([
+            r["session_id"], r["source"], r["project"], r["first_timestamp"], r["last_timestamp"],
+            r["model"], r["turn_count"], r["total_input"], r["total_output"],
+            r["total_cache_read"], r["total_cache_write"], r["total_reasoning"], 
+            r["total_cost"], r["topic"] or ""
+        ])
+    
+    conn.close()
+    return output.getvalue()
+
+
+def get_insights() -> dict:
+    """Generate actionable insights from usage data."""
+    from unified_scanner import get_db, init_db, DB_PATH
+    from datetime import datetime, timezone, timedelta
+    from dashboard_server import get_budget_status
+    
+    if not DB_PATH.exists():
+        return {"error": "Database not found"}
+    
+    conn = get_db(DB_PATH)
+    init_db(conn)
+    
+    now = datetime.now(timezone.utc)
+    week_ago = (now - timedelta(days=7)).isoformat()
+    month_ago = (now - timedelta(days=30)).isoformat()
+    
+    insights = []
+    
+    # 1. Most expensive models
+    top_cost = conn.execute("""
+        SELECT source, model, SUM(cost) as total_cost, SUM(input_tokens + output_tokens) as tokens
+        FROM unified_turns WHERE cost > 0
+        GROUP BY source, model ORDER BY total_cost DESC LIMIT 5
+    """).fetchall()
+    if top_cost:
+        insights.append({
+            "type": "top_cost_models",
+            "title": "Most Expensive Models",
+            "data": [{"model": f"{r['source']}/{r['model']}", "cost": round(r["total_cost"], 4), "tokens": r["tokens"]} for r in top_cost]
+        })
+    
+    # 2. Free vs paid ratio
+    free_stats = conn.execute("""
+        SELECT 
+            SUM(CASE WHEN source='routingmagic' OR model LIKE '%:free%' OR model LIKE '%/nemotron-%' OR model LIKE '%/big-pickle%' OR model LIKE '%/gpt-oss%' THEN input_tokens+output_tokens ELSE 0 END) as free_tokens,
+            SUM(input_tokens + output_tokens) as total_tokens
+        FROM unified_turns
+    """).fetchone()
+    if free_stats and free_stats["total_tokens"]:
+        free_pct = (free_stats["free_tokens"] / free_stats["total_tokens"]) * 100
+        insights.append({
+            "type": "free_ratio",
+            "title": "Free vs Paid Usage",
+            "data": {"free_pct": round(free_pct, 1), "free_tokens": free_stats["free_tokens"], "paid_tokens": free_stats["total_tokens"] - free_stats["free_tokens"]}
+        })
+    
+    # 3. Daily trend (last 7 days)
+    daily = conn.execute("""
+        SELECT substr(timestamp, 1, 10) as day, SUM(input_tokens + output_tokens) as tokens, SUM(cost) as cost
+        FROM unified_turns WHERE timestamp >= ? GROUP BY day ORDER BY day
+    """, (week_ago,)).fetchall()
+    if daily:
+        insights.append({
+            "type": "daily_trend",
+            "title": "Last 7 Days Trend",
+            "data": [{"day": r["day"], "tokens": r["tokens"], "cost": round(r["cost"], 4)} for r in daily]
+        })
+    
+    # 4. Top projects by cost
+    projects = conn.execute("""
+        SELECT project, SUM(cost) as cost, SUM(input_tokens + output_tokens) as tokens, COUNT(DISTINCT session_id) as sessions
+        FROM unified_turns GROUP BY project ORDER BY cost DESC LIMIT 10
+    """).fetchall()
+    if projects:
+        insights.append({
+            "type": "top_projects",
+            "title": "Top Projects by Cost",
+            "data": [{"project": r["project"], "cost": round(r["cost"], 4), "tokens": r["tokens"], "sessions": r["sessions"]} for r in projects]
+        })
+    
+    # 5. Model efficiency (tokens per $)
+    efficiency = conn.execute("""
+        SELECT source, model, 
+               SUM(input_tokens + output_tokens) * 1.0 / NULLIF(SUM(cost), 0) as tokens_per_dollar,
+               SUM(cost) as cost
+        FROM unified_turns WHERE cost > 0
+        GROUP BY source, model HAVING cost > 0.01
+        ORDER BY tokens_per_dollar DESC LIMIT 10
+    """).fetchall()
+    if efficiency:
+        insights.append({
+            "type": "model_efficiency",
+            "title": "Most Efficient Models (Tokens/$)",
+            "data": [{"model": f"{r['source']}/{r['model']}", "tokens_per_dollar": round(r["tokens_per_dollar"], 0), "cost": round(r["cost"], 4)} for r in efficiency]
+        })
+    
+    # 6. Budget health
+    budget = get_budget_status()
+    budget_health = "healthy"
+    if budget["monthly"]["pct"] >= 90:
+        budget_health = "critical"
+    elif budget["monthly"]["pct"] >= 75:
+        budget_health = "warning"
+    insights.append({
+        "type": "budget_health",
+        "title": "Budget Health",
+        "data": {"status": budget_health, "monthly_pct": round(budget["monthly"]["pct"], 1), "daily_pct": round(budget["daily"]["pct"], 1)}
+    })
+    
+    conn.close()
+    
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "insights": insights,
+    }
+
+
+
 
 def main():
     import sys
@@ -1133,12 +1529,6 @@ def get_adapter_status() -> dict:
     rows = conn.execute("SELECT * FROM adapter_state").fetchall()
     conn.close()
     return {r["name"]: dict(r) for r in rows}
-
-
-def serve(host="localhost", port=9898):
-    server = ThreadingHTTPServer((host, port), DashboardHandler)
-    print(f"Dashboard running at http://{host}:{port}")
-    server.serve_forever()
 
 
 def main():

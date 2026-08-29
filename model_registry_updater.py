@@ -64,30 +64,32 @@ OPENCODE_BUILTIN_MODELS = [
 # Model IDs match the actual NVIDIA NIM API response (no "nvidia/" prefix for partner models)
 
 # Known metadata for NIM models (since API doesn't return context_length/params)
+# Each entry has: context_length, supported_parameters, category, is_free (boolean)
+# is_free: True = free on NIM free tier, False = paid (requires NIM credits)
 NIM_MODEL_METADATA = {
-    "deepseek-ai/deepseek-v4-flash-0731":      {"context_length": 1000000, "supported_parameters": ["temperature", "max_tokens", "reasoning"], "category": "coding"},
-    "z-ai/glm-5.2":                            {"context_length": 1000000, "supported_parameters": ["temperature", "max_tokens", "reasoning"], "category": "agentic"},
-    "nvidia/nemotron-3-ultra-550b-a55b":       {"context_length": 1000000, "supported_parameters": ["temperature", "max_tokens", "reasoning"], "category": "reasoning_flagship"},
-    "qwen/qwen3-coder-480b-a35b-instruct":     {"context_length": 256000, "supported_parameters": ["temperature", "max_tokens", "tools"], "category": "coding"},
-    "minimaxai/minimax-m2.7":                  {"context_length": 1000000, "supported_parameters": ["temperature", "max_tokens"], "category": "long_context"},
-    "google/gemma-4-31b-it":                   {"context_length": 1000000, "supported_parameters": ["temperature", "max_tokens"], "category": "general"},
-    "nvidia/nemotron-3.5-lightning-30b-a3b":   {"context_length": 1000000, "supported_parameters": ["temperature", "max_tokens", "reasoning"], "category": "long_context"},
-    "mistralai/mistral-large-2-instruct":      {"context_length": 128000, "supported_parameters": ["temperature", "max_tokens", "tools"], "category": "general"},
-    "minimaxai/minimax-m3":                    {"context_length": 1000000, "supported_parameters": ["temperature", "max_tokens", "tools"], "category": "long_context"},
-    "nvidia/nemotron-3-super-120b-a12b":       {"context_length": 1000000, "supported_parameters": ["temperature", "max_tokens", "reasoning", "tools"], "category": "reasoning"},
-    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning": {"context_length": 256000, "supported_parameters": ["temperature", "max_tokens", "reasoning"], "category": "reasoning"},
-    "nvidia/nemotron-ocr-v1":                  {"context_length": 128000, "supported_parameters": ["temperature", "max_tokens"], "category": "vision"},
-    "nvidia/nemotron-voicechat":               {"context_length": 128000, "supported_parameters": ["temperature", "max_tokens"], "category": "vision"},
-    "nvidia/cosmos-reason2-8b":                {"context_length": 128000, "supported_parameters": ["temperature", "max_tokens", "reasoning"], "category": "reasoning"},
-    "stepfun-ai/step-3.7-flash":               {"context_length": 128000, "supported_parameters": ["temperature", "max_tokens"], "category": "general"},
-    "moonshotai/kimi-k2.6":                    {"context_length": 1000000, "supported_parameters": ["temperature", "max_tokens", "tools"], "category": "agentic"},
-    "nvidia/llama-3.1-nemotron-ultra-253b-v1": {"context_length": 1000000, "supported_parameters": ["temperature", "max_tokens", "reasoning"], "category": "reasoning_flagship"},
-    "poolside/laguna-xs-2.1":                  {"context_length": 262144, "supported_parameters": ["temperature", "max_tokens", "tools"], "category": "coding"},
-    "openai/gpt-oss-120b":                     {"context_length": 131072, "supported_parameters": ["temperature", "max_tokens", "reasoning", "tools"], "category": "reasoning"},
-    "nvidia/nemotron-3.5-content-safety":      {"context_length": 128000, "supported_parameters": ["temperature", "max_tokens", "reasoning"], "category": "general"},
+    "deepseek-ai/deepseek-v4-flash-0731":      {"context_length": 1000000, "supported_parameters": ["temperature", "max_tokens", "reasoning"], "category": "coding", "is_free": True},
+    "z-ai/glm-5.2":                            {"context_length": 1000000, "supported_parameters": ["temperature", "max_tokens", "reasoning"], "category": "agentic", "is_free": False},
+    "nvidia/nemotron-3-ultra-550b-a55b":       {"context_length": 1000000, "supported_parameters": ["temperature", "max_tokens", "reasoning"], "category": "reasoning_flagship", "is_free": False},
+    "qwen/qwen3-coder-480b-a35b-instruct":     {"context_length": 256000, "supported_parameters": ["temperature", "max_tokens", "tools"], "category": "coding", "is_free": False},
+    "minimaxai/minimax-m2.7":                  {"context_length": 1000000, "supported_parameters": ["temperature", "max_tokens"], "category": "long_context", "is_free": False},
+    "google/gemma-4-31b-it":                   {"context_length": 1000000, "supported_parameters": ["temperature", "max_tokens"], "category": "general", "is_free": False},
+    "nvidia/nemotron-3.5-lightning-30b-a3b":   {"context_length": 1000000, "supported_parameters": ["temperature", "max_tokens", "reasoning"], "category": "long_context", "is_free": True},
+    "mistralai/mistral-large-2-instruct":      {"context_length": 128000, "supported_parameters": ["temperature", "max_tokens", "tools"], "category": "general", "is_free": False},
+    "minimaxai/minimax-m3":                    {"context_length": 1000000, "supported_parameters": ["temperature", "max_tokens", "tools"], "category": "long_context", "is_free": False},
+    "nvidia/nemotron-3-super-120b-a12b":       {"context_length": 1000000, "supported_parameters": ["temperature", "max_tokens", "reasoning", "tools"], "category": "reasoning", "is_free": True},
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning": {"context_length": 256000, "supported_parameters": ["temperature", "max_tokens", "reasoning"], "category": "reasoning", "is_free": True},
+    "nvidia/nemotron-ocr-v1":                  {"context_length": 128000, "supported_parameters": ["temperature", "max_tokens"], "category": "vision", "is_free": False},
+    "nvidia/nemotron-voicechat":               {"context_length": 128000, "supported_parameters": ["temperature", "max_tokens"], "category": "vision", "is_free": False},
+    "nvidia/cosmos-reason2-8b":                {"context_length": 128000, "supported_parameters": ["temperature", "max_tokens", "reasoning"], "category": "reasoning", "is_free": True},
+    "stepfun-ai/step-3.7-flash":               {"context_length": 128000, "supported_parameters": ["temperature", "max_tokens"], "category": "general", "is_free": False},
+    "moonshotai/kimi-k2.6":                    {"context_length": 1000000, "supported_parameters": ["temperature", "max_tokens", "tools"], "category": "agentic", "is_free": False},
+    "nvidia/llama-3.1-nemotron-ultra-253b-v1": {"context_length": 1000000, "supported_parameters": ["temperature", "max_tokens", "reasoning"], "category": "reasoning_flagship", "is_free": False},
+    "poolside/laguna-xs-2.1":                  {"context_length": 262144, "supported_parameters": ["temperature", "max_tokens", "tools"], "category": "coding", "is_free": True},
+    "openai/gpt-oss-120b":                     {"context_length": 131072, "supported_parameters": ["temperature", "max_tokens", "reasoning", "tools"], "category": "reasoning", "is_free": True},
+    "nvidia/nemotron-3.5-content-safety":      {"context_length": 128000, "supported_parameters": ["temperature", "max_tokens", "reasoning"], "category": "general", "is_free": True},
 }
 
-NIM_KNOWN_FREE_MODELS = list(NIM_MODEL_METADATA.keys())
+NIM_KNOWN_FREE_MODELS = [model_id for model_id, meta in NIM_MODEL_METADATA.items() if meta.get("is_free", False)]
 
 # ─── Data Classes ───────────────────────────────────────────────────────
 @dataclass
@@ -120,6 +122,9 @@ class Registry:
     opencode_models: List[ModelInfo] = field(default_factory=list)
     merged_fallback_chain: List[str] = field(default_factory=list)
     metadata: Dict = field(default_factory=dict)
+    # Free model lists (auto-updated daily)
+    nim_free_models: List[str] = field(default_factory=list)
+    openrouter_free_models: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict:
         return {
@@ -128,6 +133,8 @@ class Registry:
             "opencode_models": [m.to_dict() for m in self.opencode_models],
             "merged_fallback_chain": self.merged_fallback_chain,
             "metadata": self.metadata,
+            "nim_free_models": self.nim_free_models,
+            "openrouter_free_models": self.openrouter_free_models,
         }
 
     @classmethod
@@ -137,6 +144,8 @@ class Registry:
             openrouter_models=[ModelInfo.from_dict(m) for m in data.get("openrouter_models", [])],
             opencode_models=[ModelInfo.from_dict(m) for m in data.get("opencode_models", [])],
             merged_fallback_chain=data.get("merged_fallback_chain", []),
+            nim_free_models=data.get("nim_free_models", []),
+            openrouter_free_models=data.get("openrouter_free_models", []),
             metadata=data.get("metadata", {}),
         )
 
@@ -384,6 +393,13 @@ def save_registry_atomic(registry: Registry, registry_dir: Path):
     # Atomic rename
     temp_file.replace(registry_file)
     
+    # Also save to user's home directory for dashboard access
+    home_registry_dir = Path.home() / ".routingmagic" / "registry"
+    home_registry_dir.mkdir(parents=True, exist_ok=True)
+    home_registry_file = home_registry_dir / "model_registry.json"
+    with open(home_registry_file, "w") as f:
+        json.dump(registry.to_dict(), f, indent=2)
+    
     # Update last update timestamp
     with open(registry_dir / "last_update.txt", "w") as f:
         f.write(now.isoformat().replace("+00:00", "Z"))
@@ -619,6 +635,10 @@ def update_registry(registry_dir: Path = REGISTRY_DIR, do_health_checks: bool = 
     
     opencode_models = get_opencode_models()
     
+    # Build free model lists
+    nim_free_models = [m.id for m in nim_models]
+    openrouter_free_models = [m.id for m in or_models]
+    
     # Ensure registry directory exists before logging
     registry_dir.mkdir(parents=True, exist_ok=True)
     
@@ -627,6 +647,8 @@ def update_registry(registry_dir: Path = REGISTRY_DIR, do_health_checks: bool = 
         nim_models=nim_models,
         openrouter_models=or_models,
         opencode_models=opencode_models,
+        nim_free_models=nim_free_models,
+        openrouter_free_models=openrouter_free_models,
     )
     new_registry.merged_fallback_chain = build_merged_fallback_chain(new_registry)
     
