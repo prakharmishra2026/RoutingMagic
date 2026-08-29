@@ -1254,6 +1254,7 @@ function renderInsights(data){
   }
   let html='';
   data.insights.forEach(insight=>{
+    const d=insight.data;
     html+='<div class="insight-card" style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px;">';
     html+='<h4 style="font-size:14px;font-weight:600;margin-bottom:12px;color:var(--accent);">'+esc(insight.title)+'</h4>';
     if(insight.type==='top_cost_models' || insight.type==='top_projects' || insight.type==='model_efficiency'){
@@ -1274,7 +1275,6 @@ function renderInsights(data){
       });
       html+='</tbody></table>';
     }else if(insight.type==='free_ratio'){
-      const d=insight.data;
       html+='<div style="display:flex;gap:16px;margin-top:8px;">';
       html+='<div style="flex:1;background:rgba(110,224,163,0.1);border:1px solid var(--green);border-radius:8px;padding:12px;text-align:center;">';
       html+='<div style="font-size:24px;font-weight:700;color:var(--green);">'+d.free_pct+'%</div>';
@@ -1302,6 +1302,16 @@ function renderInsights(data){
       html+='<div style="width:12px;height:12px;border-radius:50%;background:'+c+';"></div>';
       html+='<div><div style="font-size:14px;font-weight:600;color:'+c+';">'+d.status.toUpperCase()+'</div>';
       html+='<div style="font-size:12px;color:var(--muted);">Monthly: '+d.monthly_pct+'% | Daily: '+d.daily_pct+'%</div></div></div>';
+    }else if(insight.type==='cache_breakdown'){
+      html+='<div style="display:flex;gap:16px;margin-bottom:10px;">';
+      html+='<div style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center;">';
+      html+='<div style="font-size:20px;font-weight:700;">'+d.cache_read.toLocaleString()+'</div><div style="font-size:11px;color:var(--muted);">cache read (re-sent)</div></div>';
+      html+='<div style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center;">';
+      html+='<div style="font-size:20px;font-weight:700;">'+d.cache_write.toLocaleString()+'</div><div style="font-size:11px;color:var(--muted);">cache write (new)</div></div>';
+      html+='<div style="flex:1;background:rgba(110,224,163,0.1);border:1px solid var(--green);border-radius:8px;padding:12px;text-align:center;">';
+      html+='<div style="font-size:20px;font-weight:700;color:var(--green);">$'+Math.round(d.est_savings_usd).toLocaleString()+'</div><div style="font-size:11px;color:var(--muted);">saved vs uncached</div></div>';
+      html+='</div>';
+      html+='<div style="font-size:12px;color:var(--text);line-height:1.5;">'+esc(d.note)+'</div>';
     }
     html+='</div>';
   });
@@ -1367,6 +1377,7 @@ function insightHeadline(ins){
   const d=ins.data;
   try{
     if(ins.type==='free_ratio') return (d.free_pct??0)+'% free';
+    if(ins.type==='cache_breakdown') return fmt(d.cache_read||0)+' read · saves $'+Math.round(d.est_savings_usd||0).toLocaleString();
     if(ins.type==='budget_health') return String(d.status||'?')+' · mo '+(d.monthly_pct??0)+'%';
     if(ins.type==='top_cost_models'&&d[0]) return d[0].model.split('/').pop()+' $'+(d[0].cost||0).toFixed(2);
     if(ins.type==='top_projects'&&d[0]) return (d[0].project||d[0].name||'?')+' $'+(d[0].cost||0).toFixed(2);
@@ -1404,7 +1415,8 @@ function renderStats(){
 
   const totalInput=daily.reduce((s,r)=>s+r.input,0);
   const totalOutput=daily.reduce((s,r)=>s+r.output,0);
-  const totalCache=daily.reduce((s,r)=>s+r.cache_read+r.cache_write,0);
+  const cacheRead=daily.reduce((s,r)=>s+r.cache_read,0);
+  const cacheWrite=daily.reduce((s,r)=>s+r.cache_write,0);
   const totalReasoning=daily.reduce((s,r)=>s+r.reasoning,0);
   const totalTurns=daily.reduce((s,r)=>s+r.turns,0);
   const totalCost=sessions.reduce((s,r)=>s+(r.cost||0),0);
@@ -1417,7 +1429,8 @@ function renderStats(){
     <div class="stat-card"><div class="label">Total Turns</div><div class="value">${fmt(totalTurns)}</div><div class="sub">${sources.size} source${sources.size!==1?'s':''}</div></div>
     <div class="stat-card"><div class="label">Input Tokens</div><div class="value">${fmt(totalInput)}</div><div class="sub">prompt tokens</div></div>
     <div class="stat-card"><div class="label">Output Tokens</div><div class="value">${fmt(totalOutput)}</div><div class="sub">generated tokens</div></div>
-    <div class="stat-card"><div class="label">Cache</div><div class="value">${fmt(totalCache)}</div><div class="sub">read + write</div></div>
+    <div class="stat-card"><div class="label">Cache Read</div><div class="value">${fmt(cacheRead)}</div><div class="sub">re-sent context</div></div>
+    <div class="stat-card"><div class="label">Cache Write</div><div class="value">${fmt(cacheWrite)}</div><div class="sub">new context cached</div></div>
     <div class="stat-card"><div class="label">Reasoning</div><div class="value">${fmt(totalReasoning)}</div><div class="sub">thinking tokens</div></div>
     <div class="stat-card"><div class="label">Est. Cost</div><div class="value">${fmtCost(totalCost)}</div><div class="sub">API pricing equiv.</div></div>
     <div class="stat-card"><div class="label">Free Usage</div><div class="value">${freePct}%</div><div class="sub">${fmt(freeTurns)} free turns</div></div>
@@ -1653,6 +1666,7 @@ def export_data() -> dict:
         "adapter_state": [row_to_dict(r) for r in adapter_state],
         "quota_snapshots": [row_to_dict(r) for r in quota_snapshots],
         "budget_alerts": [row_to_dict(r) for r in budget_alerts],
+        "insights": get_insights().get("insights", []),
     }
 
 
@@ -1686,11 +1700,21 @@ def export_csv() -> str:
         writer.writerow([
             r["session_id"], r["source"], r["project"], r["first_timestamp"], r["last_timestamp"],
             r["model"], r["turn_count"], r["total_input"], r["total_output"],
-            r["total_cache_read"], r["total_cache_write"], r["total_reasoning"], 
+            r["total_cache_read"], r["total_cache_write"], r["total_reasoning"],
             r["total_cost"], r["topic"] or ""
         ])
-    
+
     conn.close()
+
+    # trailing summary section: one "# key,value" row per insight datum so a
+    # spreadsheet import still parses cleanly (cache_breakdown included)
+    writer.writerow([])
+    writer.writerow(["# insight", "metric", "value"])
+    for ins in get_insights().get("insights", []):
+        d = ins.get("data")
+        if isinstance(d, dict):
+            for k, v in d.items():
+                writer.writerow([f"# {ins['type']}", k, v])
     return output.getvalue()
 
 
@@ -1740,6 +1764,39 @@ def get_insights() -> dict:
             "data": {"free_pct": round(free_pct, 1), "free_tokens": free_stats["free_tokens"], "paid_tokens": free_stats["total_tokens"] - free_stats["free_tokens"]}
         })
     
+    # 2b. Cache read/write breakdown — high re-read means a big baseline context
+    # is re-sent every turn. The fix is to shrink that baseline, never to disable
+    # the cache: cache reads bill ~$0.30/M vs ~$3.00/M uncached, so the cache is
+    # saving money, not costing it.
+    cache_row = conn.execute("""
+        SELECT SUM(cache_read) as cr, SUM(cache_write) as cw,
+               SUM(CASE WHEN cache_read > 0 THEN 1 ELSE 0 END) as cached_turns
+        FROM unified_turns
+    """).fetchone()
+    if cache_row and (cache_row["cr"] or cache_row["cw"]):
+        cr = cache_row["cr"] or 0
+        cw = cache_row["cw"] or 0
+        cached_turns = cache_row["cached_turns"] or 1
+        UNCACHED_RATE = 3.00 / 1_000_000   # $/token if re-sent as fresh input
+        CACHED_RATE = 0.30 / 1_000_000     # $/token as a cache read
+        saved = cr * (UNCACHED_RATE - CACHED_RATE)
+        baseline_per_turn = cr / cached_turns  # avg re-sent context on turns that use cache
+        insights.append({
+            "type": "cache_breakdown",
+            "title": "Cache Read vs Write",
+            "data": {
+                "cache_read": cr,
+                "cache_write": cw,
+                "baseline_tokens_per_turn": round(baseline_per_turn),
+                "est_savings_usd": round(saved, 2),
+                "note": (
+                    f"High cache re-read means a large baseline context is re-sent "
+                    f"every turn. Shrink the baseline (currently ~{round(baseline_per_turn/1000)}k "
+                    f"tok/turn). Cache is saving ~${round(saved):,} versus uncached."
+                ),
+            },
+        })
+
     # 3. Daily trend (last 7 days)
     daily = conn.execute("""
         SELECT substr(timestamp, 1, 10) as day, SUM(input_tokens + output_tokens) as tokens, SUM(cost) as cost
