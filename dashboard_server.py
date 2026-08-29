@@ -1369,7 +1369,7 @@ function renderStats(){
   const totalReasoning=daily.reduce((s,r)=>s+r.reasoning,0);
   const totalTurns=daily.reduce((s,r)=>s+r.turns,0);
   const totalCost=sessions.reduce((s,r)=>s+(r.cost||0),0);
-  const freeTurns=daily.filter(r=>r.model.indexOf(':free')>-1||r.source==='routingmagic').reduce((s,r)=>s+r.turns,0);
+  const freeTurns=daily.filter(r=>r.free).reduce((s,r)=>s+r.turns,0);
   const freePct=totalTurns>0?Math.round(freeTurns/totalTurns*100):0;
 
   const sources=new Set(daily.map(r=>r.source));
