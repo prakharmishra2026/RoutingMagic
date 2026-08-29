@@ -26,6 +26,40 @@ from unified_scanner import get_db, init_db, DB_PATH, scan
 
 VERSION = "2.0.0"
 
+
+def parse_timestamp(ts: str) -> Optional[datetime]:
+    """Parse timestamp from various formats, return timezone-aware datetime or None."""
+    if not ts:
+        return None
+    s = ts.strip()
+    # Try ISO format with Z suffix
+    try:
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except ValueError:
+        pass
+    # Try common formats
+    for fmt in (
+        "%Y-%m-%dT%H:%M:%S.%f%z",
+        "%Y-%m-%dT%H:%M:%S%z",
+        "%Y-%m-%dT%H:%M:%S.%f",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%d %H:%M:%S.%f",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y/%m/%d %H:%M:%S",
+    ):
+        try:
+            dt = datetime.strptime(s, fmt)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
+        except ValueError:
+            continue
+    return None
+
+
 # Cache for get_dashboard_data
 _dashboard_cache = {"mtime": None, "data": None}
 _dashboard_cache_lock = threading.Lock()
@@ -197,7 +231,7 @@ PRICING = {
 ZERO_PRICING = {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0}
 
 # Provider tokens that indicate ALWAYS zero-cost (built-in free)
-FREE_PROVIDER_TOKENS = {"nvidia", "nim", "opencode"}
+FREE_PROVIDER_TOKENS = {"opencode"}
 # Provider tokens that have a FREE TIER (use :free suffix check)
 FREE_TIER_PROVIDERS = {"nvidia", "nim", "openrouter"}
 # Model families always free regardless of provider
@@ -361,9 +395,12 @@ def get_dashboard_data(db_path: Path = DB_PATH) -> dict:
     sessions_all = []
     for r in session_rows:
         try:
-            t1 = datetime.fromisoformat(r["first_timestamp"].replace("Z", "+00:00"))
-            t2 = datetime.fromisoformat(r["last_timestamp"].replace("Z", "+00:00"))
-            duration_min = round((t2 - t1).total_seconds() / 60, 1)
+            t1 = parse_timestamp(r["first_timestamp"])
+            t2 = parse_timestamp(r["last_timestamp"])
+            if t1 and t2:
+                duration_min = round((t2 - t1).total_seconds() / 60, 1)
+            else:
+                duration_min = 0
         except Exception:
             duration_min = 0
         model = r["model"] or "unknown"
@@ -575,6 +612,404 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         self.send_response(404)
         self.end_headers()
+
+
+DASHBOARD_HTML = r"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RoutingMagic Usage Dashboard</title>
+<script src="/assets/chart.umd.min.js"></script>
+<style>
+:root{--bg:#0d0d0e;--card:#161617;--border:#2C2D2E;--text:#BFBFBF;--muted:#4F4F50;--accent:#d97757;--blue:#48A0C7;--green:#74C991;--red:#C74E39;--purple:#9B7EC7;--amber:#D9A84E;--teal:#5BB8A3;--mauve:#C77E9B;--raised:#1E1F20;--selected:#262626;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;}
+header{background:var(--card);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;justify-content:space-between;}
+header h1{font-size:17px;font-weight:600;}
+header .meta{color:var(--muted);font-size:11px;text-align:right;}
+#rescan-btn{background:var(--card);border:1px solid var(--border);color:var(--muted);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;}
+#rescan-btn:hover{color:var(--text);border-color:var(--accent);}
+#filter-bar{background:var(--card);border-bottom:1px solid var(--border);padding:8px 24px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.filter-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);white-space:nowrap;}
+.filter-sep{width:1px;height:22px;background:var(--border);}
+.chip-group{display:flex;gap:4px;flex-wrap:wrap;}
+.chip{padding:3px 10px;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;cursor:pointer;transition:all .12s;}
+.chip:hover{border-color:var(--accent);color:var(--text);}
+.chip.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+.chip .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:middle;}
+.range-select select{appearance:none;-webkit-appearance:none;min-width:130px;padding:4px 28px 4px 10px;background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;cursor:pointer;}
+.range-select::after{content:"\25BE";position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:10px;pointer-events:none;}
+.range-select{position:relative;}
+.container{max-width:1400px;margin:0 auto;padding:20px 24px;}
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px;}
+.stat-card .label{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;}
+.stat-card .value{font-size:20px;font-weight:700;}
+.stat-card .sub{color:var(--muted);font-size:10px;margin-top:3px;}
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;}
+.chart-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;min-width:0;}
+.chart-card.wide{grid-column:1/-1;}
+.chart-card h2{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px;}
+.chart-wrap{position:relative;height:220px;}
+.chart-wrap.tall{height:280px;}
+table{width:100%;border-collapse:collapse;}
+th{text-align:left;padding:7px 10px;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap;}
+th.sortable{cursor:pointer;user-select:none;}
+th.sortable:hover{color:var(--text);}
+td{padding:8px 10px;border-bottom:1px solid var(--border);font-size:12px;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:var(--raised);}
+.table-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:20px;overflow-x:auto;}
+.section-title{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;}
+.source-tag{display:inline-block;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;}
+.source-claude{background:rgba(217,119,87,0.2);color:var(--accent);}
+.source-opencode{background:rgba(72,160,199,0.2);color:var(--blue);}
+.source-9router{background:rgba(155,126,199,0.2);color:var(--purple);}
+.source-hermes{background:rgba(91,184,163,0.2);color:var(--teal);}
+.source-codex{background:rgba(217,168,78,0.2);color:var(--amber);}
+.source-routingmagic{background:rgba(116,201,145,0.2);color:var(--green);}
+.model-tag{display:inline-block;padding:2px 6px;border-radius:4px;font-size:10px;background:rgba(72,160,199,0.15);color:var(--blue);}
+.cost{color:var(--green);font-family:monospace;}
+.cost-na{color:var(--muted);font-family:monospace;font-size:10px;}
+.num{font-family:monospace;}
+.free-tag{color:var(--green);font-size:10px;font-weight:600;}
+.muted{color:var(--muted);}
+.topic-cell{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--text);}
+.show-more-btn{background:transparent;border:1px solid var(--border);color:var(--muted);padding:3px 10px;border-radius:6px;cursor:pointer;font-size:11px;}
+.show-more-btn:hover{color:var(--text);border-color:var(--accent);}
+.footer-content{border-top:1px solid var(--border);padding:16px 24px;margin-top:8px;}
+.footer-content p{color:var(--muted);font-size:11px;line-height:1.6;}
+.footer-content a{color:var(--blue);text-decoration:none;}
+@media(max-width:768px){.charts-grid{grid-template-columns:1fr;}.chart-card.wide{grid-column:1;}}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>RoutingMagic Usage Dashboard</h1></div>
+  <div class="meta" id="meta">Loading...</div>
+  <button id="rescan-btn" onclick="rescan()" title="Rescan all sources">&#x21bb; Rescan</button>
+</header>
+<div id="filter-bar">
+  <span class="filter-label">Sources</span>
+  <div class="chip-group" id="source-chips"></div>
+  <div class="filter-sep"></div>
+  <span class="filter-label">Models</span>
+  <div class="chip-group" id="model-chips"></div>
+  <div class="filter-sep"></div>
+  <span class="filter-label">Range</span>
+  <div class="range-select">
+    <select id="range-select" onchange="setRange(this.value)">
+      <option value="today">Today</option>
+      <option value="week">This Week</option>
+      <option value="30d" selected>Last 30 Days</option>
+      <option value="90d">Last 90 Days</option>
+      <option value="all">All Time</option>
+    </select>
+  </div>
+</div>
+<div class="container">
+  <div class="stats-row" id="stats-row"></div>
+  <div class="charts-grid">
+    <div class="chart-card wide" id="sec-daily"><h2>Daily Token Usage by Source</h2><div class="chart-wrap tall"><canvas id="chart-daily"></canvas></div></div>
+    <div class="chart-card" id="sec-source"><h2>Tokens by Source</h2><div class="chart-wrap"><canvas id="chart-source"></canvas></div></div>
+    <div class="chart-card" id="sec-model"><h2>Tokens by Model</h2><div class="chart-wrap"><canvas id="chart-model"></canvas></div></div>
+    <div class="chart-card wide" id="sec-source-daily"><h2>Daily Cost by Source</h2><div class="chart-wrap"><canvas id="chart-cost-daily"></canvas></div></div>
+    <div class="chart-card" id="sec-reasoning"><h2>Reasoning Tokens by Source</h2><div class="chart-wrap"><canvas id="chart-reasoning"></canvas></div></div>
+    <div class="chart-card" id="sec-cost-model"><h2>Cost by Model</h2><div class="chart-wrap"><canvas id="chart-cost-model"></canvas></div></div>
+  </div>
+  <div class="table-card" id="sec-sessions">
+    <div class="section-title">Recent Sessions</div>
+    <table><thead><tr>
+      <th>Source</th><th>Project</th><th>Title</th><th>Last Active</th><th>Model</th>
+      <th>Turns</th><th>Input</th><th>Output</th><th>Cache</th><th>Cost</th>
+    </tr></thead><tbody id="sessions-body"></tbody></table>
+    <div style="margin-top:10px;text-align:center;" id="sessions-foot"></div>
+  </div>
+  <div class="table-card" id="sec-cost-table">
+    <div class="section-title">Cost by Model (All Sources)</div>
+    <table><thead><tr>
+      <th>Source</th><th>Model</th><th>Turns</th><th>Input</th><th>Output</th><th>Cache</th><th>Reasoning</th><th>Cost</th>
+    </tr></thead><tbody id="cost-body"></tbody></table>
+  </div>
+</div>
+<div class="footer-content">
+  <p>RoutingMagic Usage Dashboard v""" + VERSION + r""" &mdash; Unified view of Claude Code, OpenCode, Hermes, Codex CLI, 9router, and RoutingMagic usage.</p>
+  <p>Cost estimates use API pricing. Free models (NVIDIA NIM, OpenRouter :free) show $0.00. RoutingMagic-specific metrics (Caveman savings, Mythos effort) shown separately.</p>
+</div>
+<script>
+const C={text:'#BFBFBF',muted:'#4F4F50',axis:'#6F6F70',border:'#2C2D2E',accent:'#d97757',blue:'#48A0C7',green:'#74C991',red:'#C74E39',purple:'#9B7EC7',amber:'#D9A84E',teal:'#5BB8A3',mauve:'#C77E9B'};
+const SOURCE_COLORS={claude:'#d97757',opencode:'#48A0C7','9router':'#9B7EC7',hermes:'#5BB8A3',codex:'#D9A84E',routingmagic:'#74C991'};
+const SOURCE_NAMES={claude:'Claude Code',opencode:'OpenCode','9router':'9router',hermes:'Hermes',codex:'Codex CLI',routingmagic:'RoutingMagic'};
+let rawData=null,selectedSources=new Set(),selectedModels=new Set(),allModelsList=[],selectedRange='30d',charts={},sessionsLimit=10;
+
+function esc(s){const d=document.createElement('div');d.textContent=String(s);return d.innerHTML;}
+function fmt(n){if(n>=1e9)return(n/1e9).toFixed(1)+'B';if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'K';return String(n);}
+function fmtCost(c){return c===0?'$0.00':c<0.01?'<$0.01':'$'+c.toFixed(2);}
+
+function isFiltered(r){
+  if(selectedSources.size>0&&!selectedSources.has(r.source))return false;
+  if(selectedModels.size>0&&!selectedModels.has(r.model))return false;
+  return true;
+}
+function filterByRange(rows){
+  if(selectedRange==='all')return rows;
+  const now=new Date();
+  let cutoff;
+  switch(selectedRange){
+    case'today':cutoff=new Date(now.getFullYear(),now.getMonth(),now.getDate());break;
+    case'week':cutoff=new Date(now-7*864e5);break;
+    case'30d':cutoff=new Date(now-30*864e5);break;
+    case'90d':cutoff=new Date(now-90*864e5);break;
+    default:cutoff=new Date(0);
+  }
+  const co=cutoff.toISOString().slice(0,10);
+  return rows.filter(r=>(r.day||r.last_date||r.timestamp||'').slice(0,10)>=co);
+}
+
+function setRange(v){selectedRange=v;render();}
+function toggleSource(s){
+  if(selectedSources.has(s))selectedSources.delete(s);else selectedSources.add(s);
+  renderSourceChips();render();
+}
+function toggleModel(m){
+  if(selectedModels.has(m))selectedModels.delete(m);else selectedModels.add(m);
+  renderModelChips();render();
+}
+
+function renderSourceChips(){
+  const el=document.getElementById('source-chips');
+  if(!rawData||!rawData.sources){el.innerHTML='';return;}
+  el.innerHTML=rawData.sources.map(s=>{
+    const active=selectedSources.size===0||selectedSources.has(s.source);
+    return `<button class="chip ${active?'active':''}" onclick="toggleSource('${s.source}')" style="${active?'':'opacity:0.5'}"><span class="dot" style="background:${SOURCE_COLORS[s.source]||'#666'}"></span>${SOURCE_NAMES[s.source]||s.source} (${fmt(s.tokens)})</button>`;
+  }).join('');
+}
+function renderModelChips(){
+  const el=document.getElementById('model-chips');
+  if(!rawData||!rawData.all_models){el.innerHTML='';return;}
+  const top10=rawData.all_models.slice(0,12);
+  el.innerHTML=top10.map(m=>{
+    const active=selectedModels.size===0||selectedModels.has(m.model);
+    const short=m.model.length>25?m.model.slice(0,25)+'...':m.model;
+    return `<button class="chip ${active?'active':''}" onclick="toggleModel('${esc(m.model)}')" style="${active?'':'opacity:0.5'}"><span class="dot" style="background:${SOURCE_COLORS[m.source]||'#666'}"></span>${esc(short)}</button>`;
+  }).join('');
+}
+
+function renderStats(){
+  const el=document.getElementById('stats-row');
+  if(!rawData){el.innerHTML='';return;}
+  let daily=filterByRange(rawData.daily_by_model);
+  daily=daily.filter(r=>isFiltered(r));
+  let sessions=filterByRange(rawData.sessions_all);
+  sessions=sessions.filter(r=>isFiltered(r));
+
+  const totalInput=daily.reduce((s,r)=>s+r.input,0);
+  const totalOutput=daily.reduce((s,r)=>s+r.output,0);
+  const totalCache=daily.reduce((s,r)=>s+r.cache_read+r.cache_write,0);
+  const totalReasoning=daily.reduce((s,r)=>s+r.reasoning,0);
+  const totalTurns=daily.reduce((s,r)=>s+r.turns,0);
+  const totalCost=sessions.reduce((s,r)=>s+(r.cost||0),0);
+  const freeTurns=daily.filter(r=>r.model.indexOf(':free')>-1||r.source==='routingmagic').reduce((s,r)=>s+r.turns,0);
+  const freePct=totalTurns>0?Math.round(freeTurns/totalTurns*100):0;
+
+  const sources=new Set(daily.map(r=>r.source));
+
+  el.innerHTML=`
+    <div class="stat-card"><div class="label">Total Turns</div><div class="value">${fmt(totalTurns)}</div><div class="sub">${sources.size} source${sources.size!==1?'s':''}</div></div>
+    <div class="stat-card"><div class="label">Input Tokens</div><div class="value">${fmt(totalInput)}</div><div class="sub">prompt tokens</div></div>
+    <div class="stat-card"><div class="label">Output Tokens</div><div class="value">${fmt(totalOutput)}</div><div class="sub">generated tokens</div></div>
+    <div class="stat-card"><div class="label">Cache</div><div class="value">${fmt(totalCache)}</div><div class="sub">read + write</div></div>
+    <div class="stat-card"><div class="label">Reasoning</div><div class="value">${fmt(totalReasoning)}</div><div class="sub">thinking tokens</div></div>
+    <div class="stat-card"><div class="label">Est. Cost</div><div class="value">${fmtCost(totalCost)}</div><div class="sub">API pricing equiv.</div></div>
+    <div class="stat-card"><div class="label">Free Usage</div><div class="value">${freePct}%</div><div class="sub">${fmt(freeTurns)} free turns</div></div>
+    <div class="stat-card"><div class="label">Sessions</div><div class="value">${sessions.length}</div><div class="sub">${selectedRange}</div></div>`;
+}
+
+function destroyChart(key){if(charts[key]){charts[key].destroy();delete charts[key];}}
+
+function renderDailyChart(){
+  destroyChart('daily');
+  let daily=filterByRange(rawData.daily_by_model).filter(r=>isFiltered(r));
+  const byDay={};
+  daily.forEach(r=>{if(!byDay[r.day])byDay[r.day]={};byDay[r.day][r.source]=(byDay[r.day][r.source]||0)+r.input+r.output;});
+  const days=Object.keys(byDay).sort();
+  const sources=[...new Set(daily.map(r=>r.source))];
+  const datasets=sources.map(s=>({label:SOURCE_NAMES[s]||s,data:days.map(d=>byDay[d][s]||0),backgroundColor:SOURCE_COLORS[s]+'cc',borderColor:SOURCE_COLORS[s],borderWidth:1}));
+  charts.daily=new Chart(document.getElementById('chart-daily'),{type:'bar',data:{labels:days,datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:C.axis,font:{size:10}}}},scales:{x:{stacked:true,ticks:{color:C.muted,font:{size:9}},grid:{color:C.border}},y:{stacked:true,ticks:{color:C.muted,font:{size:9},callback:v=>fmt(v)},grid:{color:C.border}}}}});
+}
+
+function renderSourcePie(){
+  destroyChart('source');
+  let daily=filterByRange(rawData.daily_by_model).filter(r=>isFiltered(r));
+  const bySrc={};daily.forEach(r=>{bySrc[r.source]=(bySrc[r.source]||0)+r.input+r.output;});
+  const srcs=Object.keys(bySrc);
+  charts.source=new Chart(document.getElementById('chart-source'),{type:'doughnut',data:{labels:srcs.map(s=>SOURCE_NAMES[s]||s),datasets:[{data:srcs.map(s=>bySrc[s]),backgroundColor:srcs.map(s=>(SOURCE_COLORS[s]||'#666')+'cc'),borderColor:'#161617',borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:C.axis,font:{size:10},padding:8}}}}});
+}
+
+function renderModelBar(){
+  destroyChart('model');
+  let daily=filterByRange(rawData.daily_by_model).filter(r=>isFiltered(r));
+  const byM={};daily.forEach(r=>{byM[r.model]=(byM[r.model]||0)+r.input+r.output;});
+  const sorted=Object.entries(byM).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const colors=sorted.map(([m])=>{for(const s in SOURCE_COLORS){if(m.toLowerCase().includes(s))return SOURCE_COLORS[s];}return C.blue;});
+  charts.model=new Chart(document.getElementById('chart-model'),{type:'bar',data:{labels:sorted.map(([m])=>m.length>20?m.slice(0,20)+'...':m),datasets:[{data:sorted.map(([,v])=>v),backgroundColor:colors.map(c=>c+'cc'),borderColor:colors,borderWidth:1}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:C.muted,font:{size:9},callback:v=>fmt(v)},grid:{color:C.border}},y:{ticks:{color:C.axis,font:{size:9}},grid:{display:false}}}}});
+}
+
+function renderCostDaily(){
+  destroyChart('costDaily');
+  let sessions=filterByRange(rawData.sessions_all).filter(r=>isFiltered(r));
+  const byDaySrc={};
+  sessions.forEach(r=>{const d=r.last_date;if(!byDaySrc[d])byDaySrc[d]={};byDaySrc[d][r.source]=(byDaySrc[d][r.source]||0)+(r.cost||0);});
+  const days=Object.keys(byDaySrc).sort();
+  const sources=[...new Set(sessions.map(r=>r.source))];
+  const datasets=sources.map(s=>({label:SOURCE_NAMES[s]||s,data:days.map(d=>byDaySrc[d]?.[s]||0),backgroundColor:SOURCE_COLORS[s]+'cc',borderColor:SOURCE_COLORS[s],borderWidth:1}));
+  charts.costDaily=new Chart(document.getElementById('chart-cost-daily'),{type:'bar',data:{labels:days,datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:C.axis,font:{size:10}}}},scales:{x:{stacked:true,ticks:{color:C.muted,font:{size:9}},grid:{color:C.border}},y:{stacked:true,ticks:{color:C.muted,font:{size:9},callback:v=>fmtCost(v)},grid:{color:C.border}}}}});
+}
+
+function renderReasoning(){
+  destroyChart('reasoning');
+  let daily=filterByRange(rawData.daily_by_model).filter(r=>isFiltered(r));
+  const bySrc={};daily.forEach(r=>{bySrc[r.source]=(bySrc[r.source]||0)+r.reasoning;});
+  const srcs=Object.keys(bySrc).filter(s=>bySrc[s]>0);
+  if(srcs.length===0){document.getElementById('chart-reasoning').parentElement.style.display='none';return;}
+  document.getElementById('chart-reasoning').parentElement.style.display='';
+  charts.reasoning=new Chart(document.getElementById('chart-reasoning'),{type:'doughnut',data:{labels:srcs.map(s=>SOURCE_NAMES[s]||s),datasets:[{data:srcs.map(s=>bySrc[s]),backgroundColor:srcs.map(s=>(SOURCE_COLORS[s]||'#666')+'cc'),borderColor:'#161617',borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:C.axis,font:{size:10},padding:8}}}}});
+}
+
+function renderCostModel(){
+  destroyChart('costModel');
+  let sessions=filterByRange(rawData.sessions_all).filter(r=>isFiltered(r));
+  const byM={};sessions.forEach(r=>{byM[r.model]=(byM[r.model]||0)+(r.cost||0);});
+  const sorted=Object.entries(byM).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  if(sorted.length===0){document.getElementById('chart-cost-model').parentElement.style.display='none';return;}
+  document.getElementById('chart-cost-model').parentElement.style.display='';
+  charts.costModel=new Chart(document.getElementById('chart-cost-model'),{type:'doughnut',data:{labels:sorted.map(([m])=>m.length>25?m.slice(0,25)+'...':m),datasets:[{data:sorted.map(([,v])=>v),backgroundColor:[C.accent,C.blue,C.green,C.purple,C.amber,C.teal,C.mauve,C.red],borderColor:'#161617',borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:C.axis,font:{size:10},padding:6}}}}});
+}
+
+function renderSessions(){
+  const body=document.getElementById('sessions-body');
+  const foot=document.getElementById('sessions-foot');
+  if(!rawData){body.innerHTML='';foot.innerHTML='';return;}
+  let sessions=filterByRange(rawData.sessions_all).filter(r=>isFiltered(r));
+  sessions.sort((a,b)=>(b.last||'').localeCompare(a.last||''));
+  const shown=sessions.slice(0,sessionsLimit);
+  body.innerHTML=shown.map(r=>{
+    const costStr=r.cost>0?fmtCost(r.cost):'<span class="free-tag">FREE</span>';
+    const topic=r.topic ? esc(r.topic) : '<span class="muted">untitled</span>';
+    return `<tr>
+      <td><span class="source-tag source-${r.source}">${SOURCE_NAMES[r.source]||r.source}</span></td>
+      <td class="topic-cell">${esc(r.project)}</td>
+      <td class="topic-cell">${topic}</td>
+      <td class="muted">${esc(r.last)}</td>
+      <td><span class="model-tag">${esc(r.model)}</span></td>
+      <td class="num">${r.turns}</td>
+      <td class="num">${fmt(r.input)}</td>
+      <td class="num">${fmt(r.output)}</td>
+      <td class="num">${fmt(r.cache_read+r.cache_write)}</td>
+      <td class="cost">${costStr}</td>
+    </tr>`;
+  }).join('');
+  if(sessions.length>sessionsLimit){
+    foot.innerHTML=`<button class="show-more-btn" onclick="sessionsLimit+=15;renderSessions()">Show ${Math.min(15,sessions.length-sessionsLimit)} more</button>`;
+  }else{foot.innerHTML='';}
+}
+
+function renderCostTable(){
+  const body=document.getElementById('cost-body');
+  if(!rawData){body.innerHTML='';return;}
+  let sessions=filterByRange(rawData.sessions_all).filter(r=>isFiltered(r));
+  const bySM={};
+  sessions.forEach(r=>{
+    const k=r.source+'|'+r.model;
+    if(!bySM[k])bySM[k]={source:r.source,model:r.model,turns:0,input:0,output:0,cache:0,reasoning:0,cost:0};
+    const b=bySM[k];b.turns+=r.turns;b.input+=r.input;b.output+=r.output;b.cache+=r.cache_read+r.cache_write;b.reasoning+=r.reasoning;b.cost+=r.cost||0;
+  });
+  const rows=Object.values(bySM).sort((a,b)=>b.cost-a.cost);
+  body.innerHTML=rows.map(r=>{
+    const costStr=r.cost>0?fmtCost(r.cost):'<span class="free-tag">FREE</span>';
+    return `<tr>
+      <td><span class="source-tag source-${r.source}">${SOURCE_NAMES[r.source]||r.source}</span></td>
+      <td><span class="model-tag">${esc(r.model)}</span></td>
+      <td class="num">${r.turns}</td>
+      <td class="num">${fmt(r.input)}</td>
+      <td class="num">${fmt(r.output)}</td>
+      <td class="num">${fmt(r.cache)}</td>
+      <td class="num">${fmt(r.reasoning)}</td>
+      <td class="cost">${costStr}</td>
+    </tr>`;
+  }).join('');
+}
+
+function render(){
+  renderStats();renderDailyChart();renderSourcePie();renderModelBar();
+  renderCostDaily();renderReasoning();renderCostModel();
+  renderSessions();renderCostTable();
+}
+
+function rescan(){
+  document.getElementById('rescan-btn').disabled=true;
+  document.getElementById('rescan-btn').textContent='Scanning...';
+  fetch('/api/rescan').then(()=>setTimeout(()=>loadData().then(()=>{document.getElementById('rescan-btn').disabled=false;document.getElementById('rescan-btn').textContent='\u21bb Rescan';}),2000));
+}
+
+function loadData(){
+  return fetch('/api/data').then(r=>r.json()).then(data=>{
+    if(data.error){document.getElementById('meta').textContent=data.error;return;}
+    rawData=data;
+    document.getElementById('meta').textContent=`Updated: ${data.generated_at}`;
+    allModelsList=data.all_models||[];
+    renderSourceChips();renderModelChips();render();
+  });
+}
+
+setInterval(loadData,30000);
+loadData();
+</script>
+</body>
+</html>"""
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  CLI entry point
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def main():
+    import sys
+    host = os.environ.get("HOST", "localhost")
+    port = int(os.environ.get("PORT", "9898"))
+
+    for i, arg in enumerate(sys.argv[1:], 1):
+        if arg == "--host" and i < len(sys.argv):
+            host = sys.argv[i + 1]
+        if arg == "--port" and i < len(sys.argv):
+            port = int(sys.argv[i + 1])
+        if arg == "scan":
+            scan()
+            return
+        if arg in ("-h", "--help"):
+            print(f"Usage: python3 dashboard_server.py [scan] [--host HOST] [--port PORT]")
+            print(f"  scan     Scan all sources and update unified DB")
+            print(f"  --host   Bind address (default: localhost)")
+            print(f"  --port   Port (default: 9898)")
+            return
+
+    # Background scan, serve immediately
+    def bg_scan():
+        scan(verbose=False)
+    threading.Thread(target=bg_scan, daemon=True).start()
+
+    # Open browser
+    def open_browser():
+        time.sleep(1.5)
+        webbrowser.open(f"http://{host}:{port}")
+    threading.Thread(target=open_browser, daemon=True).start()
+
+    serve(host=host, port=port)
+
+
+if __name__ == "__main__":
+    main()
 
 
 # ════════════════════════════════════════════════════════════════════════════════

@@ -2630,7 +2630,6 @@ def repl(model, use_deep_context=False, session_context=None):
 
         # Unified Dashboard (multi-tool usage)
         if line_stripped.startswith("/dashboard"):
-            import subprocess as _sp
             parts = line_stripped.split()
             subcmd = parts[1] if len(parts) > 1 else "open"
             script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dashboard_server.py")
@@ -2640,14 +2639,16 @@ def repl(model, use_deep_context=False, session_context=None):
                 print("\033[92m[Dashboard] Scan complete.\033[0m")
             elif subcmd in ("open", "start"):
                 import webbrowser as _wb
+                # Use ensure_dashboard_running to start daemon and get actual port
+                from dashboard_server import ensure_dashboard_running
+                port = ensure_dashboard_running()
                 def _open_dash():
                     import time as _t
                     _t.sleep(1.5)
-                    _wb.open("http://localhost:9898")
-                _sp.Popen([sys.executable, script], stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
+                    _wb.open(f"http://localhost:{port}")
                 import threading as _th
                 _th.Thread(target=_open_dash, daemon=True).start()
-                print("\033[92m[Dashboard] Running at http://localhost:9898\033[0m")
+                print(f"\033[92m[Dashboard] Running at http://localhost:{port}\033[0m")
             elif subcmd == "stop":
                 print("\033[93m[Dashboard] Kill with: pkill -f dashboard_server.py\033[0m")
             else:
