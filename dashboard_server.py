@@ -17,6 +17,8 @@ import socket
 import sys
 import signal
 import atexit
+import random
+import concurrent.futures
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from pathlib import Path
@@ -581,9 +583,278 @@ def _try_trigger_rescan() -> tuple[bool, str]:
     return True, "scanning"
 
 
+# ════════════════════════════════════════════════════════════════════════════════
+#  Model Council  (POST /api/council)
+#
+#  Registry-driven: members are picked from the live free-model pool written by
+#  model_registry_updater.py — never a hardcoded list. Synchronous end to end so
+#  it is safe to call straight from a request thread (ThreadingHTTPServer).
+# ════════════════════════════════════════════════════════════════════════════════
+
+# documented load order: ~/.routingmagic/.env, then ~/global.env, then real env vars
+RM_ENV_FILES = (Path.home() / ".routingmagic" / ".env", Path.home() / "global.env")
+RM_REGISTRY_DIR = Path.home() / ".routingmagic" / "registry"
+COUNCIL_SIZE = 3
+COUNCIL_MEMBER_TIMEOUT = 45.0
+COUNCIL_STALE_HOURS = 48
+
+# prompt keyword groups -> model-name substrings that suit that kind of task
+_COUNCIL_TASK_HINTS = [
+    (("code", "bug", "refactor", "function", "regex", "sql", "python", "typescript", "javascript", "react"),
+     ("coder", "code", "deepseek", "qwen")),
+    (("plan", "architecture", "strategy", "design", "reason", "analy", "trade-off", "tradeoff", "proof", "algorithm"),
+     ("nemotron", "reason", "gpt-oss", "glm", "ultra")),
+    (("finance", "financial", "valuation", "dcf", "stock", "invest", "earnings", "portfolio"),
+     ("minimax", "nemotron", "glm")),
+]
+
+# free-pool entries that are not general chat models (music/vision/OCR/moderation/
+# meta-route aliases) — never send council prompts to these
+_COUNCIL_EXCLUDE_SUBSTR = (
+    "lyria", "whisper", "parakeet", "canary", "embed", "-ocr", "-tts", "-rerank",
+    "content-safety", "guard", "moderation", "stable-diffusion", "sdxl", "flux",
+    "imagen", "sana", "-vl-", "vision-", "clip-", "-clip", "voicechat",
+    "inkling",  # thinkingmachines/inkling* — gated to "agentic harnesses", 403 on plain chat
+)
+_COUNCIL_EXCLUDE_EXACT = {"openrouter/free"}
+
+
+def _load_rm_env():
+    """Best-effort load of RoutingMagic env files into os.environ.
+
+    Never overwrites a value already set (real env vars win). Empty assignments
+    like ``NVAPI_KEY=`` are ignored so they cannot shadow a real key in a later
+    file — this is exactly the ~/.routingmagic/.env vs ~/global.env case.
+    """
+    for path in RM_ENV_FILES:
+        try:
+            lines = path.read_text().splitlines()
+        except (OSError, ValueError):
+            continue
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, _, v = line.partition("=")
+            k, v = k.strip(), v.strip().strip('"').strip("'")
+            if k and v and not os.environ.get(k):
+                os.environ[k] = v
+
+
+def _registry_age_hours() -> float:
+    """Hours since model_registry.json was last written (data-freshness signal)."""
+    try:
+        mtime = (RM_REGISTRY_DIR / "model_registry.json").stat().st_mtime
+        return (time.time() - mtime) / 3600.0
+    except OSError:
+        return float("inf")
+
+
+def _load_degraded_models() -> set:
+    """Model IDs the daily health check flagged degraded (health_cache.json keys)."""
+    try:
+        data = json.loads((RM_REGISTRY_DIR / "health_cache.json").read_text())
+        return {k.lower() for k in data} if isinstance(data, dict) else set()
+    except (OSError, ValueError):
+        return set()
+
+
+def _is_chat_model(model: str) -> bool:
+    """False for free-pool entries that are not general chat models."""
+    m = model.lower()
+    if m in _COUNCIL_EXCLUDE_EXACT:
+        return False
+    return not any(s in m for s in _COUNCIL_EXCLUDE_SUBSTR)
+
+
+def _select_council_models(prompt: str, n: int = COUNCIL_SIZE, want: int = None):
+    """Pick free models from the live registry: task-suited first, then random.
+
+    Returns up to ``want`` (default n) candidates as (model_id, provider) pairs.
+    Free models fail often (429/404/503), so callers over-select and keep the
+    first n that answer. ``provider`` comes from which registry set the model is
+    in (nim_free_models -> nvidia, openrouter_free_models -> openrouter), NOT the
+    ':free' suffix, which some NIM-list and Google-on-OpenRouter entries lack.
+    Returns (picks, degraded_relaxed, pool_size); degraded_relaxed means health
+    checks knocked the pool below n and degraded models were allowed back in.
+    """
+    want = want or n
+    nim_free, or_free = _load_free_models_from_registry()
+    provider_of = {}
+    for m in or_free:
+        provider_of[m] = "openrouter"
+    for m in nim_free:
+        provider_of.setdefault(m, "nvidia")  # nim list wins only if not already OR
+
+    # collapse "<id>" and "<id>:free" to one entry (same model, two providers)
+    by_base = {}
+    for m in provider_of:
+        by_base.setdefault(m[:-5] if m.endswith(":free") else m, m)
+    provider_of = {v: provider_of[v] for v in by_base.values()}
+
+    pool = sorted(m for m in provider_of if _is_chat_model(m))
+    degraded = _load_degraded_models()
+    healthy = [m for m in pool if m not in degraded]
+    working = healthy if len(healthy) >= n else pool
+    degraded_relaxed = len(healthy) < n and bool(degraded)
+
+    pl = (prompt or "").lower()
+    preferred = []
+    for kws, hints in _COUNCIL_TASK_HINTS:
+        if any(k in pl for k in kws):
+            preferred = [m for m in working if any(h in m for h in hints)]
+            break
+
+    picked = []
+    for m in preferred:
+        if m not in picked:
+            picked.append(m)
+        if len(picked) >= want:
+            break
+    rest = [m for m in working if m not in picked]
+    random.shuffle(rest)
+    picked.extend(rest[: max(0, want - len(picked))])
+    return [(m, provider_of[m]) for m in picked[:want]], degraded_relaxed, len(pool)
+
+
+def _council_client(provider: str):
+    from openai import OpenAI  # lazy: the dashboard still starts if openai is absent
+    if provider == "nvidia":
+        key = os.environ.get("NVAPI_KEY") or os.environ.get("NVIDIA_API_KEY")
+        if not key:
+            raise RuntimeError("NVAPI_KEY not set")
+        return OpenAI(base_url="https://integrate.api.nvidia.com/v1", api_key=key,
+                      max_retries=0, timeout=COUNCIL_MEMBER_TIMEOUT)
+    key = os.environ.get("OPENROUTER_API_KEY")
+    if not key:
+        raise RuntimeError("OPENROUTER_API_KEY not set")
+    return OpenAI(base_url="https://openrouter.ai/api/v1", api_key=key,
+                  max_retries=0, timeout=COUNCIL_MEMBER_TIMEOUT)
+
+
+def _council_query_one(model: str, provider: str, prompt: str) -> dict:
+    try:
+        resp = _council_client(provider).chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=1500,
+        )
+        return {"model": model, "provider": provider, "success": True, "error": "",
+                "content": (resp.choices[0].message.content or "").strip()}
+    except Exception as e:
+        return {"model": model, "provider": provider, "success": False,
+                "error": f"{type(e).__name__}: {str(e)[:200]}", "content": ""}
+
+
+def _council_synthesize(prompt: str, members: list) -> str:
+    ok = [m for m in members if m["success"] and m["content"]]
+    if not ok:
+        return ""
+    if len(ok) == 1:
+        return ok[0]["content"]
+    joined = "\n\n".join(f"### Member {i + 1} ({m['model']})\n{m['content']}"
+                         for i, m in enumerate(ok))
+    syn_prompt = (
+        f"You are the chair of a model council. {len(ok)} models independently answered "
+        "the question below. Synthesise one decisive answer: note where they agree, flag "
+        "where they disagree, and give the best combined recommendation.\n\n"
+        f"QUESTION:\n{prompt}\n\n{joined}"
+    )
+    for m in ok:  # reuse a member that already worked as the synthesiser
+        r = _council_query_one(m["model"], m["provider"], syn_prompt)
+        if r["success"] and r["content"]:
+            return r["content"]
+    return ok[0]["content"]
+
+
+def run_local_council(prompt: str) -> dict:
+    """Registry-driven Model Council. Synchronous; safe from a request thread."""
+    _load_rm_env()
+    prompt = (prompt or "").strip()
+    if not prompt:
+        return {"error": "empty prompt", "results": [], "synthesis": "",
+                "degraded": True, "degraded_note": ""}
+
+    age = _registry_age_hours()
+    if age > COUNCIL_STALE_HOURS:
+        return {"error": (f"model registry is {age:.0f}h old (>{COUNCIL_STALE_HOURS}h); "
+                          "refusing to run — listed models may no longer be free. "
+                          "Run model_registry_updater.py."),
+                "results": [], "synthesis": "", "degraded": True, "degraded_note": ""}
+
+    # Over-select: free models fail often, so try up to 2x and keep the first
+    # COUNCIL_SIZE that actually answer. _select_council_models caps `want` at
+    # the number of candidates actually available.
+    picks, degraded_relaxed, pool_size = _select_council_models(
+        prompt, want=COUNCIL_SIZE * 2)
+    if not picks:
+        return {"error": f"no free chat models in registry (pool={pool_size}); "
+                         "run model_registry_updater.py",
+                "results": [], "synthesis": "", "degraded": True, "degraded_note": ""}
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(picks)) as ex:
+        tried = list(ex.map(lambda mp: _council_query_one(mp[0], mp[1], prompt), picks))
+
+    good = [m for m in tried if m["success"]]
+    bad = [m for m in tried if not m["success"]]
+    members = good[:COUNCIL_SIZE] or bad[:COUNCIL_SIZE]
+    if len(good) < COUNCIL_SIZE:  # pad with failures so the UI shows what was tried
+        members = good + bad[: COUNCIL_SIZE - len(good)]
+
+    ok = len(good)
+    if ok < COUNCIL_SIZE:
+        note = (f"degraded: only {ok} of {COUNCIL_SIZE} members answered "
+                f"({len(picks)} models tried)")
+    elif degraded_relaxed:
+        note = "warning: health cache exhausted the free pool; degraded models were allowed"
+    else:
+        note = ""
+    return {
+        "results": members,
+        "synthesis": _council_synthesize(prompt, members),
+        "degraded": ok < COUNCIL_SIZE,
+        "degraded_note": note,
+        "models": [m["model"] for m in members],
+        "tried": [m["model"] for m in tried],
+        "pool_size": pool_size,
+        "registry_age_hours": round(age, 1),
+    }
+
+
 class DashboardHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass  # Suppress request logging
+
+    def _send_json(self, obj, code=200):
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        _apply_cors(self)
+        self.end_headers()
+        self.wfile.write(json.dumps(obj).encode())
+
+    def do_POST(self):
+        parsed = urlparse(self.path)
+        if parsed.path == "/api/council":
+            try:
+                n = int(self.headers.get("Content-Length", 0) or 0)
+                raw = self.rfile.read(n) if n > 0 else b"{}"
+                prompt = json.loads(raw or b"{}").get("prompt", "")
+            except (ValueError, TypeError):
+                self._send_json({"error": "invalid JSON body", "results": []}, 400)
+                return
+            if not str(prompt).strip():
+                self._send_json({"error": "empty prompt", "results": []}, 400)
+                return
+            try:
+                result = run_local_council(prompt)
+            except Exception as e:
+                self._send_json({"error": f"{type(e).__name__}: {e}", "results": []}, 500)
+                return
+            self._send_json(result, 200 if not result.get("error") else 503)
+            return
+        self.send_response(404)
+        self.end_headers()
 
     def do_GET(self):
         parsed = urlparse(self.path)
@@ -768,6 +1039,38 @@ tr:hover td{background:var(--raised);}
 .footer-content p{color:var(--muted);font-size:11px;line-height:1.6;}
 .footer-content a{color:var(--blue);text-decoration:none;}
 @media(max-width:768px){.charts-grid{grid-template-columns:1fr;}.chart-card.wide{grid-column:1;}}
+.header-actions{display:flex;gap:8px;flex-wrap:wrap;}
+.btn{background:var(--card);border:1px solid var(--border);color:var(--text);padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;display:inline-flex;align-items:center;gap:6px;}
+.btn:hover{border-color:var(--accent);color:var(--accent);}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:1000;padding:20px;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:16px;max-width:900px;width:100%;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;animation:slideUp .2s ease;}
+@keyframes slideUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+.modal-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.modal-title{font-size:16px;font-weight:700;}
+.modal-close{background:transparent;border:none;color:var(--muted);font-size:24px;cursor:pointer;padding:0;line-height:1;}
+.modal-close:hover{color:var(--text);}
+.modal-body{padding:24px;overflow-y:auto;flex:1;}
+.modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:12px;}
+.council-prompt{width:100%;min-height:110px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:12px;font-family:inherit;font-size:14px;resize:vertical;margin-bottom:14px;}
+.council-prompt:focus{outline:none;border-color:var(--accent);}
+.council-note{color:var(--amber);font-size:12px;margin-bottom:12px;padding:8px 10px;border:1px solid var(--amber);border-radius:6px;background:rgba(217,168,78,.08);}
+.council-results{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;}
+.council-member{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:16px;min-width:0;}
+.council-member-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;gap:8px;}
+.council-member-model{flex:1;min-width:0;font-weight:600;font-size:12px;font-family:monospace;color:var(--accent);overflow-wrap:anywhere;}
+.council-member-status{flex-shrink:0;font-size:11px;padding:2px 8px;border-radius:4px;}
+.council-member-status.success{background:rgba(110,224,163,.2);color:var(--green);}
+.council-member-status.error{background:rgba(232,92,78,.2);color:var(--red);}
+.council-member-content{font-size:13px;line-height:1.6;color:var(--text);white-space:pre-wrap;max-height:220px;overflow-y:auto;}
+.council-synthesis{grid-column:1/-1;margin-top:4px;padding:16px;background:rgba(217,119,87,.08);border:1px solid var(--accent);border-radius:10px;}
+.council-synthesis h4{font-size:13px;font-weight:600;margin-bottom:8px;color:var(--accent);}
+.council-synthesis p{font-size:13px;line-height:1.6;color:var(--text);white-space:pre-wrap;}
+.loading{display:inline-flex;align-items:center;gap:8px;color:var(--muted);}
+.spinner{width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
 </style>
 </head>
 <body>
@@ -880,6 +1183,59 @@ function showInsights(){
 
 function closeInsights(){
   document.getElementById('insights-modal').classList.remove('open');
+}
+
+// ── Model Council ──────────────────────────────────────────────────────────────
+function openCouncil(){
+  document.getElementById('council-modal').classList.add('open');
+  const r=document.getElementById('council-results');r.style.display='none';r.innerHTML='';
+  document.getElementById('council-note').style.display='none';
+  setTimeout(()=>document.getElementById('council-prompt').focus(),50);
+}
+function closeCouncil(){
+  document.getElementById('council-modal').classList.remove('open');
+}
+function runCouncil(){
+  const prompt=document.getElementById('council-prompt').value.trim();
+  if(!prompt){alert('Enter a prompt for the council');return;}
+  const btn=document.getElementById('council-run');
+  const loading=document.getElementById('council-loading');
+  const results=document.getElementById('council-results');
+  const note=document.getElementById('council-note');
+  btn.disabled=true;loading.style.display='inline-flex';results.style.display='none';note.style.display='none';
+  fetch('/api/council',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})})
+    .then(resp=>resp.json().then(data=>({ok:resp.ok,status:resp.status,data})))
+    .then(({ok,status,data})=>renderCouncilResults(data,status))
+    .catch(e=>{
+      results.innerHTML='<div style="color:var(--red);padding:16px;">Request failed: '+esc(e.message||String(e))+' &mdash; is the dashboard server running on this port?</div>';
+      results.style.display='block';
+    })
+    .finally(()=>{btn.disabled=false;loading.style.display='none';});
+}
+function renderCouncilResults(data,status){
+  const results=document.getElementById('council-results');
+  const note=document.getElementById('council-note');
+  if(data && data.error){
+    results.innerHTML='<div style="color:var(--red);padding:16px;">'+esc(data.error)+(status?' (HTTP '+status+')':'')+'</div>';
+    results.style.display='block';return;
+  }
+  if(data.degraded_note){note.textContent='⚠ '+data.degraded_note;note.style.display='block';}
+  let html='';
+  (data.results||[]).forEach((r,i)=>{
+    const short=(r.error||'failed').split(':')[0];
+    html+='<div class="council-member">'
+      +'<div class="council-member-header">'
+      +'<span class="council-member-model">'+esc(r.model||('member '+(i+1)))+'</span>'
+      +'<span class="council-member-status '+(r.success?'success':'error')+'">'+(r.success?'✓ ok':'✗ '+esc(short))+'</span>'
+      +'</div>'
+      +'<div class="council-member-content">'+esc(r.success?(r.content||'(no response)'):(r.error||'(failed)'))+'</div>'
+      +'</div>';
+  });
+  if(data.synthesis){
+    html+='<div class="council-synthesis"><h4>Synthesis</h4><p>'+esc(data.synthesis)+'</p></div>';
+  }
+  results.innerHTML=html||'<div style="padding:16px;color:var(--muted);">No council members responded.</div>';
+  results.style.display='block';
 }
 
 function renderInsights(data){
@@ -1183,6 +1539,28 @@ loadData();
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeInsights()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Council Modal -->
+<div class="modal-overlay" id="council-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Model Council</span>
+      <button class="modal-close" onclick="closeCouncil()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <textarea class="council-prompt" id="council-prompt" placeholder="Ask the council a question. It queries 3 free models from the live registry in parallel, then synthesises one answer."></textarea>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+        <button class="btn primary" id="council-run" onclick="runCouncil()">Run Council</button>
+        <span class="loading" id="council-loading" style="display:none;"><span class="spinner"></span>Deliberating&hellip;</span>
+      </div>
+      <div class="council-note" id="council-note" style="display:none;"></div>
+      <div class="council-results" id="council-results" style="display:none;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeCouncil()">Close</button>
     </div>
   </div>
 </div>
