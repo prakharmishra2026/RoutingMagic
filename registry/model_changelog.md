@@ -53,3 +53,7 @@
   ⬆️ **Score change**: nim:nvidia/nemotron-3-ultra-550b-a55b (30.0 → 55.0)
   ⬆️ **Score change**: nim:deepseek-ai/deepseek-v4-flash-0731 (30.0 → 55.0)
   ⬆️ **Score change**: nim:google/gemma-4-31b-it (30.0 → 40.0)
+
+## 2026-08-29 07:45 UTC
+  ➕ **Added**: inclusionai/ling-3.0-flash-fin:free (openrouter, agentic, score: 42.6)
+  ➖ **Removed**: stepfun-ai/step-3.7-flash (nim, general)
