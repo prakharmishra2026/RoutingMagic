@@ -1001,6 +1001,12 @@ header .meta{color:var(--muted);font-size:11px;text-align:right;}
 .container{max-width:1400px;margin:0 auto;padding:20px 24px;}
 .stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px;}
 .stat-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px;}
+#insights-inline{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;cursor:pointer;}
+#insights-inline:empty{display:none;}
+.ins-chip{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 12px;min-width:120px;transition:border-color .15s;}
+#insights-inline:hover .ins-chip{border-color:var(--accent);}
+.ins-chip .k{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:3px;}
+.ins-chip .v{font-size:13px;color:var(--text);}
 .stat-card .label{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;}
 .stat-card .value{font-size:20px;font-weight:700;}
 .stat-card .sub{color:var(--muted);font-size:10px;margin-top:3px;}
@@ -1105,6 +1111,7 @@ tr:hover td{background:var(--raised);}
 </div>
 <div class="container">
   <div class="stats-row" id="stats-row"></div>
+  <div id="insights-inline" title="Click for full insights" onclick="showInsights()"></div>
   <div class="charts-grid">
     <div class="chart-card wide" id="sec-daily"><h2>Daily Token Usage by Source</h2><div class="chart-wrap tall"><canvas id="chart-daily"></canvas></div></div>
     <div class="chart-card" id="sec-source"><h2>Tokens by Source</h2><div class="chart-wrap"><canvas id="chart-source"></canvas></div></div>
@@ -1137,6 +1144,7 @@ const C={text:'#BFBFBF',muted:'#4F4F50',axis:'#6F6F70',border:'#2C2D2E',accent:'
 const SOURCE_COLORS={claude:'#d97757',opencode:'#48A0C7','9router':'#9B7EC7',hermes:'#5BB8A3',codex:'#D9A84E',routingmagic:'#74C991'};
 const SOURCE_NAMES={claude:'Claude Code',opencode:'OpenCode','9router':'9router',hermes:'Hermes',codex:'Codex CLI',routingmagic:'RoutingMagic'};
 let rawData=null,selectedSources=new Set(),selectedModels=new Set(),allModelsList=[],selectedRange='30d',charts={},sessionsLimit=10;
+let insightsCache=null;
 
 // Export & Insights functions
 function exportJSON(){
@@ -1170,6 +1178,7 @@ function showInsights(){
   document.getElementById('insights-loading').style.display='inline-flex';
   document.getElementById('insights-content').style.display='none';
   fetch('/api/insights').then(r=>r.json()).then(data=>{
+    if(data&&data.insights){insightsCache=data;renderInsightsInline();}
     renderInsights(data);
     document.getElementById('insights-loading').style.display='none';
     document.getElementById('insights-content').style.display='block';
@@ -1178,7 +1187,6 @@ function showInsights(){
     document.getElementById('insights-content').innerHTML='<div style="color:var(--red);padding:16px;">Error loading insights: '+e+'</div>';
     document.getElementById('insights-content').style.display='block';
   });
-  document.getElementById('insights-modal').classList.add('open');
 }
 
 function closeInsights(){
@@ -1355,9 +1363,40 @@ function renderModelChips(){
   }).join('');
 }
 
+function insightHeadline(ins){
+  const d=ins.data;
+  try{
+    if(ins.type==='free_ratio') return (d.free_pct??0)+'% free';
+    if(ins.type==='budget_health') return String(d.status||'?')+' · mo '+(d.monthly_pct??0)+'%';
+    if(ins.type==='top_cost_models'&&d[0]) return d[0].model.split('/').pop()+' $'+(d[0].cost||0).toFixed(2);
+    if(ins.type==='top_projects'&&d[0]) return (d[0].project||d[0].name||'?')+' $'+(d[0].cost||0).toFixed(2);
+    if(ins.type==='model_efficiency'&&d[0]) return d[0].model.split('/').pop()+' '+fmt(d[0].tokens_per_dollar||d[0].cost_per_dollar||0)+'/$';
+    if(ins.type==='daily_trend'&&d.length){
+      const t=d.reduce((s,r)=>s+(r.tokens||0),0), c=d.reduce((s,r)=>s+(r.cost||0),0);
+      return fmt(t)+' tok · $'+c.toFixed(2);
+    }
+  }catch(e){}
+  return '—';
+}
+function renderInsightsInline(){
+  const el=document.getElementById('insights-inline');
+  if(!el) return;
+  if(!insightsCache||!insightsCache.insights){el.innerHTML='';return;}
+  el.innerHTML=insightsCache.insights.map(ins=>
+    '<div class="ins-chip"><div class="k">'+esc(ins.title)+'</div><div class="v">'+esc(insightHeadline(ins))+'</div></div>'
+  ).join('');
+}
+function loadInsightsInline(){
+  if(insightsCache){renderInsightsInline();return;}
+  fetch('/api/insights').then(r=>r.ok?r.json():null).then(data=>{
+    if(data&&data.insights){insightsCache=data;renderInsightsInline();}
+  }).catch(()=>{});
+}
+
 function renderStats(){
   const el=document.getElementById('stats-row');
   if(!rawData){el.innerHTML='';return;}
+  loadInsightsInline();
   let daily=filterByRange(rawData.daily_by_model);
   daily=daily.filter(r=>isFiltered(r));
   let sessions=filterByRange(rawData.sessions_all);
@@ -1509,6 +1548,7 @@ function render(){
 function rescan(){
   document.getElementById('rescan-btn').disabled=true;
   document.getElementById('rescan-btn').textContent='Scanning...';
+  insightsCache=null;
   fetch('/api/rescan').then(()=>setTimeout(()=>loadData().then(()=>{document.getElementById('rescan-btn').disabled=false;document.getElementById('rescan-btn').textContent='\u21bb Rescan';}),2000));
 }
 
