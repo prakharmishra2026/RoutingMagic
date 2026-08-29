@@ -71,8 +71,70 @@ def _project_from_path(path: str) -> str:
 #  Claude Code — ~/.claude/usage.db (turns table)
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def scan_claude_jsonl(projects_dir: Optional[Path] = None) -> List[Dict]:
+    """Read Claude Code session logs (~/.claude/projects/*/*.jsonl) directly.
+
+    usage.db is populated by the external `claude-usage` ingester, which can fall
+    days behind without anything noticing. The JSONL logs are written live by
+    Claude Code itself, so they are the fresher source. Field shape matches
+    ~/.claude/token-report.py.
+    """
+    base = Path(projects_dir) if projects_dir else Path.home() / ".claude" / "projects"
+    if not base.is_dir():
+        return []
+
+    rows: List[Dict] = []
+    for jf in base.glob("*/*.jsonl"):
+        try:
+            fh = jf.open(errors="ignore")
+        except OSError:
+            continue
+        with fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    o = json.loads(line)
+                except ValueError:
+                    continue
+                if o.get("type") != "assistant":
+                    continue
+                msg = o.get("message") or {}
+                u = msg.get("usage")
+                if not isinstance(u, dict):
+                    continue
+                inp = u.get("input_tokens", 0) or 0
+                out = u.get("output_tokens", 0) or 0
+                cr = u.get("cache_read_input_tokens", 0) or 0
+                cw = u.get("cache_creation_input_tokens", 0) or 0
+                if inp + out + cr + cw == 0:
+                    continue
+                details = u.get("output_tokens_details") or {}
+                rows.append({
+                    "source": "claude",
+                    "session_id": o.get("sessionId") or jf.stem,
+                    "timestamp": o.get("timestamp") or "",
+                    "model": msg.get("model") or "unknown",
+                    "input_tokens": inp,
+                    "output_tokens": out,
+                    "cache_read": cr,
+                    "cache_write": cw,
+                    "reasoning_tokens": details.get("thinking_tokens", 0) or 0,
+                    "cost": 0.0,
+                    "project": _project_from_path(o.get("cwd") or ""),
+                    "source_metadata": json.dumps({"gitBranch": o.get("gitBranch") or ""}),
+                })
+    return rows
+
+
 def scan_claude(db_path: Optional[Path] = None) -> List[Dict]:
-    """Scan Claude Code usage.db turns table."""
+    """Scan Claude Code usage — prefers the live JSONL logs, falls back to usage.db."""
+    if db_path is None:
+        live = scan_claude_jsonl()
+        if live:
+            return live
+
     db = db_path or Path.home() / ".claude" / "usage.db"
     conn = _safe_connect(db)
     if not conn:

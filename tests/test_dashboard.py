@@ -3,6 +3,7 @@
 Network-free. The council tests exercise selection/filtering logic only; they never
 call a model.
 """
+import json
 import os
 import re
 import sys
@@ -104,3 +105,45 @@ def test_stale_registry_makes_council_refuse(monkeypatch):
 def test_empty_prompt_rejected():
     out = ds.run_local_council("   ")
     assert out["error"] == "empty prompt"
+
+
+# ── Phase 8: Claude JSONL scanner (no dependency on the usage.db ingester) ────────
+
+def test_scan_claude_jsonl_reads_live_logs(tmp_path):
+    import dashboard_adapters as da
+
+    proj = tmp_path / "-Users-me-Projects-demo"
+    proj.mkdir()
+    turn = {
+        "type": "assistant",
+        "timestamp": "2026-08-29T10:00:00.000Z",
+        "sessionId": "abc-123",
+        "cwd": "/Users/me/Projects/demo",
+        "gitBranch": "main",
+        "message": {
+            "model": "claude-sonnet-5",
+            "usage": {
+                "input_tokens": 10, "output_tokens": 20,
+                "cache_read_input_tokens": 100, "cache_creation_input_tokens": 5,
+                "output_tokens_details": {"thinking_tokens": 7},
+            },
+        },
+    }
+    noise = {"type": "user", "message": {"content": "hi"}}
+    (proj / "sess.jsonl").write_text(json.dumps(noise) + "\n" + json.dumps(turn) + "\n")
+
+    rows = da.scan_claude_jsonl(projects_dir=tmp_path)
+    assert len(rows) == 1
+    r = rows[0]
+    assert r["source"] == "claude"
+    assert r["session_id"] == "abc-123"
+    assert r["model"] == "claude-sonnet-5"
+    assert (r["input_tokens"], r["output_tokens"]) == (10, 20)
+    assert (r["cache_read"], r["cache_write"]) == (100, 5)
+    assert r["reasoning_tokens"] == 7
+    assert r["project"] == "Projects/demo"
+
+
+def test_scan_claude_jsonl_missing_dir_is_empty(tmp_path):
+    import dashboard_adapters as da
+    assert da.scan_claude_jsonl(projects_dir=tmp_path / "nope") == []
