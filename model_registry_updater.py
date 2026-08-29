@@ -393,16 +393,25 @@ def save_registry_atomic(registry: Registry, registry_dir: Path):
     # Atomic rename
     temp_file.replace(registry_file)
     
-    # Also save to user's home directory for dashboard access
-    home_registry_dir = Path.home() / ".routingmagic" / "registry"
-    home_registry_dir.mkdir(parents=True, exist_ok=True)
-    home_registry_file = home_registry_dir / "model_registry.json"
-    with open(home_registry_file, "w") as f:
-        json.dump(registry.to_dict(), f, indent=2)
-    
-    # Update last update timestamp
-    with open(registry_dir / "last_update.txt", "w") as f:
-        f.write(now.isoformat().replace("+00:00", "Z"))
+    stamp = now.isoformat().replace("+00:00", "Z")
+
+    # Update last-update stamp in the registry dir we just wrote.
+    (registry_dir / "last_update.txt").write_text(stamp)
+
+    # Mirror everything the runtime reads into ~/.routingmagic/registry so the
+    # router, is_update_needed(), and the dashboard council all see the same
+    # freshness and health data. Previously only model_registry.json was mirrored,
+    # so the home stamp was frozen (is_update_needed() permanently true) and the
+    # home health_cache was missing (degraded models never excluded at dispatch).
+    home_registry_dir = HOME_REGISTRY_DIR
+    if home_registry_dir.resolve() != registry_dir.resolve():
+        home_registry_dir.mkdir(parents=True, exist_ok=True)
+        (home_registry_dir / "model_registry.json").write_text(
+            json.dumps(registry.to_dict(), indent=2))
+        (home_registry_dir / "last_update.txt").write_text(stamp)
+        src_health = registry_dir / "health_cache.json"
+        if src_health.exists():
+            (home_registry_dir / "health_cache.json").write_text(src_health.read_text())
 
 
 def log_changes(old: Registry, new: Registry):
@@ -581,11 +590,21 @@ async def run_health_checks(registry: Registry, max_concurrent: int = 10) -> Dic
         elif model_id in health_cache:
             # Model recovered
             print(f"[ModelRegistry] ✓ Model recovered: {model_id}")
-    
+
+    # Guard against a wholesale-failure artifact: if almost every checked model
+    # "failed", the check itself is broken (bad/absent key, endpoint down), not
+    # the entire free tier. Writing that would exclude the whole pool at
+    # dispatch. Keep the previous cache instead.
+    n_checked = len(models_to_check)
+    if n_checked >= 5 and len(degraded) >= n_checked - 1:
+        print(f"[ModelRegistry] ⚠ Health check flagged {len(degraded)}/{n_checked} "
+              "models — treating as a failed run, keeping previous health_cache.json")
+        return health_cache
+
     # Save health cache
     with open(HEALTH_CACHE_FILE, "w") as f:
         json.dump(degraded, f, indent=2)
-    
+
     return degraded
 
 

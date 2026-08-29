@@ -858,6 +858,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/api/data":
             data = get_dashboard_data()
+            if isinstance(data, dict) and "error" not in data:
+                # computed fresh each request (registry rot is independent of DB mtime)
+                age = _registry_age_hours()
+                data = {**data, "registry_age_hours": round(age, 1),
+                        "registry_stale": age > COUNCIL_STALE_HOURS}
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             _apply_cors(self)
@@ -998,6 +1003,7 @@ header .meta{color:var(--muted);font-size:11px;text-align:right;}
 .container{max-width:1400px;margin:0 auto;padding:20px 24px;}
 .stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px;}
 .stat-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px;}
+#stale-banner{background:rgba(199,78,57,0.12);border:1px solid var(--red);color:var(--red);padding:10px 16px;font-size:13px;border-radius:8px;margin:12px 20px 0;}
 #insights-inline{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;cursor:pointer;}
 #insights-inline:empty{display:none;}
 .ins-chip{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 12px;min-width:120px;transition:border-color .15s;}
@@ -1088,6 +1094,7 @@ tr:hover td{background:var(--raised);}
     <button class="btn" id="rescan-btn" onclick="rescan()" title="Rescan all sources">Rescan</button>
   </div>
 </header>
+<div id="stale-banner" style="display:none;"></div>
 <div id="filter-bar">
   <span class="filter-label">Sources</span>
   <div class="chip-group" id="source-chips"></div>
@@ -1566,11 +1573,24 @@ function rescan(){
   fetch('/api/rescan').then(()=>setTimeout(()=>loadData().then(()=>{document.getElementById('rescan-btn').disabled=false;document.getElementById('rescan-btn').textContent='\u21bb Rescan';}),2000));
 }
 
+function renderStaleBanner(data){
+  const el=document.getElementById('stale-banner');
+  if(!el) return;
+  if(data && data.registry_stale){
+    el.textContent='⚠ Model registry is '+Math.round(data.registry_age_hours)+'h old (>48h). '
+      +'The router and Model Council may be running on a stale free-model list — run model_registry_updater.py.';
+    el.style.display='block';
+  }else{
+    el.style.display='none';
+  }
+}
+
 function loadData(){
   return fetch('/api/data').then(r=>r.json()).then(data=>{
     if(data.error){document.getElementById('meta').textContent=data.error;return;}
     rawData=data;
     document.getElementById('meta').textContent=`Updated: ${data.generated_at}`;
+    renderStaleBanner(data);
     allModelsList=data.all_models||[];
     renderSourceChips();renderModelChips();render();
   });

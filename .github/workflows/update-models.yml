@@ -80,9 +80,22 @@ jobs:
       
       - name: Notify on failure
         if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "::error::Daily model registry update failed. Check workflow logs."
-          # Could add Slack/Discord webhook here if needed
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          title="Model Registry Update failed ($(date -u +'%Y-%m-%d'))"
+          # Reuse an existing open alert issue if one is already there; otherwise open one.
+          existing=$(gh issue list --state open --label registry-alert --json number --jq '.[0].number' 2>/dev/null || true)
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "Failed again $(date -u). Run: $run_url"
+          else
+            gh label create registry-alert --color B60205 --description "Automated model-registry update failures" 2>/dev/null || true
+            gh issue create --label registry-alert \
+              --title "$title" \
+              --body "The daily model registry update workflow failed. The router and Model Council may be running on a stale free-model list. Run: $run_url"
+          fi
 
   # Optional: Run health checks weekly (more comprehensive)
   weekly-health-check:
