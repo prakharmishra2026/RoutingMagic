@@ -26,7 +26,7 @@ from datetime import datetime, timedelta, timezone
 
 from unified_scanner import get_db, init_db, DB_PATH, scan
 
-VERSION = "2.0.0"
+VERSION = "2.2.0"
 
 
 def parse_timestamp(ts: str) -> Optional[datetime]:
@@ -345,10 +345,7 @@ def is_free(model: str, source: str = None) -> bool:
             return False  # free-tier providers need :free suffix or registry entry
     if tokens & FREE_MODEL_TOKENS:
         return True
-    return False  # free-tier providers need :free suffix
-    if tokens & FREE_MODEL_TOKENS:
-        return True
-    return False
+    return False  # free-tier providers need :free suffix or a registry entry
 
 def get_pricing(model: str, source: str = None) -> Optional[dict]:
     if not model:
@@ -976,7 +973,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RoutingMagic Usage Dashboard</title>
+<title>RoutingMagic Desk</title>
 <script src="/assets/chart.umd.min.js"></script>
 <style>
 :root{--bg:#0d0d0e;--card:#161617;--border:#2C2D2E;--text:#BFBFBF;--muted:#4F4F50;--accent:#d97757;--blue:#48A0C7;--green:#74C991;--red:#C74E39;--purple:#9B7EC7;--amber:#D9A84E;--teal:#5BB8A3;--mauve:#C77E9B;--raised:#1E1F20;--selected:#262626;}
@@ -1136,7 +1133,7 @@ tr:hover td{background:var(--raised);}
   </div>
 </div>
 <div class="footer-content">
-  <p>RoutingMagic Usage Dashboard v""" + VERSION + r""" &mdash; Unified view of Claude Code, OpenCode, Hermes, Codex CLI, 9router, and RoutingMagic usage.</p>
+  <p>RoutingMagic Desk v""" + VERSION + r""" &mdash; Unified view of Claude Code, OpenCode, Hermes, Codex CLI, 9router, and RoutingMagic usage.</p>
   <p>Cost estimates use API pricing. Free models (NVIDIA NIM, OpenRouter :free) show $0.00. RoutingMagic-specific metrics (Caveman savings, Mythos effort) shown separately.</p>
 </div>
 <script>
@@ -1177,14 +1174,18 @@ function showInsights(){
   document.getElementById('insights-modal').classList.add('open');
   document.getElementById('insights-loading').style.display='inline-flex';
   document.getElementById('insights-content').style.display='none';
-  fetch('/api/insights').then(r=>r.json()).then(data=>{
-    if(data&&data.insights){insightsCache=data;renderInsightsInline();}
-    renderInsights(data);
+  fetch('/api/insights').then(r=>r.json().then(data=>({ok:r.ok,status:r.status,data}))).then(({ok,status,data})=>{
+    if(data&&data.insights&&data.insights.length){insightsCache=data;renderInsightsInline();}
+    if(!ok||(data&&data.error)){
+      document.getElementById('insights-content').innerHTML='<div style="color:var(--red);padding:16px;">Insights error'+(status?' (HTTP '+status+')':'')+': '+esc((data&&data.error)||'unknown')+'</div>';
+    }else{
+      renderInsights(data);
+    }
     document.getElementById('insights-loading').style.display='none';
     document.getElementById('insights-content').style.display='block';
   }).catch(e=>{
     document.getElementById('insights-loading').style.display='none';
-    document.getElementById('insights-content').innerHTML='<div style="color:var(--red);padding:16px;">Error loading insights: '+e+'</div>';
+    document.getElementById('insights-content').innerHTML='<div style="color:var(--red);padding:16px;">Could not reach the dashboard server (is it running on this port?): '+esc(String(e.message||e))+'</div>';
     document.getElementById('insights-content').style.display='block';
   });
 }
@@ -1722,12 +1723,21 @@ def get_insights() -> dict:
     """Generate actionable insights from usage data."""
     from unified_scanner import get_db, init_db, DB_PATH
     from datetime import datetime, timezone, timedelta
-    from dashboard_server import get_budget_status
-    
+
     if not DB_PATH.exists():
-        return {"error": "Database not found"}
-    
-    conn = get_db(DB_PATH)
+        return {"error": "Database not found", "insights": []}
+
+    try:
+        return _build_insights(get_db(DB_PATH))
+    except Exception as e:
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        return {"error": f"{type(e).__name__}: {e}", "insights": []}
+
+
+def _build_insights(conn) -> dict:
+    from unified_scanner import init_db
+    from datetime import datetime, timezone, timedelta
     init_db(conn)
     
     now = datetime.now(timezone.utc)
@@ -1749,19 +1759,24 @@ def get_insights() -> dict:
             "data": [{"model": f"{r['source']}/{r['model']}", "cost": round(r["total_cost"], 4), "tokens": r["tokens"]} for r in top_cost]
         })
     
-    # 2. Free vs paid ratio
-    free_stats = conn.execute("""
-        SELECT 
-            SUM(CASE WHEN source='routingmagic' OR model LIKE '%:free%' OR model LIKE '%/nemotron-%' OR model LIKE '%/big-pickle%' OR model LIKE '%/gpt-oss%' THEN input_tokens+output_tokens ELSE 0 END) as free_tokens,
-            SUM(input_tokens + output_tokens) as total_tokens
+    # 2. Free vs paid ratio — classify with is_free() (registry-aware), not
+    # hardcoded model-name LIKE patterns, so it can't rot when the free tier
+    # changes. Same single source of truth the rest of the dashboard uses.
+    fr_rows = conn.execute("""
+        SELECT source, COALESCE(NULLIF(model, ''), 'unknown') as model,
+               SUM(input_tokens + output_tokens) as toks
         FROM unified_turns
-    """).fetchone()
-    if free_stats and free_stats["total_tokens"]:
-        free_pct = (free_stats["free_tokens"] / free_stats["total_tokens"]) * 100
+        GROUP BY source, COALESCE(NULLIF(model, ''), 'unknown')
+    """).fetchall()
+    total_tokens = sum(r["toks"] or 0 for r in fr_rows)
+    free_tokens = sum((r["toks"] or 0) for r in fr_rows if is_free(r["model"], r["source"]))
+    if total_tokens:
         insights.append({
             "type": "free_ratio",
             "title": "Free vs Paid Usage",
-            "data": {"free_pct": round(free_pct, 1), "free_tokens": free_stats["free_tokens"], "paid_tokens": free_stats["total_tokens"] - free_stats["free_tokens"]}
+            "data": {"free_pct": round(free_tokens / total_tokens * 100, 1),
+                     "free_tokens": free_tokens,
+                     "paid_tokens": total_tokens - free_tokens},
         })
     
     # 2b. Cache read/write breakdown — high re-read means a big baseline context
