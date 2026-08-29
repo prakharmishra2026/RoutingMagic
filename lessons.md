@@ -115,3 +115,26 @@
 ## 025 — Atomic PID File Write
 **What worked**: `write_pid_file` uses `tempfile.NamedTemporaryFile` + `os.replace()` for atomic PID+port write. No partial reads on quick restart.
 **Rule**: Always write PID/state files atomically: temp file in same directory + `os.replace()` (POSIX atomic rename).
+
+## 026 — Free-model council needs over-selection, not a fixed 3
+**What broke**: A council of exactly 3 free models returned 1–2 failures nearly every run (429/404/503 from OpenRouter free tier).
+**Root cause**: Individual free models are unreliable; a fixed-size draw inherits every failure.
+**Rule**: Over-select `2*N` candidates, run in parallel, keep the first `N` that answer. Only report `degraded` if fewer than `N` succeed. Redundancy is the whole point of a council over flaky endpoints.
+
+## 027 — health_cache "everything degraded" is an auth failure, not reality
+**What broke**: `registry/health_cache.json` held 27 entries with one identical timestamp — the entire free pool marked degraded. Syncing that to runtime would empty the council pool.
+**Root cause**: `run_health_checks` treats any exception (incl. missing/invalid key) as `healthy=False`, so a keyless run flags the whole pool.
+**Rule**: If a health check flags ≥ n-1 of n models, treat the run as failed and keep the previous cache. Never persist a wholesale-degraded result.
+
+## 028 — Mirror every runtime-read file, not just the big one
+**What broke**: `save_registry_atomic` copied `model_registry.json` to `~/.routingmagic/registry` but not `last_update.txt` or `health_cache.json`. Home stamp froze → `is_update_needed()` permanently true → "Daily update needed" on every `ask`; home health cache never existed.
+**Rule**: When a writer maintains a mirror dir, mirror the *entire* set of files the runtime reads from it, atomically, in the same call.
+
+## 029 — Claude usage.db lags; the JSONL logs don't
+**What broke**: Dashboard "today" view sat 3 days stale — `usage.db` newest turn 2026-08-26 while work continued.
+**Root cause**: `usage.db` is filled by the external `claude-usage` ingester, which can silently stop.
+**Rule**: Read `~/.claude/projects/*/*.jsonl` directly (Claude Code writes them live). Shape: `type=="assistant"`, `message.usage.{input_tokens,output_tokens,cache_read_input_tokens,cache_creation_input_tokens,output_tokens_details.thinking_tokens}`. Keep the DB path as fallback.
+
+## 030 — Editing from a worktree: pass worktree-absolute paths
+**What broke**: Phase 2's 335-line change landed in `~/Projects/RoutingMagic/dashboard_server.py` (main checkout, branch `main`) instead of the worktree, because an absolute non-worktree path was passed to Edit.
+**Rule**: In a worktree session, every file path must be under the worktree root. Recover with `git -C main diff > patch; git -C main checkout -- file; git -C worktree apply patch` (safe when both are at the same HEAD).

@@ -88,3 +88,28 @@
 - Ollama proxy not yet tested
 - Competitor adapters scaffolded but not implemented
 - Standalone package `pipx install routingmagic-dashboard` not yet published
+
+---
+
+## Session checkpoint — 2026-08-29 — Council auditor + dashboard fixes
+
+**Branch**: `claude/nemotron-audit-plan-fd907b` (8 commits on top of `7535312`)
+**Plan**: `~/.claude/plans/plan-an-appropriate-fix-graceful-mango.md` (Phases 1–9)
+
+### What changed
+- **Consolidation**: canonical checkout is now `~/Projects/RoutingMagic` only. `~/RoutingMagic` → `~/RoutingMagic.old-20260829-163156`; `~/.gstack/projects/RoutingMagic` aside; skill symlink + `~/.claude/CLAUDE.md` (3 refs, `.bak-20260829-163156`) repointed. `~/.zshrc:260` was already correct.
+- **dashboard_server.py**: `do_POST`/`_send_json`; `run_local_council()` (registry-driven, over-select 6→keep 3, degraded note, 48h staleness guard, env from `.routingmagic/.env`+`global.env` skipping empties); council modal CSS/JS ported from vercel; inline insights strip; cache read/write split + `cache_breakdown` insight; `free_ratio` via `is_free()`; `is_free` dead code gone; `get_insights` self-import gone + wrapped; `renderInsights` `const d` hoist fix; stale banner; title/VERSION → "RoutingMagic Desk v2.2.0".
+- **model_registry_updater.py**: `save_registry_atomic` mirrors stamp + health cache to home; wholesale-failure health guard.
+- **dashboard_adapters.py**: `scan_claude_jsonl()` (live logs) preferred over `usage.db`.
+- **.github/workflows/update-models.yml**: failure → `gh issue` (label `registry-alert`).
+- **tests/**: `test_council.py` (7), `test_dashboard.py` (16). `pytest tests/ -q` → 41 pass.
+- **registry/health_cache.json**: reset to `{}` (was the 27-entry auth-failure artifact).
+- **docs/audits/**: 3 Aug-27 audit docs + stale-copy diff preserved.
+
+### Verified on :9898 (fresh start)
+GET / 200 · /api/data 200 (stale=False) · /api/insights 200 (7 cards) · POST /api/council empty→400, real→3/3 members + synthesis, 0 console errors.
+
+### Open / not done
+- Pre-existing tracked `__pycache__/*.pyc` (5 files) — repo cruft, left alone.
+- Deferred (plan): CLAUDE.md `council_audit.sh` auditor block, LaunchAgent for `rm-desk`, read-only budget UI.
+- Phase 7 workflow alert not runnable locally (YAML syntax-validated only).

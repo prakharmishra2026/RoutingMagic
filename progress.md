@@ -95,3 +95,19 @@
 | Unified Dashboard | 10 | 10 | 100% |
 | UAT Fixes | 12 | 12 | 100% |
 | **Total** | **51** | **51** | **100%** |
+
+---
+
+## Council Auditor + Dashboard Fixes (branch: claude/nemotron-audit-plan-fd907b) — 2026-08-29
+
+| Phase | What | Status |
+|-------|------|--------|
+| 1 | Consolidate 3 on-disk RoutingMagic copies → one canonical (`~/Projects/RoutingMagic`); retire `~/RoutingMagic`; repoint skill symlink + `~/.claude/CLAUDE.md` | Done |
+| 2 | Wire dead Model Council button on :9898 — `do_POST /api/council`, registry-driven model pool, over-select+degrade handling, ported modal CSS/JS | Done |
+| 3 | Free Usage stat reads server `r.free` (registry-aware) not `:free` substring | Done |
+| 4 | Insights strip rendered inline under stat row; modal kept for drill-down | Done |
+| 5 | Cache stat split read/write; `cache_breakdown` insight (Hazard-4 rate model); carried in JSON+CSV export | Done |
+| 6 | `save_registry_atomic` mirrors `last_update.txt`+`health_cache.json` to `~/.routingmagic/registry`; wholesale-failure health-check guard | Done |
+| 7 | GitHub Action failure opens/comments a `registry-alert` issue; dashboard 48h staleness banner | Done |
+| 8 | `scan_claude_jsonl()` reads `~/.claude/projects/*.jsonl` live (10.6k turns vs 4k stale usage.db); `tests/test_council.py` + jsonl tests; 41 pass | Done |
+| 9 | `is_free` dead code removed; `get_insights` self-import removed + try/except; `free_ratio` SQL → `is_free()`; frontend `resp.ok`/status; title/VERSION → "RoutingMagic Desk v2.2.0" | Done |
