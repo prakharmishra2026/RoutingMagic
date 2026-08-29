@@ -236,6 +236,18 @@ FREE_PROVIDER_TOKENS = {"opencode"}
 FREE_TIER_PROVIDERS = {"nvidia", "nim", "openrouter"}
 # Model families always free regardless of provider
 FREE_MODEL_TOKENS = {"gpt-oss", "big-pickle", "laguna", "nemotron-3-ultra-free", "nemotron-3.5-lightning-free"}
+# NIM models that are free (no :free suffix in registry; known from NVIDIA NIM free tier)
+# All lowercase for case-insensitive matching
+FREE_NIM_MODELS = {
+    "deepseek-ai/deepseek-v4-flash-0731",
+    "nvidia/nemotron-3-super-120b-a12b",
+    "nvidia/nemotron-3.5-lightning-30b-a3b",
+    "nvidia/nemotron-3.5-content-safety",
+    "openai/gpt-oss-120b",
+    "nvidia/cosmos-reason2-8b",
+    "poolside/laguna-xs-2.1",
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+}
 
 PRICING_KEYS = {k.lower(): v for k, v in PRICING.items()}
 
@@ -285,6 +297,9 @@ def is_free(model: str, source: str = None) -> bool:
         if provider in FREE_PROVIDER_TOKENS:
             return True
         if provider in FREE_TIER_PROVIDERS:
+            # Check if this specific model is a known-free NIM model (case-insensitive)
+            if m in FREE_NIM_MODELS:
+                return True
             return False  # free-tier providers need :free suffix
     if tokens & FREE_MODEL_TOKENS:
         return True

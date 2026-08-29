@@ -63,7 +63,7 @@ def test_is_free_classification():
     """Test that free/paid classification works correctly."""
     # Paid models should not be free
     assert is_free("nvidia/nemotron-3-ultra-550b-a55b") == False
-    assert is_free("nvidia/nemotron-3-super-120b-a12b") == False
+    assert is_free("nvidia/nemotron-3-super-120b-a12b") == True  # Free on NIM
     assert is_free("openai/gpt-5.6-sol") == False
     assert is_free("claude-sonnet-4.6") == False
     
