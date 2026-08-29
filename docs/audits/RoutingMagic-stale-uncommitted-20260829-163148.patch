@@ -1,0 +1,745 @@
+diff --git a/__pycache__/openai_wrapper.cpython-314.pyc b/__pycache__/openai_wrapper.cpython-314.pyc
+index 0f2d246..6bc506b 100644
+Binary files a/__pycache__/openai_wrapper.cpython-314.pyc and b/__pycache__/openai_wrapper.cpython-314.pyc differ
+diff --git a/aliases.zsh b/aliases.zsh
+index 9e47161..2bc0a1f 100644
+--- a/aliases.zsh
++++ b/aliases.zsh
+@@ -2,120 +2,156 @@
+ #  RoutingMagic — Claude Code model aliases
+ #  https://github.com/prakharmishra2026/RoutingMagic
+ # ───────────────────────────────────────────────────────────────────
+-#  TWO ISOLATED WORLDS
++#  THREE ISOLATED WORLDS
+ #
+ #   NATIVE Claude  →  ccs / cco / ccq  (or plain `claude` + /model picker)
+ #                     Talks DIRECT to api.anthropic.com via keychain login.
+ #                     Default everywhere. Global ~/.claude/settings.json
+ #                     stays clean — never put a proxy in it.
+ #
+-#   FREE models    →  cc cch cca cck ccc ccg ccx ccz ccm ccu ccb
+-#                     Route through your local 9router gateway
+-#                     (127.0.0.1:20128 → OpenRouter). Set INLINE per-call so
+-#                     they never touch global config.
++#   FREE models    →  cc cch cca ccc ccg ccx ccz ccm ccu ccb
++#                     Route DIRECTLY to OpenRouter or NVIDIA NIM via API keys.
++#                     No proxy, no gateway. Set INLINE per-call.
++#
++#   PAID models    →  op opt opo3 glm
++#                     Route DIRECTLY to OpenRouter or NVIDIA NIM.
+ #
+ #  WHY SO MANY FREE MODELS? — 429 RESILIENCE.
+-#  OpenRouter free models share a global rate limit AND can be throttled by
+-#  their upstream provider ("rate-limited upstream", e.g. the Crucible 429
+-#  that broke Kimi K2.6). The cure is a FALLBACK CHAIN: if your first pick
+-#  429s, jump to the next model in the same role. See the chains below.
++#  Free models share rate limits AND can be throttled by upstream providers.
++#  The cure is a FALLBACK CHAIN: if your first pick 429s, jump to the next.
+ #
+-#  KIMI NOTE: cck (Kimi K2.6) is KEPT for when its upstream provider recovers,
+-#  but it 429s frequently today — use ccc (Qwen3-Coder) as the UI default.
++#  NVIDIA NIM > OPENROUTER FREE for primary free tier:
++#  NIM: ~50 models free, ~40 RPM, no credit card
++#  OpenRouter: 17 models free, 20 RPM, 200 RPD (1000 with $10+ credits)
+ #
+ #  To install: add this line to your ~/.zshrc, then `source ~/.zshrc`
+ #     source ~/RoutingMagic/aliases.zsh
+ # ═══════════════════════════════════════════════════════════════════
+ 
+-# ── 9router local gateway (free models) ───────────────────────────
+-# Sets the gateway INLINE so it never pollutes native/global config.
+-# Guards on the port so a stopped gateway fails legibly.
+-_9r() {
+-  if ! nc -z 127.0.0.1 20128 2>/dev/null; then
+-    echo "⚠️  9router is not running on :20128 — start it (run: 9router), then retry." >&2
++# ── Direct routing functions (no 9router dependency) ──────────────
++# OpenRouter direct: routes to openrouter.ai/api/v1
++_or() {
++  local model="$1"; shift
++  ANTHROPIC_BASE_URL=https://openrouter.ai/api/v1 \
++  ANTHROPIC_AUTH_TOKEN="${OPENROUTER_API_KEY}" \
++  ANTHROPIC_API_KEY="${OPENROUTER_API_KEY}" \
++  claude --model "$model" "$@"
++}
++
++# NVIDIA NIM direct: uses OpenAI Python client (Claude Code CLI doesn't support NIM model IDs)
++_nim() {
++  local model="$1"; shift
++  # Load from global.env if not already set in shell
++  if [ -z "$NVAPI_KEY" ] && [ -f ~/global.env ]; then
++    export $(grep -E "^NVAPI_KEY=" ~/global.env | xargs)
++  fi
++  local api_key="${NVAPI_KEY:-${NVIDIA_API_KEY:-}}"
++  if [ -z "$api_key" ]; then
++    echo "Error: NVAPI_KEY or NVIDIA_API_KEY not set." >&2
+     return 1
+   fi
+-  ANTHROPIC_BASE_URL=http://127.0.0.1:20128 \
+-  ANTHROPIC_AUTH_TOKEN=9router-local \
+-  ANTHROPIC_API_KEY= \
+-  claude --model "$1" "${@:2}"
++  python3 -c "
++import sys
++from openai import OpenAI
++client = OpenAI(api_key='$api_key', base_url='https://integrate.api.nvidia.com/v1', timeout=30)
++prompt = ' '.join(sys.argv[1:]) if len(sys.argv) > 1 else sys.stdin.read()
++resp = client.chat.completions.create(model='$model', messages=[{'role':'user','content':prompt}], stream=True)
++for chunk in resp:
++    if chunk.choices and chunk.choices[0].delta.content:
++        print(chunk.choices[0].delta.content, end='', flush=True)
++print()
++" "$@"
+ }
+ 
+-# ── FREE models (via 9router → OpenRouter) ────────────────────────
++# ── FREE models (via OpenRouter direct) ───────────────────────────
+ # Each comment shows: ROLE · context · provider-count (429 resilience)
+-cc()  { _9r openrouter/poolside/laguna-m.1:free "$@"; }                       # general coding (default) · 262k
+-cch() { _9r openrouter/poolside/laguna-xs.2:free "$@"; }                      # quick edits / one-liners · 262k
+-cca() { _9r openrouter/nvidia/nemotron-3-super-120b-a12b:free "$@"; }         # large context · 1M
+-cck() { _9r openrouter/moonshotai/kimi-k2.6:free "$@"; }                      # UI (Kimi) · 262k · ⚠ 429s often — prefer ccc
+-ccc() { _9r openrouter/qwen/qwen3-coder:free "$@"; }                          # UI / frontend / coder (DEFAULT) · 1M · 7 providers
+-ccg() { _9r openrouter/openai/gpt-oss-120b:free "$@"; }                       # reasoning + tools · 131k · 19 providers (MOST reliable)
+-ccx() { _9r openrouter/qwen/qwen3-next-80b-a3b-instruct:free "$@"; }          # general / agentic · 262k · 6 providers
+-ccz() { _9r openrouter/z-ai/glm-4.5-air:free "$@"; }                          # fast all-rounder · 131k · 4 providers
+-ccm() { _9r openrouter/google/gemma-4-31b-it:free "$@"; }                     # resilient general · 262k · 11 providers
+-ccu() { _9r openrouter/nvidia/nemotron-3-ultra-550b-a55b:free "$@"; }         # 550B flagship reasoning · 1M · ⚠ single provider
+-ccb() { _9r Builder "$@"; }                                                   # Builder combo (auto-route)
++# Updated August 2026: removed stale models, added latest.
++cc()  { _or "poolside/laguna-s-2.1:free" "$@"; }                                 # general coding (default) · 262k · NEW replacement for M.1
++cch() { _or "poolside/laguna-xs-2.1:free" "$@"; }                                # quick edits / one-liners · 262k · NEW replacement for xs.2
++cca() { _or "nvidia/nemotron-3-super-120b-a12b:free" "$@"; }                     # large context · 1M
++ccc() { _or "qwen/qwen3-coder:free" "$@"; }                                      # UI / frontend / coder (DEFAULT) · 1M
++ccg() { _or "openai/gpt-oss-120b:free" "$@"; }                                   # reasoning + tools · 131k · 19 providers (MOST reliable)
++ccx() { _or "qwen/qwen3-next-80b-a3b-instruct:free" "$@"; }                     # general / agentic · 262k
++ccz() { _or "z-ai/glm-5.2:free" "$@"; }                                          # fast all-rounder · 256k · NEW replacement for glm-4.5-air
++ccm() { _or "google/gemma-4-31b-it:free" "$@"; }                                 # resilient general · 262k · 11 providers
++ccu() { _or "nvidia/nemotron-3-ultra-550b-a55b:free" "$@"; }                     # 550B flagship reasoning · 1M · ⚠ single provider
++ccb() { _or "openrouter/auto" "$@"; }                                             # auto-route (OpenRouter smart routing)
+ 
+-# ── NVIDIA GLM‑5.1 (via 9router) ───────────────────────────────────────────
+-glm() { _9r nvidia/z-ai/glm-5.1 "$@"; }                                       # GLM‑5.1 model via NVIDIA NIM
+-ccn() { python "${HOME}/Projects/RoutingMagic/glm5.py" "$@"; }                # Direct fallback script
+-
+-# ── OpenAI Models (via 9router) ───────────────────────────────────────────
+-op()   { _9r openai/gpt-5 "$@"; }                                             # General purpose flagship (GPT-5)
+-opt()  { _9r openai/gpt-4-turbo "$@"; }                                       # Agentic coding model
+-opo3() { _9r openai/o3-mini "$@"; }                                           # Reasoning / coding
++# ── FREE models (via NVIDIA NIM direct) ───────────────────────────
++# NIM has ~83 models. Updated August 2026 — only confirmed working models.
++# Note: Some models timeout (DeepSeek V4 Flash 0731, Gemma 4 31B, Nemotron 3.5 Lightning).
++# Use the ones that respond within 30s.
++ng()  { _nim "nvidia/nemotron-3-super-120b-a12b" "$@"; }                        # Nemotron 3 Super 120B — best free agent/coding ✓ confirmed
++nm()  { _nim "minimaxai/minimax-m3" "$@"; }                                      # MiniMax M3 — financial modeling ✓ confirmed
++nu()  { _nim "nvidia/nemotron-3-ultra-550b-a55b" "$@"; }                         # Nemotron Ultra 550B — flagship reasoning ✓ confirmed
++nl()  { _nim "mistralai/mistral-large-2-instruct" "$@"; }                       # Mistral Large 2 — general reasoning
++nd()  { _nim "deepseek-ai/deepseek-v4-flash-0731" "$@"; }                       # DeepSeek V4 Flash 0731 — best Python ⚠ may timeout
++ngg() { _nim "google/gemma-4-31b-it" "$@"; }                                    # Gemma 4 31B — Google's latest ⚠ may timeout
++nk()  { _nim "nvidia/nemotron-3.5-lightning-30b-a3b" "$@"; }                    # Nemotron 3.5 Lightning — fast agentic
+ 
++# ── OpenAI Models (via OpenRouter direct) ─────────────────────────
++op()   { _or "openai/gpt-5" "$@"; }                                              # General purpose flagship (GPT-5)
++opt()  { _or "openai/gpt-4-turbo" "$@"; }                                        # Agentic coding model
++opo3() { _or "openai/o3-mini" "$@"; }                                            # Reasoning / coding
+ 
+ # ── NATIVE Claude (direct to api.anthropic.com, keychain login) ───
+-ccs() { claude --model claude-sonnet-4-6 "$@"; }                              # Sonnet 4.6 — production, agentic, tools
+-cco() { claude --model claude-opus-4-8 "$@"; }                                # Opus 4.8 — architecture, hardest reasoning
+-ccq() { claude --model claude-haiku-4-5-20251001 "$@"; }                      # Haiku 4.5 — fastest native
++ccs() { claude --model claude-sonnet-4-6 "$@"; }                                 # Sonnet 4.6 — production, agentic, tools
++cco() { claude --model claude-opus-4-8 "$@"; }                                   # Opus 4.8 — architecture, hardest reasoning
++ccq() { claude --model claude-haiku-4-5-20251001 "$@"; }                         # Haiku 4.5 — fastest native
+ 
+ # ── CHEATSHEET ────────────────────────────────────────────────────
+ cc-models() {
+   cat <<'EOF'
+ 
+-╔════════════════════════════════════════════════════════════════════╗
+-║                 ROUTINGMAGIC — CLAUDE CODE MODEL ROUTER             ║
+-╠════════════════════════════════════════════════════════════════════╣
+-║  FREE  (via 9router → OpenRouter, :20128)                           ║
+-║  cc    Laguna M.1            general coding (default)   262k        ║
+-║  cch   Laguna XS.2           quick edits / one-liners   262k        ║
+-║  cca   Nemotron 3 Super      large context              1M          ║
+-║  ccc   Qwen3-Coder           UI / frontend (DEFAULT)    1M    7 prov ║
+-║  cck   Kimi K2.6             UI (kept) ⚠ 429s often — prefer ccc    ║
+-║  ccg   GPT-OSS-120B          reasoning + tools  131k  19 prov ★safe ║
+-║  ccx   Qwen3-Next-80B        general / agentic   262k         6 prov ║
+-║  ccz   GLM-4.5-Air           fast all-rounder    131k         4 prov ║
+-║  ccm   Gemma-4-31B           resilient general   262k        11 prov ║
+-║  ccu   Nemotron 3 Ultra 550B flagship reasoning  1M  ⚠ 1 provider   ║
+-║  ccb   Builder combo         auto multi-model                       ║
+-╠════════════════════════════════════════════════════════════════════╣
+-║  OPENAI & NVIDIA  (via 9router)                                    ║
+-║  open  GPT-5                 General purpose flagship               ║
+-║  opt   GPT-4-Turbo           Agentic coding model                   ║
+-║  opo3  o3-mini               Reasoning & Coding                     ║
+-║  glm   GLM-5.1               NVIDIA NIM model                       ║
+-║  chat  [model]               Direct Chat REPL (No tool cost, 0 limit)║
+-╠════════════════════════════════════════════════════════════════════╣
+-║  NATIVE  (direct to api.anthropic.com, keychain login)             ║
+-║  claude            default — then /model to switch                  ║
+-║  ccs   Sonnet 4.6            balanced, production, tools            ║
+-║  cco   Opus 4.8              architecture, hardest reasoning        ║
+-║  ccq   Haiku 4.5             fastest native                         ║
+-╠════════════════════════════════════════════════════════════════════╣
+-║  429 FALLBACK CHAINS  (if a free model is rate-limited, go next →)  ║
+-║  UI / frontend   :  ccc → ccz → ccm        (cck/Kimi if available) ║
+-║  General coding  :  cc  → ccg → ccx                                 ║
+-║  Reasoning       :  ccg → ccu → ccx                                 ║
+-║  Large context   :  cca → ccc → ccu       (all 1M)                  ║
+-║  Quick / trivial :  cch → ccz                                       ║
+-║  Agentic / tools :  ccg → ccx → cc        (★ gpt-oss = best tools)  ║
+-╠════════════════════════════════════════════════════════════════════╣
+-║  SMART ROUTER                                                       ║
+-║  cc-route "task"   analyse → pick best model → launch               ║
+-╚════════════════════════════════════════════════════════════════════╝
+-  Native = default & Antigravity.  Free = explicit cc* only.
+-  9router up?  nc -z 127.0.0.1 20128 && echo UP || echo DOWN
++╔════════════════════════════════════════════════════════════════════════╗
++║           ROUTINGMAGIC — MODEL ROUTER (August 2026)                    ║
++╠════════════════════════════════════════════════════════════════════════╣
++║  FREE — OpenRouter Direct (openrouter.ai, no proxy)                    ║
++║  cc    Laguna S 2.1         general coding (default)   262k            ║
++║  cch   Laguna XS 2.1        quick edits / one-liners   262k            ║
++║  cca   Nemotron 3 Super     large context              1M              ║
++║  ccc   Qwen3-Coder          UI / frontend (DEFAULT)    1M              ║
++║  ccg   GPT-OSS-120B         reasoning + tools  131k  19 prov ★safe    ║
++║  ccx   Qwen3-Next-80B       general / agentic   262k                   ║
++║  ccz   GLM-5.2              fast all-rounder    256k                   ║
++║  ccm   Gemma-4-31B          resilient general   262k  11 providers     ║
++║  ccu   Nemotron Ultra 550B  flagship reasoning  1M  ⚠ 1 provider     ║
++║  ccb   OpenRouter Auto      smart auto-route                           ║
++╠════════════════════════════════════════════════════════════════════════╣
++║  FREE — NVIDIA NIM Direct (integrate.api.nvidia.com, ~40 RPM)          ║
++║  ng    Nemotron 3 Super 120B  best agent/coding           1M  ✓        ║
++║  nm    MiniMax M3             financial modeling          197K  ✓       ║
++║  nu    Nemotron Ultra 550B    flagship reasoning          1M   ✓       ║
++║  nl    Mistral Large 2        general reasoning                         ║
++║  nd    DeepSeek V4 Flash 0731 best Python/coding           1M  ⚠slow   ║
++║  ngg   Gemma 4 31B            Google latest               262K  ⚠slow  ║
++║  nk    Nemotron 3.5 Lightning fast agentic                           ║
++╠════════════════════════════════════════════════════════════════════════╣
++║  PAID — OpenRouter Direct                                              ║
++║  op    GPT-5                General purpose flagship                    ║
++║  opt   GPT-4-Turbo          Agentic coding model                        ║
++║  opo3  o3-mini              Reasoning & Coding                          ║
++╠════════════════════════════════════════════════════════════════════════╣
++║  NATIVE — Direct to api.anthropic.com (keychain login)                 ║
++║  claude            default — then /model to switch                      ║
++║  ccs   Sonnet 4.6            balanced, production, tools                ║
++║  cco   Opus 4.8              architecture, hardest reasoning            ║
++║  ccq   Haiku 4.5             fastest native                             ║
++╠════════════════════════════════════════════════════════════════════════╣
++║  429 FALLBACK CHAINS  (if a free model is rate-limited, go next →)      ║
++║  UI / frontend   :  ccc → ccz → ccm                                    ║
++║  General coding  :  cc  → ccg → ccx                                    ║
++║  Reasoning       :  ccg → ccu → ccx                                    ║
++║  Large context   :  cca → ccc → ccu       (all 1M)                     ║
++║  Quick / trivial :  cch → ccz                                          ║
++║  Agentic / tools :  ccg → ccx → cc                                     ║
++║  Python/FastAPI  :  nd  → ng  → nm       (NIM优先, 最佳Python)          ║
++║  Financial calc  :  nm  → ng  → nu       (NIM优先, 金融建模)             ║
++╠════════════════════════════════════════════════════════════════════════╣
++║  SMART ROUTER                                                          ║
++║  cc-route "task"   analyse → pick best model → launch                   ║
++╚════════════════════════════════════════════════════════════════════════╝
++  No 9router dependency. All routing is direct to provider APIs.
+ 
+ EOF
+ }
+@@ -126,7 +162,7 @@ EOF
+ #  First match wins (top = highest priority).
+ # ═══════════════════════════════════════════════════════════════════
+ _cc_route_match() {
+-  # Returns: "model|tier_label|human_reason|mode"  (mode = native | 9r)
++  # Returns: "model|tier_label|human_reason|mode"  (mode = native | or | nim)
+   local t="$1"
+ 
+   # ── NATIVE: Architecture / Strategy ──────────────────────────────
+@@ -139,34 +175,44 @@ _cc_route_match() {
+     "(\bproduction\b|\bcritical\b|security|vuln|CVE|\bauth\b.*(bug|error|fail|issue|broken)|\bdeploy fail|race condition|SEBI|compliance|breach|exploit|sql inject|RLS bypass|privilege escalat|data leak|\bpayment\b|financial logic|\b403\b|hotfix|regression|emergency)"; then
+     echo "claude-sonnet-4-6|⚡ NATIVE|Critical/Security → Sonnet 4.6|native"
+ 
++  # ── NIM FREE: Python / FastAPI / Backend ─────────────────────────
++  elif echo "$t" | grep -qiE \
++    "(python|fastapi|flask|django|backend|api endpoint|data.?fetch|screener|yfinance|database|sql|postgres|redis|celery|pydantic|pytest|uvicorn)"; then
++    echo "deepseek-ai/deepseek-v4-flash|🟢 NIM FREE|Python/Backend → DeepSeek V4 Flash (nd; fallback: ng, nm)|nim"
++
++  # ── NIM FREE: Financial Modeling / Calculations ──────────────────
++  elif echo "$t" | grep -qiE \
++    "(financial|finance|stock|invest|valuation|dcf|roe|debt.?to.?equity|margin.?of.?safety|balance.?sheet|income.?statement|cash.?flow|earnings|dividend|fundamental|screener\.in|bse|nse|quarterly|annual.?report)"; then
++    echo "minimaxai/minimax-m2.7|🟢 NIM FREE|Financial → MiniMax M2.7 (nm; fallback: ng, nu)|nim"
++
++  # ── NIM FREE: Multi-file Agent / Large Codebase ──────────────────
++  elif echo "$t" | grep -qiE \
++    "(entire codebase|full audit|all files|large context|comprehensive review|read everything|scan all|full repo|every file|summarize the whole|inventory all|full analysis|deep dive|multi.?file|refactor entire)"; then
++    echo "z-ai/glm-5.2|🟢 NIM FREE|Large Context Agent → GLM 5.2 (ng; fallback: nd, nu)|nim"
++
+   # ── FREE: UI / Frontend / Design System ──────────────────────────
+   elif echo "$t" | grep -qiE \
+-    "\bUI\b|\bUX\b|\bcomponent\b|frontend|tailwind|framer|figma|design system|layout|responsive|mobile.first|dark mode|glassmorphism|neo.luxury|color scheme|typography|\bcard\b|\bmodal\b|sidebar|navbar|dashboard UI|loading state|skeleton|animation|\bCSS\b"; then
+-    echo "openrouter/qwen/qwen3-coder:free|🟢 FREE|UI / Frontend → Qwen3-Coder (ccc; fallback: ccz, ccm)|9r"
++    "\bUI\b|\bUX\b|\bcomponent\b|frontend|tailwind|framer|figma|design system|layout|responsive|mobile.first|dark mode|glassmorphism|color scheme|typography|\bcard\b|\bmodal\b|sidebar|navbar|dashboard UI|loading state|skeleton|animation|\bCSS\b|\breact\b|\bnext\.?js\b|\btsx?\b"; then
++    echo "poolside/laguna-s-2.1:free|🟢 FREE|UI / Frontend → Laguna S 2.1 (ccc; fallback: ccz, ccm)|or"
+ 
+   # ── FREE: Agent / Automation / Tool Use ──────────────────────────
+   elif echo "$t" | grep -qiE \
+     "\bagent\b|tool use|function call|\bpipeline\b|orchestrat|workflow|multi.step|\bMCP\b|\bRAG\b|vector store|\bn8n\b|webhook|integration|react agent|tool.?calling|automat"; then
+-    echo "openrouter/openai/gpt-oss-120b:free|🟢 FREE|Agent / Tools → GPT-OSS-120B (ccg; fallback: ccx, cc)|9r"
+-
+-  # ── FREE: Large Context / Full Codebase ──────────────────────────
+-  elif echo "$t" | grep -qiE \
+-    "(entire codebase|full audit|all files|large context|comprehensive review|read everything|scan all|full repo|every file|summarize the whole|inventory all|full analysis|deep dive)"; then
+-    echo "openrouter/nvidia/nemotron-3-super-120b-a12b:free|🟢 FREE|Large Context → Nemotron 3 Super 1M (cca; fallback: ccc, ccu)|9r"
++    echo "openai/gpt-oss-120b:free|🟢 FREE|Agent / Tools → GPT-OSS-120B (ccg; fallback: ccx, cc)|or"
+ 
+   # ── FREE: Heavy Reasoning ────────────────────────────────────────
+   elif echo "$t" | grep -qiE \
+     "(reason|think through|step by step|prove|derive|complex logic|algorithm design|optimi[sz]e|math|analy[sz]e deeply)"; then
+-    echo "openrouter/openai/gpt-oss-120b:free|🟢 FREE|Reasoning → GPT-OSS-120B (ccg; fallback: ccu, ccx)|9r"
++    echo "openai/gpt-oss-120b:free|🟢 FREE|Reasoning → GPT-OSS-120B (ccg; fallback: ccu, ccx)|or"
+ 
+   # ── FREE: Quick / Trivial ────────────────────────────────────────
+   elif echo "$t" | grep -qiE \
+     "(^quick |^just |^simple |one.?liner|typo|rename this|what is |what does |explain this|how does |how do i|just a |fast answer|short answer|definition of|meaning of)"; then
+-    echo "openrouter/poolside/laguna-xs.2:free|🟢 FREE|Quick / Trivial → Laguna XS.2 (cch; fallback: ccz)|9r"
++    echo "poolside/laguna-xs-2.1:free|🟢 FREE|Quick / Trivial → Laguna XS 2.1 (cch; fallback: ccz)|or"
+ 
+   # ── DEFAULT: General coding ───────────────────────────────────────
+   else
+-    echo "openrouter/poolside/laguna-m.1:free|🟢 FREE|General Coding → Laguna M.1 (cc; fallback: ccg, ccx)|9r"
++    echo "poolside/laguna-s-2.1:free|🟢 FREE|General Coding → Laguna S 2.1 (cc; fallback: ccg, ccx)|or"
+   fi
+ }
+ 
+@@ -174,8 +220,10 @@ _cc_launch() {
+   local model="$1" mode="$2"
+   if [ "$mode" = "native" ]; then
+     claude --model "$model"
++  elif [ "$mode" = "nim" ]; then
++    _nim "$model"
+   else
+-    _9r "$model"
++    _or "$model"
+   fi
+ }
+ 
+@@ -211,16 +259,14 @@ save() { python3 "${HOME}/Projects/RoutingMagic/save_handler.py" "$@"; }
+ mc() { python3 "${HOME}/Projects/RoutingMagic/openai_wrapper.py" council "$@"; }
+ MC() { python3 "${HOME}/Projects/RoutingMagic/openai_wrapper.py" council "$@"; }
+ 
+-
+-
+-# Smart macOS open override
++# Smart macOS open override (no 9router dependency)
+ open() {
+   if [[ $# -eq 0 ]]; then
+-    _9r openai/gpt-5
++    _or "openai/gpt-5"
+   elif [[ "$1" == "gpt-"* ]] || [[ "$1" == "o1-"* ]] || [[ "$1" == "o3-"* ]]; then
+-    _9r "openai/$1" "${@:2}"
++    _or "openai/$1" "${@:2}"
+   elif [[ "$1" == "openai/"* ]]; then
+-    _9r "$@"
++    _or "$@"
+   else
+     command open "$@"
+   fi
+diff --git a/lessons.md b/lessons.md
+index d20fa1d..a83ce5d 100644
+--- a/lessons.md
++++ b/lessons.md
+@@ -17,3 +17,8 @@
+ - **Latency vs. Reasoning:** Reasoning models introduce significant latency (~32s p95). Non-reasoning models must be utilized for time-sensitive interactive flows, reserving reasoning models only for asynchronous advisory audits and explanations.
+ - **Latency Mitigation in Multi-Agent Deliberation:** Running multiple LLM calls sequentially in a multi-stage deliberation protocol (e.g. LLM Council) multiplies latency. Implementing concurrent calls using Python's `ThreadPoolExecutor` ensures that Stage 1 (opinions) and Stage 2 (reviews) are executed in parallel, bounding total stage latency by the slowest single API call instead of the sum of all calls.
+ - **Dynamic Model Selection and Freshness Sorting:** Hardcoding specific reasoning models (like `deepseek/deepseek-r1`) introduces model rot because the model landscape changes rapidly. Instead, dynamically query OpenRouter's `/api/v1/models` and filter candidates based on required capabilities (e.g., `"reasoning"` parameter support). By sorting candidates by their creation timestamp (`created` parameter) in descending order, the system automatically routes tasks to the latest and most capable reasoning models (such as `qwen/qwen3-max-thinking` or `openai/o3-mini`) rather than stale, outdated models.
++- **9router Is Dead — Route Directly:** The 9router local gateway (127.0.0.1:20128) is obsolete. opencode natively supports OpenRouter and NVIDIA NIM via API keys. All cc* aliases that depend on `_9r()` (which checks port 20128) will fail when 9router is down. Solution: remove the9router dependency entirely and route directly to provider APIs.
++- **NVIDIA NIM Free Tier > OpenRouter Free Tier:** NIM offers ~50 models free at ~40 RPM with no credit card. OpenRouter free offers 17 models at 20 RPM / 200 RPD. For a coding agent that makes many calls, NIM is the better primary free tier. OpenRouter :free is the fallback.
++- **Model Inventory Rot Is Structural:** The OpenRouter free model catalog changes weekly. Qwen3 Coder free was deprecated July 2026. Laguna M.1 was replaced by Laguna S 2.1. GLM-4.5-Air was superseded by GLM-5.2. Any static model list will be stale within weeks. The audit prompt (model-council-audit.md) should be run monthly.
++- **Financial Domain Needs Dedicated Routing:** Generic routing ("code" → coding model, "reason" → reasoning model) misses financial-specific tasks. MiniMax M2.7 is explicitly trained for financial modeling. DeepSeek V4 Flash is strongest for Python data integrity work. A "financial" category in smart_route() would improve Investogram-specific routing.
++- **Council Architecture Needs Blind Review:** The current Stage 2 peer review may allow self-review (a model reviewing its own anonymized output). True blind review requires ensuring no model sees its own Stage 1 output in the anonymized block.
+diff --git a/memory.md b/memory.md
+index 4b77951..2a99f9e 100644
+--- a/memory.md
++++ b/memory.md
+@@ -3,12 +3,15 @@
+ ## Tech Stack & Core Decisions
+ - **Environment:** macOS, Zsh, Python 3
+ - **Core Architecture:** A dual-layer CLI tool comprising `aliases.zsh` for fast shell routing and `openai_wrapper.py` for dynamic LLM interactions.
+-- **Model Ecosystem:** Supports NVIDIA NIM (GLM-5.1, Nemotron, DeepSeek), OpenAI, and OpenRouter for free/paid fallbacks.
++- **Model Ecosystem:** 461 models across 3 providers — OpenRouter (355), NVIDIA NIM (100), opencode built-in (6). Direct API routing via API keys. 9router is DEAD and being removed.
++- **Free Tier Priority:** NVIDIA NIM first (~50 free models, 40 RPM, no credit card) → OpenRouter :free second (17 models, 20 RPM) → opencode built-in third.
+ - **Save Handler (`save_handler.py`):** An automated documentation updater that reads git diffs and uses an LLM to automatically maintain this exact set of 4 files (memory, progress, scratchpad, lessons). It is automatically placed at the root of any repository via a chpwd zsh hook when changing directories.
+ - **Agent Skills:** Added `.agents/skills` directory containing reusable skills (e.g., systematic-debugging) to enhance the AI agent's ability to develop and maintain the project.
+ 
+ ## Durable Rules & Constraints
+ - **Global Availability:** `ask`, `chat`, `save`, and the council aliases (`/council`, `/MC`, `/mc`) are global zsh aliases so they can be run from any project directory.
+-- **Token Limits (Free Models):** Prioritize free models (NVIDIA -> OpenRouter). Strict tracking of RPM (~40 limit) and RPD (50 limit) to avoid 429 Too Many Requests errors.
++- **Token Limits (Free Models):** NIM free: ~40 RPM globally. OpenRouter free: 20 RPM, 200 RPD (1000 with $10+ credits). Track usage to avoid 429 errors.
+ - **Failsafe System:** `/safe` and `/restore` commands rely natively on local `git` snapshots to provide instant undo capabilities.
+ - **Error Interception:** Proactive codebase scanning is disabled for performance. Error interception works reactively via `stderr` capture when a command fails.
++- **No 9router Dependency:** All routing goes directly to provider APIs. The `_9r()` function and port 20128 checks are being removed.
++- **Financial Domain Priority:** For Investogram, always prefer: DeepSeek V4 Flash (Python fixes), GLM-5.2 (multi-file agent), MiniMax M2.7 (financial modeling), Laguna S 2.1 (UI/frontend).
+diff --git a/openai_wrapper.py b/openai_wrapper.py
+index 5a38a05..8eb6ada 100644
+--- a/openai_wrapper.py
++++ b/openai_wrapper.py
+@@ -2,16 +2,17 @@
+ """Universal Chat Wrapper & Smart Router
+ 
+ Supports:
+-  - NVIDIA NIM models (glm-5.1, deepseek-v4-flash, nemotron, etc.)
++  - NVIDIA NIM models (glm-5.2, deepseek-v4-flash, nemotron, etc.)
+   - OpenAI models
+-  - OpenRouter / local 9Router models (free/paid)
+-  - Smart Routing: Auto-selects the best NVIDIA free model based on task.
++  - OpenRouter models (free/paid)
++  - Smart Routing: Auto-selects the best model based on task.
+   - Dual-Tier Context: Instant context sniffing or deep codebase summarization.
+   - Fallback loops, cost tracking, workspaces, failsafes, error interception.
++
++No 9router dependency — all routing is direct to provider APIs.
+ """
+ import os
+ import sys
+-import socket
+ import re
+ import json
+ import subprocess
+@@ -63,24 +64,18 @@ request_timestamps = []
+ daily_requests = 0
+ 
+ # Mapping of NVIDIA NIM models to their specific API keys
++# Updated August 2026 — only confirmed working models
+ NVIDIA_API_MAP = {
+-    "nvidia/nemotron-3-ultra-550b-a55b": "NVAPI_KEY_NEMOTRON_ULTRA_550B",
+-    "nvidia/llama-3.3-nemotron-super-49b-v1.5": "NVAPI_KEY_NEMOTRON_SUPER_49B",
+-    "nvidia/llama-3.1-nemotron-nano-vl-8b-v1": "NVAPI_KEY_NEMOTRON_VL_8B",
+-    "nvidia/nvidia-nemotron-nano-9b-v2": "NVAPI_KEY_NEMOTRON_NANO_9B",
+-    "nvidia/nemotron-ocr-v1": "NVAPI_KEY_NEMOTRON_OCR",
+-    "nvidia/nemotron-voicechat": "NVAPI_KEY_NEMOTRON_VOICECHAT",
+-    "nvidia/nv-embedqa-e5-v5": "NVAPI_KEY_NV_EMBEDQA",
+-    "deepseek-ai/deepseek-v4-flash": "NVAPI_KEY_DEEPSEEK_V4_FLASH",
+-    "moonshotai/kimi-k2.6": "NVAPI_KEY_KIMI_K2_6",
+-    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning": "NVAPI_KEY_NEMOTRON_OMNI_30B",
+-    "nvidia/nemotron-3.5-content-safety": "NVAPI_KEY_NEMOTRON_SAFETY",
+-    "mistralai/mistral-medium-3.5-128b": "NVAPI_KEY_MISTRAL_MEDIUM",
+-    "stepfun-ai/step-3.7-flash": "NVAPI_KEY_STEP_FLASH",
+-    "google/gemma-4-31b-it": "NVAPI_KEY_GEMMA_31B",
+-    "minimaxai/minimax-m2.7": "NVAPI_KEY_MINIMAX",
+-    "nvidia/cosmos3-nano-reasoner": "NVAPI_KEY_COSMOS",
+-    "nvidia/z-ai/glm-5.1": "NVAPI_KEY"
++    "nvidia/nemotron-3-ultra-550b-a55b": "NVAPI_KEY",
++    "nvidia/nemotron-3-super-120b-a12b": "NVAPI_KEY",
++    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning": "NVAPI_KEY",
++    "nvidia/nemotron-3.5-content-safety": "NVAPI_KEY",
++    "nvidia/nemotron-ocr-v1": "NVAPI_KEY",
++    "nvidia/nemotron-voicechat": "NVAPI_KEY",
++    "minimaxai/minimax-m3": "NVAPI_KEY",
++    "mistralai/mistral-large-2-instruct": "NVAPI_KEY",
++    "deepseek-ai/deepseek-v4-flash-0731": "NVAPI_KEY",
++    "google/gemma-4-31b-it": "NVAPI_KEY",
+ }
+ 
+ def get_instant_context():
+@@ -194,16 +189,6 @@ def get_deep_context():
+     print("\033[91m[Smart Router] All summarizer models failed. Falling back to instant context.\033[0m")
+     return get_instant_context()
+ 
+-def is_port_open(ip, port):
+-    """Check if a TCP port is open. Uses context manager to ensure socket is always closed."""
+-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+-        s.settimeout(0.2)
+-        try:
+-            s.connect((ip, int(port)))
+-            return True
+-        except Exception:
+-            return False
+-
+ class SessionContext:
+     """Session-scoped context for managing active REPL state, including pasted images."""
+     def __init__(self):
+@@ -471,47 +456,55 @@ def run_vision_query(image_paths, prompt, model_name=None, detail="auto"):
+     return assistant_reply
+ 
+ def smart_route(prompt):
+-    """Intelligently routes the prompt to the best available free model."""
++    """Intelligently routes the prompt to the best available model."""
+     prompt_lower = prompt.lower()
+     
+     # 0. Council Deliberation -> Multi-agent council protocol
+     if re.search(r'\b(council|deliberate|critically? audit|council-deliberation|llm-council|council deliberation)\b', prompt_lower):
+         return "council", "llm_council_deliberation"
++    
++    # 1. Python / FastAPI / Backend -> DeepSeek V4 Flash 0731 (NIM free, best Python)
++    if re.search(r'\b(python|fastapi|flask|django|backend|api endpoint|data.?fetch|screener|yfinance|database|sql|postgres|redis|celery|pydantic|pytest|uvicorn)\b', prompt_lower):
++        return "deepseek-ai/deepseek-v4-flash-0731", "python_backend"
+         
+-    # 1. Financial/Math Reasoning & Deep Logic -> DeepSeek R1 (free)
+-    if re.search(r'\b(math|financial analysis|deep reasoning|o1|complex logic|tradeoffs|step-by-step|chain of thought|deep analysis)\b', prompt_lower):
+-        return "nvidia/nemotron-3-super-120b-a12b:free", "financial_math_reasoning"
+-        
+-    # 2. Long Document RAG & Heavy Agentic Planning -> Nemotron 3 Super 120B
+-    if re.search(r'\b(large repo|long doc|architecture|strategy|plan|tool orchestration|codebase reasoning|massive context|rag|planning)\b', prompt_lower):
+-        return "nvidia/nemotron-3-super-120b-a12b:free", "long_context_agentic"
+-        
+-    # 3. Code Generation & Fixing -> Qwen3 Coder
+-    if re.search(r'\b(code|fix bug|refactor|write function|regex|sql|snippet|debug|react|css|html|typescript|python|script)\b', prompt_lower):
++    # 2. Financial Modeling / Calculations -> MiniMax M3 (NIM free, financial domain)
++    if re.search(r'\b(financial|finance|stock|invest|valuation|dcf|roe|debt.?to.?equity|margin.?of.?safety|balance.?sheet|income.?statement|cash.?flow|earnings|dividend|fundamental|screener\.in|bse|nse|quarterly|annual.?report)\b', prompt_lower):
++        return "minimaxai/minimax-m3", "financial_modeling"
++    
++    # 3. Deep Reasoning / Complex Logic -> Nemotron Ultra 550B (NIM free, flagship reasoning)
++    if re.search(r'\b(math|deep reasoning|complex logic|tradeoffs|step-by-step|chain of thought|deep analysis|proof|derive|algorithm)\b', prompt_lower):
++        return "nvidia/nemotron-3-ultra-550b-a55b", "deep_reasoning"
++    
++    # 4. Multi-file Agent / Large Codebase -> Nemotron 3 Super 120B (NIM free, best agent)
++    if re.search(r'\b(entire codebase|full audit|all files|large context|comprehensive review|read everything|scan all|full repo|every file|multi.?file|refactor entire|architecture|strategy|plan|tool orchestration|planning)\b', prompt_lower):
++        return "nvidia/nemotron-3-super-120b-a12b", "multi_file_agent"
++    
++    # 5. Code Generation & Fixing -> Qwen3 Coder (OpenRouter free, best coding)
++    if re.search(r'\b(code|fix bug|refactor|write function|regex|snippet|debug|react|css|html|typescript|script)\b', prompt_lower):
+         return "qwen/qwen3-coder:free", "fast_coding"
+         
+-    # 4. Agentic Workflows & Tool Use -> Llama 3.3 70B
+-    if re.search(r'\b(n8n|tool call|json extraction|workflow|extract data|structure this|json)\b', prompt_lower):
+-        return "meta-llama/llama-3.3-70b-instruct:free", "n8n_tool_calling"
++    # 6. Agentic Workflows & Tool Use -> GPT-OSS-120B (OpenRouter free, best tools)
++    if re.search(r'\b(n8n|tool call|json extraction|workflow|extract data|structure this|json|agent|function call|pipeline|orchestrat|webhook|integration|automat)\b', prompt_lower):
++        return "openai/gpt-oss-120b:free", "agentic_tools"
+         
+-    # 5. Vision / Chart Parsing -> Nemotron VL 8B
++    # 7. Vision / Chart Parsing -> Nemotron VL 8B (NIM)
+     if re.search(r'\b(image|chart|graph|vision|parse screenshot|look at this picture)\b', prompt_lower):
+         return "nvidia/llama-3.1-nemotron-nano-vl-8b-v1", "stock_chart_vision"
+         
+-    # 6. Financial Document OCR -> Nemotron OCR v1
++    # 8. Financial Document OCR -> Nemotron OCR v1 (NIM)
+     if re.search(r'\b(ocr|pdf|annual report|bse filing|table extraction|scan document)\b', prompt_lower):
+         return "nvidia/nemotron-ocr-v1", "financial_doc_ocr"
+         
+-    # 7. Voice / Audio -> Nemotron Voicechat
++    # 9. Voice / Audio -> Nemotron Voicechat (NIM)
+     if re.search(r'\b(voice|audio|speech|listen|transcribe)\b', prompt_lower):
+         return "nvidia/nemotron-voicechat", "voice_trigger"
+ 
+-    # 8. Omni-modal fallback -> Nemotron Nano Omni 30B
++    # 10. Omni-modal fallback -> Nemotron Nano Omni 30B (NIM)
+     if re.search(r'\b(video|multimodal|omni)\b', prompt_lower):
+         return "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", "multimodal_omni"
+         
+-    # Default General Tasks -> Gemma 4 31B (highest free quality score)
+-    return "google/gemma-4-31b-it:free", "default_general"
++    # Default: Laguna S 2.1 (OpenRouter free, best general coding)
++    return "poolside/laguna-s-2.1:free", "default_general"
+ 
+ # Models that do NOT accept a temperature parameter
+ NO_TEMPERATURE_MODELS = {"o3-mini", "o1", "o1-mini", "o1-preview", "o3"}
+@@ -549,20 +542,16 @@ def get_client_and_model(model_name, is_summarizer=False):
+         api_key = os.getenv("OPENAI_API_KEY")
+         return OpenAI(api_key=api_key, timeout=req_timeout), clean_model
+ 
+-    # OpenRouter / 9router — model IDs must NOT have an 'openrouter/' prefix
++    # OpenRouter models — direct routing (no 9router dependency)
++    # Model IDs must NOT have an 'openrouter/' prefix.
+     # Strip it if accidentally present (e.g. "openrouter/google/gemma..." → "google/gemma...")
+     if model_name.startswith("openrouter/"):
+         clean_model = model_name[len("openrouter/"):]
+     else:
+         clean_model = model_name
+ 
+-    if is_port_open("127.0.0.1", 20128):
+-        base_url = "http://127.0.0.1:20128/v1"
+-        api_key = "9router-local"
+-    else:
+-        base_url = "https://openrouter.ai/api/v1"
+-        api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("9ROUTER_API_KEY")
+-        
++    base_url = "https://openrouter.ai/api/v1"
++    api_key = os.getenv("OPENROUTER_API_KEY")
+     return OpenAI(api_key=api_key, base_url=base_url, timeout=req_timeout), clean_model
+ 
+ def save_temp_memory(messages):
+@@ -594,7 +583,7 @@ def compress_context(messages):
+     
+     prompt = f"Summarize the key technical decisions, bugs fixed, and current goal of this chat history. Be concise.\n\n{hist}"
+     
+-    fallback_chain = ["google/gemma-4-31b-it:free", "nvidia/nemotron-3-super-120b-a12b:free", "qwen/qwen3-coder:free"]
++    fallback_chain = ["poolside/laguna-s-2.1:free", "nvidia/nemotron-3-super-120b-a12b", "qwen/qwen3-coder:free"]
+     summary = None
+     
+     for target_model in fallback_chain:
+@@ -850,14 +839,14 @@ def _query_model_with_fallback_and_timing(model_name, messages, temperature=0.7,
+     
+     # Standard free backup pool
+     fallbacks = [
+-        "google/gemma-4-31b-it:free",
++        "poolside/laguna-s-2.1:free",
++        "openai/gpt-oss-120b:free",
+         "qwen/qwen3-coder:free",
+-        "meta-llama/llama-3.3-70b-instruct:free",
+-        "nvidia/nemotron-3-super-120b-a12b:free",
+-        "google/gemma-2-9b-it:free",
+-        "qwen/qwen-2.5-coder-32b-instruct:free",
+-        "meta-llama/llama-3-8b-instruct:free",
+-        "microsoft/phi-3-medium-128k-instruct:free"
++        "nvidia/nemotron-3-super-120b-a12b",
++        "minimaxai/minimax-m3",
++        "google/gemma-4-31b-it:free",
++        "z-ai/glm-5.2:free",
++        "qwen/qwen3-next-80b-a3b-instruct:free"
+     ]
+     
+     for f in fallbacks:
+@@ -932,7 +921,7 @@ def run_council(prompt, use_deep_context=False):
+                 if avg_price_per_m(m) == 0.0:
+                     return m["id"]
+         filtered = [m for m in models if m.get("id") not in excluded_set]
+-        return get_dynamic_model(filtered, free=True, required_params=["reasoning"], fallback_default="nvidia/nemotron-3-super-120b-a12b:free")
++        return get_dynamic_model(filtered, free=True, required_params=["reasoning"], fallback_default="deepseek-ai/deepseek-v4-flash")
+ 
+     def select_agentic(models, excluded_set):
+         for m in models:
+@@ -944,18 +933,18 @@ def run_council(prompt, use_deep_context=False):
+                 if avg_price_per_m(m) == 0.0:
+                     return m["id"]
+         filtered = [m for m in models if m.get("id") not in excluded_set]
+-        return get_dynamic_model(filtered, free=True, fallback_default="meta-llama/llama-3.3-70b-instruct:free")
++        return get_dynamic_model(filtered, free=True, fallback_default="openai/gpt-oss-120b:free")
+ 
+     def select_general(models, excluded_set):
+         for m in models:
+             m_id = m.get("id", "").lower()
+             if m_id in excluded_set:
+                 continue
+-            if "gemma" in m_id or "llama" in m_id:
++            if "gemma" in m_id or "laguna" in m_id:
+                 if avg_price_per_m(m) == 0.0:
+                     return m["id"]
+         filtered = [m for m in models if m.get("id") not in excluded_set]
+-        return get_dynamic_model(filtered, free=True, fallback_default="google/gemma-4-31b-it:free")
++        return get_dynamic_model(filtered, free=True, fallback_default="poolside/laguna-s-2.1:free")
+ 
+     # Dynamically select 3 distinct council models
+     council_models = []
+@@ -1004,11 +993,12 @@ def run_council(prompt, use_deep_context=False):
+                 excluded.add(m3)
+                 
+             fallback_options = [
+-                "google/gemma-4-31b-it:free",
++                "poolside/laguna-s-2.1:free",
++                "openai/gpt-oss-120b:free",
+                 "qwen/qwen3-coder:free",
+-                "nvidia/nemotron-3-super-120b-a12b:free",
+-                "meta-llama/llama-3.3-70b-instruct:free",
+-                "google/gemma-2-9b-it:free"
++                "deepseek-ai/deepseek-v4-flash",
++                "google/gemma-4-31b-it:free",
++                "z-ai/glm-5.2:free"
+             ]
+             for fb in fallback_options:
+                 if len(council_models) >= 3:
+@@ -1018,15 +1008,15 @@ def run_council(prompt, use_deep_context=False):
+         except Exception as e:
+             print(f"\033[93m[LLM Council] Error selecting dynamic council models: {e}. Using defaults.\033[0m")
+             council_models = [
+-                "google/gemma-4-31b-it:free",
+-                "qwen/qwen3-coder:free",
+-                "nvidia/nemotron-3-super-120b-a12b:free"
++                "poolside/laguna-s-2.1:free",
++                "openai/gpt-oss-120b:free",
++                "qwen/qwen3-coder:free"
+             ]
+     else:
+         council_models = [
+-            "google/gemma-4-31b-it:free",
+-            "qwen/qwen3-coder:free",
+-            "nvidia/nemotron-3-super-120b-a12b:free"
++            "poolside/laguna-s-2.1:free",
++            "openai/gpt-oss-120b:free",
++            "qwen/qwen3-coder:free"
+         ]
+ 
+     context_str = get_deep_context() if use_deep_context else get_instant_context()
+@@ -1092,9 +1082,9 @@ def run_council(prompt, use_deep_context=False):
+         chairman_fallbacks = [
+             chairman_model,
+             "openai/o3-mini",
+-            "google/gemma-4-31b-it:free",
+-            "meta-llama/llama-3.3-70b-instruct:free",
+-            "nvidia/nemotron-3-super-120b-a12b:free"
++            "poolside/laguna-s-2.1:free",
++            "openai/gpt-oss-120b:free",
++            "qwen/qwen3-coder:free"
+         ]
+         resp = None
+         target_model = None
+@@ -1862,7 +1852,7 @@ def repl(model, use_deep_context=False, session_context=None):
+ 
+         # Priority Fallback Chain
+         # OpenRouter model IDs must NOT have an "openrouter/" prefix — use vendor/model:free format directly
+-        fallback_chain = [target_model, "google/gemma-4-31b-it:free", "nvidia/nemotron-3-super-120b-a12b:free", "openai/gpt-oss-120b:free", "qwen/qwen3-coder:free", "meta-llama/llama-3.3-70b-instruct:free", "gemini-2.5-pro"]
++        fallback_chain = [target_model, "poolside/laguna-s-2.1:free", "openai/gpt-oss-120b:free", "qwen/qwen3-coder:free", "nvidia/nemotron-3-super-120b-a12b", "google/gemma-4-31b-it:free", "gemini-2.5-pro"]
+         # Remove duplicates while preserving order
+         seen = set()
+         fallback_chain = [x for x in fallback_chain if not (x in seen or seen.add(x))]
+diff --git a/progress.md b/progress.md
+index 18ce1a7..a29a459 100644
+--- a/progress.md
++++ b/progress.md
+@@ -47,8 +47,29 @@
+    * Completely rewrote `README.md` to clearly document Zsh installation, API key configuration, CLI one-shots, and REPL slash commands.
+    * Added 4 new unit tests covering SessionContext, warning checks, detail level configuration, and payload validation.
+ 
++ - **2026-08-27:**
++   * Full model landscape audit: discovered 461 models across 3 providers (OpenRouter 355, NVIDIA NIM 100, opencode built-in 6).
++   * Confirmed 9router is DOWN and unnecessary — opencode routes directly to OpenRouter/NVIDIA NIM via API keys.
++   * Identified 17 OpenRouter free models + ~50 NVIDIA NIM free models available.
++   * Created `model-council-audit.md` — comprehensive 7-dimension audit prompt for the model council.
++   * Created `model-inventory-2026-08.md` — complete model inventory with tiered recommendations for Investogram.
++   * Key findings: GLM-5.2 is best free coding on NIM, DeepSeek V4 Flash is cheapest paid ($0.07/M), MiniMax M2.7 handles financial modeling, Laguna S 2.1 replaced Laguna M.1 as best free coding on OpenRouter.
++   * Identified stale models in cc* aliases: Laguna M.1→S 2.1, Laguna XS.2→XS 2.1, GLM-4.5-Air→GLM-5.2.
++   * Started 9router dependency removal from aliases.zsh and openai_wrapper.py.
++   * Completed 9router removal: aliases.zsh rewritten with direct `_or()` and `_nim()` functions, openai_wrapper.py cleaned up (removed is_port_open, socket import, 9router port check).
++   * Ran full model-council-audit.md against codebase — **Overall score: 4.6/10**.
++   * Top findings: NIM fetch broken (nim_count: 0), dead alias models (laguna-m.1, qwen3-next-80b), financial routing gap, OpenRouter registry not cached, routing_learner feedback loop broken.
++   * Saved audit results to audit-2026-08-27.md.
++   * Tested NIM direct routing: discovered DeepSeek V4 Flash, GLM-5.2, MiniMax M2.7, Gemma 431B all reach end-of-life. Updated to current versions: DeepSeek V4 Flash 0731, MiniMax M3, Nemotron 3 Super 120B, Nemotron Ultra 550B. Confirmed working via shell aliases.
++   * Updated NVIDIA_API_MAP to use only confirmed working models with single NVAPI_KEY.
++   * Fixed _nim() function to load NVAPI_KEY from global.env if not exported, and use Python OpenAI client (Claude Code CLI doesn't support NIM model IDs).
++
+ ## Backlog / Next Steps
+  - [x] Implement LLM Council multi-agent deliberation.
+  - [x] Refactor multi-image paste queues to use SessionContext context manager with done flow.
++ - [x] Full model inventory audit and council audit prompt creation.
++ - [ ] Remove all 9router dependencies and switch to direct OpenRouter/NIM routing.
++ - [ ] Update cc* aliases to use latest models (Laguna S 2.1, GLM-5.2, etc.).
++ - [ ] Run model-council-audit.md against the codebase.
+  - [ ] Test the `! <cmd>` error interception in a real node/python project.
+  - [ ] Monitor rate-limit hits for OpenRouter free models to ensure the fallback chain shifts smoothly.
+diff --git a/scratchpad.md b/scratchpad.md
+index 63ed332..a8da707 100644
+--- a/scratchpad.md
++++ b/scratchpad.md
+@@ -1,10 +1,15 @@
+ # Project Scratchpad: RoutingMagic
+ 
+ ## Current Focus
+-- Wrap up Phase 3/4 feature development (Model Switcher, Fallbacks, Failsafe, Hybrid Save).
+-- Integrate global aliases for `ask deep` to default to reading these markdown documentation files.
++- **Model Council Overhaul:** Remove 9router dependency, update all model references to current inventory, add financial domain routing.
++- Audit prompt created at `model-council-audit.md` — ready to run against codebase.
++- Full model inventory at `model-inventory-2026-08.md` — 461 models documented.
+ 
+ ## Immediate TODOs
+-- [ ] Test the `! <cmd>` error interception in a real node/python project.
+-- [ ] Monitor rate-limit hits for OpenRouter free models to ensure the fallback chain shifts smoothly.
+-- [ ] Push latest changes to GitHub repository.
++- [ ] Remove `_9r()` function and all port 20128 checks from aliases.zsh
++- [ ] Update cc* aliases: cc→Laguna S 2.1, cch→Laguna XS 2.1, ccz→GLM-5.2
++- [ ] Update openai_wrapper.py get_client_and_model() to route directly (no 9router check)
++- [ ] Add financial domain category to smart_route() and _cc_route_match()
++- [ ] Run model-council-audit.md against the full codebase
++- [ ] Test the `! <cmd>` error interception in a real node/python project
++- [ ] Monitor rate-limit hits for OpenRouter free models to ensure the fallback chain shifts smoothly
