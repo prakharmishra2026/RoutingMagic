@@ -1,0 +1,9 @@
+{
+  "name": "routing-magic-desk",
+  "version": "2.0.0",
+  "description": "Unified AI Usage Dashboard with Model Council",
+  "private": true,
+  "dependencies": {
+    "openai": "^4.0.0"
+  }
+}

@@ -16,25 +16,7 @@
       "score": 55.0,
       "category": "coding",
       "source": "nim",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
-    },
-    {
-      "id": "nvidia/llama-3.1-nemotron-ultra-253b-v1",
-      "name": "nvidia/llama-3.1-nemotron-ultra-253b-v1",
-      "context_length": 1000000,
-      "providers": [],
-      "provider_count": 1,
-      "has_reasoning": true,
-      "supported_parameters": [
-        "temperature",
-        "max_tokens",
-        "reasoning"
-      ],
-      "created": 735790403,
-      "score": 55.0,
-      "category": "reasoning_flagship",
-      "source": "nim",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": "2026-08-29T09:58:09.519105Z"
     },
     {
       "id": "nvidia/nemotron-3-super-120b-a12b",
@@ -53,25 +35,7 @@
       "score": 55.0,
       "category": "reasoning",
       "source": "nim",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
-    },
-    {
-      "id": "nvidia/nemotron-3-ultra-550b-a55b",
-      "name": "nvidia/nemotron-3-ultra-550b-a55b",
-      "context_length": 1000000,
-      "providers": [],
-      "provider_count": 1,
-      "has_reasoning": true,
-      "supported_parameters": [
-        "temperature",
-        "max_tokens",
-        "reasoning"
-      ],
-      "created": 735790403,
-      "score": 55.0,
-      "category": "reasoning_flagship",
-      "source": "nim",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": "2026-08-29T09:58:09.519105Z"
     },
     {
       "id": "nvidia/nemotron-3.5-lightning-30b-a3b",
@@ -89,7 +53,7 @@
       "score": 55.0,
       "category": "long_context",
       "source": "nim",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": "2026-08-29T09:58:09.519105Z"
     },
     {
       "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
@@ -107,7 +71,7 @@
       "score": 47.56,
       "category": "reasoning",
       "source": "nim",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": null
     },
     {
       "id": "openai/gpt-oss-120b",
@@ -126,7 +90,7 @@
       "score": 46.31072,
       "category": "reasoning",
       "source": "nim",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": "2026-08-29T09:58:09.519105Z"
     },
     {
       "id": "nvidia/cosmos-reason2-8b",
@@ -144,7 +108,7 @@
       "score": 46.28,
       "category": "reasoning",
       "source": "nim",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": "2026-08-29T09:58:09.519105Z"
     },
     {
       "id": "nvidia/nemotron-3.5-content-safety",
@@ -162,60 +126,7 @@
       "score": 46.28,
       "category": "general",
       "source": "nim",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
-    },
-    {
-      "id": "google/gemma-4-31b-it",
-      "name": "google/gemma-4-31b-it",
-      "context_length": 1000000,
-      "providers": [],
-      "provider_count": 1,
-      "has_reasoning": false,
-      "supported_parameters": [
-        "temperature",
-        "max_tokens"
-      ],
-      "created": 735790403,
-      "score": 40.0,
-      "category": "general",
-      "source": "nim",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
-    },
-    {
-      "id": "minimaxai/minimax-m3",
-      "name": "minimaxai/minimax-m3",
-      "context_length": 1000000,
-      "providers": [],
-      "provider_count": 1,
-      "has_reasoning": false,
-      "supported_parameters": [
-        "temperature",
-        "max_tokens",
-        "tools"
-      ],
-      "created": 735790403,
-      "score": 40.0,
-      "category": "long_context",
-      "source": "nim",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
-    },
-    {
-      "id": "moonshotai/kimi-k2.6",
-      "name": "moonshotai/kimi-k2.6",
-      "context_length": 1000000,
-      "providers": [],
-      "provider_count": 1,
-      "has_reasoning": false,
-      "supported_parameters": [
-        "temperature",
-        "max_tokens",
-        "tools"
-      ],
-      "created": 735790403,
-      "score": 40.0,
-      "category": "agentic",
-      "source": "nim",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": "2026-08-29T09:58:09.519105Z"
     },
     {
       "id": "poolside/laguna-xs-2.1",
@@ -233,25 +144,7 @@
       "score": 32.62144,
       "category": "coding",
       "source": "nim",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
-    },
-    {
-      "id": "mistralai/mistral-large-2-instruct",
-      "name": "mistralai/mistral-large-2-instruct",
-      "context_length": 128000,
-      "providers": [],
-      "provider_count": 1,
-      "has_reasoning": false,
-      "supported_parameters": [
-        "temperature",
-        "max_tokens",
-        "tools"
-      ],
-      "created": 735790403,
-      "score": 31.28,
-      "category": "general",
-      "source": "nim",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": "2026-08-29T09:58:09.519105Z"
     }
   ],
   "openrouter_models": [
@@ -276,7 +169,7 @@
       "score": 50.0,
       "category": "long_context",
       "source": "openrouter",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": "2026-08-29T09:58:09.519105Z"
     },
     {
       "id": "thinkingmachines/inkling-small:free",
@@ -302,7 +195,7 @@
       "score": 50.0,
       "category": "reasoning",
       "source": "openrouter",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": "2026-08-29T09:58:09.519105Z"
     },
     {
       "id": "thinkingmachines/inkling:free",
@@ -328,7 +221,7 @@
       "score": 50.0,
       "category": "reasoning",
       "source": "openrouter",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": "2026-08-29T09:58:09.519105Z"
     },
     {
       "id": "nvidia/nemotron-3-ultra-550b-a55b:free",
@@ -352,7 +245,7 @@
       "score": 50.0,
       "category": "reasoning_flagship",
       "source": "openrouter",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": "2026-08-29T09:58:09.519105Z"
     },
     {
       "id": "minimax/minimax-m3:free",
@@ -376,7 +269,7 @@
       "score": 50.0,
       "category": "long_context",
       "source": "openrouter",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": null
     },
     {
       "id": "dots-studio/dots-3-note-preview:free",
@@ -400,7 +293,7 @@
       "score": 45.120000000000005,
       "category": "long_context",
       "source": "openrouter",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": "2026-08-29T09:58:09.519105Z"
     },
     {
       "id": "inclusionai/ling-3.0-flash-fin:free",
@@ -430,7 +323,7 @@
       "score": 42.62144,
       "category": "agentic",
       "source": "openrouter",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": "2026-08-29T09:58:09.519105Z"
     },
     {
       "id": "poolside/laguna-s-2.1:free",
@@ -451,7 +344,7 @@
       "score": 42.62144,
       "category": "coding",
       "source": "openrouter",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": "2026-08-29T09:58:09.519105Z"
     },
     {
       "id": "poolside/laguna-xs-2.1:free",
@@ -472,7 +365,7 @@
       "score": 42.62144,
       "category": "coding",
       "source": "openrouter",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": "2026-08-29T09:58:09.519105Z"
     },
     {
       "id": "google/gemma-4-26b-a4b-it:free",
@@ -496,7 +389,7 @@
       "score": 42.62144,
       "category": "agentic",
       "source": "openrouter",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": null
     },
     {
       "id": "google/gemma-4-31b-it:free",
@@ -520,7 +413,7 @@
       "score": 42.62144,
       "category": "agentic",
       "source": "openrouter",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": "2026-08-29T09:58:09.519105Z"
     },
     {
       "id": "nvidia/nemotron-3-super-120b-a12b:free",
@@ -546,7 +439,7 @@
       "score": 42.62144,
       "category": "reasoning",
       "source": "openrouter",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": "2026-08-29T09:58:09.519105Z"
     },
     {
       "id": "cohere/north-mini-code:free",
@@ -573,7 +466,7 @@
       "score": 42.56,
       "category": "coding",
       "source": "openrouter",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": "2026-08-29T09:58:09.519105Z"
     },
     {
       "id": "z-ai/glm-5.2:free",
@@ -605,7 +498,7 @@
       "score": 42.56,
       "category": "agentic",
       "source": "openrouter",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": "2026-08-29T09:58:09.519105Z"
     },
     {
       "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
@@ -628,7 +521,7 @@
       "score": 42.56,
       "category": "reasoning",
       "source": "openrouter",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": null
     },
     {
       "id": "openrouter/free",
@@ -663,7 +556,7 @@
       "score": 42.0,
       "category": "agentic",
       "source": "openrouter",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": "2026-08-29T09:58:09.519105Z"
     },
     {
       "id": "minimax/minimax-m2.7:free",
@@ -687,7 +580,7 @@
       "score": 41.966080000000005,
       "category": "agentic",
       "source": "openrouter",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": "2026-08-29T09:58:09.519105Z"
     },
     {
       "id": "nvidia/nemotron-3.5-content-safety:free",
@@ -708,7 +601,7 @@
       "score": 41.28,
       "category": "general",
       "source": "openrouter",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": "2026-08-29T09:58:09.519105Z"
     },
     {
       "id": "liquid/lfm-2.5-2.6b:free",
@@ -742,7 +635,7 @@
       "score": 40.65536,
       "category": "agentic",
       "source": "openrouter",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": "2026-08-29T09:58:09.519105Z"
     },
     {
       "id": "google/lyria-3-pro-preview",
@@ -762,7 +655,7 @@
       "score": 35.0,
       "category": "long_context",
       "source": "openrouter",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": "2026-08-29T09:58:09.519105Z"
     },
     {
       "id": "google/lyria-3-clip-preview",
@@ -782,7 +675,7 @@
       "score": 35.0,
       "category": "long_context",
       "source": "openrouter",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": "2026-08-29T09:58:09.519105Z"
     }
   ],
   "opencode_models": [
@@ -798,7 +691,7 @@
       "score": 45.0,
       "category": "reasoning_flagship",
       "source": "opencode",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": "2026-08-29T09:58:09.519105Z"
     },
     {
       "id": "opencode/nemotron-3.5-lightning-free",
@@ -812,24 +705,18 @@
       "score": 40.0,
       "category": "long_context",
       "source": "opencode",
-      "degraded_until": "2026-08-29T07:45:22.954741Z"
+      "degraded_until": "2026-08-29T09:58:09.519105Z"
     }
   ],
   "merged_fallback_chain": [
     "deepseek-ai/deepseek-v4-flash-0731",
-    "nvidia/llama-3.1-nemotron-ultra-253b-v1",
     "nvidia/nemotron-3-super-120b-a12b",
-    "nvidia/nemotron-3-ultra-550b-a55b",
     "nvidia/nemotron-3.5-lightning-30b-a3b",
     "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
     "openai/gpt-oss-120b",
     "nvidia/cosmos-reason2-8b",
     "nvidia/nemotron-3.5-content-safety",
-    "google/gemma-4-31b-it",
-    "minimaxai/minimax-m3",
-    "moonshotai/kimi-k2.6",
     "poolside/laguna-xs-2.1",
-    "mistralai/mistral-large-2-instruct",
     "nvidia/nemotron-3.5-lightning:free",
     "thinkingmachines/inkling-small:free",
     "thinkingmachines/inkling:free",
@@ -859,10 +746,43 @@
     "openai/o3-mini"
   ],
   "metadata": {
-    "updated_at": "2026-08-29T07:45:23.258807Z",
-    "nim_count": 14,
+    "updated_at": "2026-08-29T09:58:25.315249Z",
+    "nim_count": 8,
     "openrouter_free_count": 21,
     "opencode_count": 2,
-    "total_models": 37
-  }
+    "total_models": 31
+  },
+  "nim_free_models": [
+    "deepseek-ai/deepseek-v4-flash-0731",
+    "nvidia/nemotron-3-super-120b-a12b",
+    "nvidia/nemotron-3.5-lightning-30b-a3b",
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+    "openai/gpt-oss-120b",
+    "nvidia/cosmos-reason2-8b",
+    "nvidia/nemotron-3.5-content-safety",
+    "poolside/laguna-xs-2.1"
+  ],
+  "openrouter_free_models": [
+    "nvidia/nemotron-3.5-lightning:free",
+    "thinkingmachines/inkling-small:free",
+    "thinkingmachines/inkling:free",
+    "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "minimax/minimax-m3:free",
+    "dots-studio/dots-3-note-preview:free",
+    "inclusionai/ling-3.0-flash-fin:free",
+    "poolside/laguna-s-2.1:free",
+    "poolside/laguna-xs-2.1:free",
+    "google/gemma-4-26b-a4b-it:free",
+    "google/gemma-4-31b-it:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "cohere/north-mini-code:free",
+    "z-ai/glm-5.2:free",
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+    "openrouter/free",
+    "minimax/minimax-m2.7:free",
+    "nvidia/nemotron-3.5-content-safety:free",
+    "liquid/lfm-2.5-2.6b:free",
+    "google/lyria-3-pro-preview",
+    "google/lyria-3-clip-preview"
+  ]
 }

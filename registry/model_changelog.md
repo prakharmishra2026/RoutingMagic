@@ -57,3 +57,11 @@
 ## 2026-08-29 07:45 UTC
   ➕ **Added**: inclusionai/ling-3.0-flash-fin:free (openrouter, agentic, score: 42.6)
   ➖ **Removed**: stepfun-ai/step-3.7-flash (nim, general)
+
+## 2026-08-29 09:05 UTC
+  ➖ **Removed**: nvidia/nemotron-3-ultra-550b-a55b (nim, reasoning_flagship)
+  ➖ **Removed**: minimaxai/minimax-m3 (nim, long_context)
+  ➖ **Removed**: nvidia/llama-3.1-nemotron-ultra-253b-v1 (nim, reasoning_flagship)
+  ➖ **Removed**: moonshotai/kimi-k2.6 (nim, agentic)
+  ➖ **Removed**: mistralai/mistral-large-2-instruct (nim, general)
+  ➖ **Removed**: google/gemma-4-31b-it (nim, general)
