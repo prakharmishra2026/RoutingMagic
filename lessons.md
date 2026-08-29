@@ -67,3 +67,51 @@
 **What broke**: Renamed `run_health_checks` parameter to `do_health_checks` to avoid shadowing the `run_health_checks()` function, but forgot to update the call site — got `TypeError: 'bool' object is not callable` when `asyncio.run(run_health_checks(...))` tried to call the boolean parameter.
 **Root cause**: Parameter name matched function name; inside function scope, parameter shadows outer function.
 **Rule**: Never name parameters the same as functions they call. Use `do_` prefix for boolean action parameters (e.g., `do_health_checks`, `run_health_checks` → `do_health_checks`).
+
+## 016 — Session ID Unification Must Be Bidirectional
+**What broke**: `unified_sessions.session_id` stored composite `source:raw` but `unified_turns.session_id` stored raw ID. Recompute JOIN `t.session_id = s.session_id` never matched → all session totals zeroed.
+**Root cause**: Adapter returns raw session_id; `_aggregate_sessions` prefixed for sessions table but `upsert_turns` didn't prefix for turns table.
+**Rule**: When changing session ID format, update BOTH write paths (turns and sessions). Verify with `SELECT COUNT(*) FROM sessions s LEFT JOIN turns t ON t.session_id=s.session_id WHERE t.session_id IS NULL` — must be 0.
+
+## 017 — Stale Data Persists When Adapter Returns Empty
+**What broke**: Adapter returning `[]` (missing DB, transient error, or removed source) left old rows in `unified_turns` and `unified_sessions` because `scan()` only DELETE+reinsert when `rows` is truthy.
+**Root cause**: `scan()` conditional on `if rows:` before DELETE. Removing a source (e.g., 9router) left its stale data visible with no indication.
+**Rule**: ALWAYS DELETE source rows + remove from `scan_state` regardless of adapter result. If adapter returns `[]`, set `scan_state.status='empty'` so UI shows "empty" not stale data.
+
+## 018 — Free/Paid Classification Must Be Token-Based, Not Substring
+**What broke**: `FREE_MODELS` set used `if kw in model` substring matching. `"nemotron" in "nvidia/nemotron-3-ultra-550b-a55b"` → True, but this model is PAID on OpenRouter (only `:free` suffix is free).
+**Root cause**: Substring matching catches false positives across provider boundaries.
+**Rule**: Use token-based matching — split on `/`, `-`, `.`, `_`, `:` → tokens. Free if: provider prefix in `{nvidia, nim, opencode}`, `:free` suffix, `-free` token, or known free tokens `{gpt-oss, big-pickle, laguna}`. Single shared `is_free(model, source)` used by server + serialized to frontend.
+
+## 019 — CORS Wildcard Is a Security Hole
+**What broke**: All API endpoints sent `Access-Control-Allow-Origin: *`, allowing any website to trigger expensive rescans and read usage data.
+**Root cause**: CORS wildcard added for convenience during development, never restricted.
+**Rule**: Restrict CORS to same-origin only. Check `Origin` header; allow only `http://localhost:*` and `http://127.0.0.1:*`. Return 409 for concurrent rescans (single-flight lock).
+
+## 020 — PID File Must Store Actual Port
+**What broke**: `write_pid_file(port)` ignored the port argument; `get_running_dashboard_port()` hardcoded `return 9898`. If `find_free_port()` returned 9899+, dashboard open/stop targeted wrong port.
+**Root cause**: PID file only stored PID, not port. Daemon port selection was dynamic but tracking wasn't.
+**Rule**: PID file format `pid\nport` (two lines). Write atomically: temp file + `os.replace()`. Read both lines; validate PID alive before returning port.
+
+## 021 — Budget Config Must Be Validated
+**What broke**: Hardcoded `$50.00` / `2,000,000` in `get_budget_status()`. User couldn't configure; no validation meant negative/zero values could break UI.
+**Root cause**: Budget defaults only in code, not user-editable config.
+**Rule**: Read `monthly_usd` and `daily_tokens` from `~/.routingmagic/quotas.yaml` (same file as provider budgets). Validate positive numbers; fallback to defaults.
+
+## 022 — Timestamp Normalization at Ingestion
+**What broke**: `substr(timestamp, 1, 10)` and `datetime.fromisoformat()` silently fail on non-ISO timestamps (Unix epoch, numeric strings) → wrong day buckets, duration=0.
+**Root cause**: Adapters passed raw timestamps; only some used `_ts_to_iso()`. Claude usage.db returns ISO but other sources may not.
+**Rule**: Normalize ALL timestamps at ingestion via `_ts_to_iso(ts)` handling: ISO string, Unix epoch (sec/ms), numeric string, int/float. Then `substr(day, 1, 10)` is always correct.
+
+## 023 — Cache Invalidation via File Mtime
+**What worked**: `get_dashboard_data()` caching with mtime-based invalidation (`st_mtime_ns`) + lock is simple and correct. No stale reads; cache auto-invalidates when scan rewrites DB.
+**Rule**: For read-heavy APIs with periodic writes, use `stat().st_mtime_ns` as cache key. Invalidate on mtime change. No TTL needed.
+
+## 024 — Dead Code Removal (WebSocket)
+**What broke**: WebSocket layer (100+ lines) was never used by frontend (polling every 30s). `ws_broadcast` called in quota monitor but no client connected. `_ws_recv` had infinite loop risk on large frames.
+**Root cause**: Feature added but never wired; security risk from malformed frames.
+**Rule**: Remove dead WebSocket code entirely. Frontend polling (30s) is sufficient for dashboard updates. Keep quota monitor for alert persistence (saves to DB), remove broadcast calls.
+
+## 025 — Atomic PID File Write
+**What worked**: `write_pid_file` uses `tempfile.NamedTemporaryFile` + `os.replace()` for atomic PID+port write. No partial reads on quick restart.
+**Rule**: Always write PID/state files atomically: temp file in same directory + `os.replace()` (POSIX atomic rename).

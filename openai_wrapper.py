@@ -4,7 +4,7 @@
 Supports:
   - NVIDIA NIM models (glm-5.1, deepseek-v4-flash, nemotron, etc.)
   - OpenAI models
-  - OpenRouter / local 9Router models (free/paid)
+  - OpenRouter models (free/paid)
   - Smart Routing: Auto-selects the best NVIDIA free model based on task.
   - Dual-Tier Context: Instant context sniffing or deep codebase summarization.
   - Fallback loops, cost tracking, workspaces, failsafes, error interception.
@@ -1635,11 +1635,14 @@ def run_council(prompt, use_deep_context=False):
                 by_source[src].sort(key=lambda x: x.score, reverse=True)
             
             # Randomly select from top 5 of each source for diversity
+            # NOTE: normalize to string IDs — ModelInfo dataclass objects are
+            # unhashable, so set()/dict-key ops downstream (e.g. set(council_models))
+            # crash if an object is passed instead of its .id string.
             candidates = []
             for src in ["nim", "openrouter", "opencode"]:
                 top_models = by_source[src][:5]
                 if top_models:
-                    candidates.append(random.choice(top_models))
+                    candidates.append(random.choice(top_models).id)
             
             # Add direct provider models if keys available
             if has_gem:

@@ -6,7 +6,7 @@ common format that the unified scanner can merge.
 
 Common row schema:
 {
-    "source": str,           # "claude", "opencode", "9router", "hermes", "codex", "routingmagic"
+    "source": str,           # "claude", "opencode", "hermes", "codex", "routingmagic"
     "session_id": str,
     "timestamp": str,        # ISO8601
     "model": str,
@@ -108,7 +108,7 @@ def scan_claude(db_path: Optional[Path] = None) -> List[Dict]:
         results.append({
             "source": "claude",
             "session_id": r["session_id"] or "",
-            "timestamp": r["timestamp"] or "",
+            "timestamp": _ts_to_iso(r["timestamp"]),
             "model": r["model"] or "unknown",
             "input_tokens": r["input_tokens"] or 0,
             "output_tokens": r["output_tokens"] or 0,
@@ -186,70 +186,6 @@ def scan_opencode(db_path: Optional[Path] = None) -> List[Dict]:
             "project": _project_from_path(r["directory"] or ""),
             "source_metadata": json.dumps({
                 "title": r["title"] or "",
-            }),
-        })
-    return results
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  9router — ~/.9router/db/data.sqlite (usageHistory table)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-def scan_9router(db_path: Optional[Path] = None) -> List[Dict]:
-    """Scan 9router usageHistory table."""
-    db = db_path or Path.home() / ".9router" / "db" / "data.sqlite"
-    conn = _safe_connect(db)
-    if not conn:
-        return []
-
-    try:
-        rows = conn.execute("""
-            SELECT
-                id,
-                timestamp,
-                provider,
-                model,
-                promptTokens,
-                completionTokens,
-                cost,
-                status,
-                meta
-            FROM usageHistory
-            WHERE promptTokens + completionTokens > 0
-        """).fetchall()
-    except Exception:
-        return []
-    finally:
-        conn.close()
-
-    results = []
-    for r in rows:
-        model = r["model"] or "unknown"
-        provider = r["provider"] or ""
-        if provider and provider not in model:
-            model = f"{provider}/{model}"
-
-        meta = {}
-        try:
-            meta = json.loads(r["meta"] or "{}")
-        except (json.JSONDecodeError, TypeError):
-            pass
-
-        results.append({
-            "source": "9router",
-            "session_id": f"9r-{r['id']}",
-            "timestamp": r["timestamp"] or "",
-            "model": model,
-            "input_tokens": r["promptTokens"] or 0,
-            "output_tokens": r["completionTokens"] or 0,
-            "cache_read": 0,
-            "cache_write": 0,
-            "reasoning_tokens": 0,
-            "cost": r["cost"] or 0.0,
-            "project": meta.get("project", "unknown"),
-            "source_metadata": json.dumps({
-                "status": r["status"] or "",
-                "endpoint": meta.get("endpoint", ""),
             }),
         })
     return results
@@ -415,7 +351,7 @@ def scan_routingmagic(db_path: Optional[Path] = None) -> List[Dict]:
         results.append({
             "source": "routingmagic",
             "session_id": r["session_id"] or "",
-            "timestamp": r["timestamp"] or "",
+            "timestamp": _ts_to_iso(r["timestamp"]),
             "model": r["model_used"] or "unknown",
             "input_tokens": r["input_tokens"] or 0,
             "output_tokens": r["output_tokens"] or 0,
@@ -445,20 +381,18 @@ def scan_routingmagic(db_path: Optional[Path] = None) -> List[Dict]:
 ADAPTERS = {
     "claude": scan_claude,
     "opencode": scan_opencode,
-    "9router": scan_9router,
     "hermes": scan_hermes,
     "codex": scan_codex,
     "routingmagic": scan_routingmagic,
 }
 
 # Sources ordered by data richness (most detailed first)
-SOURCE_ORDER = ["claude", "opencode", "hermes", "9router", "codex", "routingmagic"]
+SOURCE_ORDER = ["claude", "opencode", "hermes", "codex", "routingmagic"]
 
 # Friendly display names for the UI
 SOURCE_DISPLAY_NAMES = {
     "claude": "Claude Code",
     "opencode": "OpenCode",
-    "9router": "9router (legacy)",
     "hermes": "Hermes",
     "codex": "Codex CLI",
     "routingmagic": "RoutingMagic",

@@ -38,7 +38,7 @@ Key features: smart_route heuristic, Model Council (3-model deliberation), git s
 - `routing_learner.py` — per-task success rate tracking, model quality DB, lesson generation
 - `save_handler.py` — auto-updates project memory files after sessions
 - `glm5.py` — direct NVIDIA GLM-5.1 fallback script
-- `dashboard_adapters.py` — source-specific SQLite adapters (Claude, OpenCode, Hermes, Codex, 9router, RoutingMagic)
+- `dashboard_adapters.py` — source-specific SQLite adapters (Claude, OpenCode, Hermes, Codex, RoutingMagic)
 - `unified_scanner.py` — orchestrates adapters → unified usage_unified.db
 - `dashboard_server.py` — unified web dashboard on localhost:9898 (/dashboard command)
 - `install.sh` — installer: zshrc + skill symlink + key setup + dashboard init

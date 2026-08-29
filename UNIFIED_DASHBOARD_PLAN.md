@@ -63,11 +63,6 @@ ADAPTER_PROBES = {
         "cli_check": ["codex", "--version"],
         "api_check": None,
     },
-    "9router": {
-        "paths": ["~/.9router/db/data.sqlite"],
-        "cli_check": ["9router", "--version"],
-        "api_check": "http://localhost:20128/health",
-    },
     "hermes": {
         "paths": ["~/.hermes/state.db"],
         "cli_check": ["hermes", "--version"],
@@ -370,7 +365,6 @@ CREATE TABLE IF NOT EXISTS budget_alerts (
 | **Claude Code** | ✅ `scan_claude` | `~/.claude/usage.db` | Plan (Max/Pro) + API credits |
 | **OpenCode** | ✅ `scan_opencode` | `~/.local/share/opencode/opencode.db` | Built-in |
 | **Codex** | ✅ `scan_codex` | `~/.codex/state_5.sqlite` | OpenAI API |
-| **9router** | ✅ `scan_9router` | `~/.9router/db/data.sqlite` | OpenRouter credits |
 | **Hermes** | ✅ `scan_hermes` | `~/.hermes/state.db` | Custom |
 | **RoutingMagic** | ✅ `scan_routingmagic` | `~/.routingmagic/metrics/token_metrics.db` | NIM RPM + OR free |
 
@@ -686,7 +680,6 @@ console_scripts = [
 claude = "routingmagic_dashboard.adapters.claude:scan_claude"
 opencode = "routingmagic_dashboard.adapters.opencode:scan_opencode"
 codex = "routingmagic_dashboard.adapters.codex:scan_codex"
-nine_router = "routingmagic_dashboard.adapters.nine_router:scan_9router"
 hermes = "routingmagic_dashboard.adapters.hermes:scan_hermes"
 routingmagic = "routingmagic_dashboard.adapters.routingmagic:scan_routingmagic"
 # Your tools

@@ -1,7 +1,7 @@
 """
 unified_scanner.py - Orchestrates all source adapters, writes unified usage DB.
 
-Reads from Claude Code, OpenCode, 9router, Hermes, Codex CLI, and RoutingMagic.
+Reads from Claude Code, OpenCode, Hermes, Codex CLI, and RoutingMagic.
 Writes a single unified SQLite database at ~/.routingmagic/metrics/usage_unified.db.
 
 The unified schema adds a 'source' column to the standard Claude dashboard schema,
@@ -67,14 +67,64 @@ def init_db(conn: sqlite3.Connection):
         CREATE TABLE IF NOT EXISTS scan_state (
             source      TEXT PRIMARY KEY,
             last_scan   TEXT,
-            row_count   INTEGER DEFAULT 0
+            row_count   INTEGER DEFAULT 0,
+            status      TEXT DEFAULT 'ok'
+        );
+
+        CREATE TABLE IF NOT EXISTS adapter_state (
+            name        TEXT PRIMARY KEY,
+            state       TEXT,
+            last_seen   TEXT,
+            last_shallow TEXT,
+            cli_ok      INTEGER,
+            api_ok      INTEGER,
+            paths_found TEXT,
+            error_msg   TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS quota_budgets (
+            provider    TEXT PRIMARY KEY,
+            budget_type TEXT,
+            config_json TEXT,
+            updated_at  TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS quota_snapshots (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            provider    TEXT,
+            model       TEXT,
+            timestamp   TEXT,
+            consumed    INTEGER,
+            remaining   INTEGER,
+            limit_value INTEGER,
+            pct_used    REAL,
+            window_start TEXT,
+            window_end   TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS budget_alerts (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            provider    TEXT,
+            model       TEXT,
+            timestamp   TEXT,
+            level       TEXT,
+            message     TEXT,
+            pct_used    REAL,
+            acknowledged INTEGER DEFAULT 0
         );
 
         CREATE INDEX IF NOT EXISTS idx_ut_source ON unified_turns(source);
         CREATE INDEX IF NOT EXISTS idx_ut_timestamp ON unified_turns(timestamp);
         CREATE INDEX IF NOT EXISTS idx_ut_model ON unified_turns(model);
         CREATE INDEX IF NOT EXISTS idx_us_source ON unified_sessions(source);
+        CREATE INDEX IF NOT EXISTS idx_qs_provider ON quota_snapshots(provider);
+        CREATE INDEX IF NOT EXISTS idx_qs_timestamp ON quota_snapshots(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_ba_provider ON budget_alerts(provider);
     """)
+    # Migration: add status column if missing
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(scan_state)").fetchall()]
+    if "status" not in cols:
+        conn.execute("ALTER TABLE scan_state ADD COLUMN status TEXT DEFAULT 'ok'")
     conn.commit()
 
 
@@ -136,7 +186,7 @@ def upsert_turns(conn: sqlite3.Connection, rows: List[Dict]):
              cache_read, cache_write, reasoning_tokens, cost, project, source_metadata)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, [
-        (r["source"], r["session_id"], r["timestamp"], r["model"],
+        (r["source"], f"{r['source']}:{r['session_id']}", r["timestamp"], r["model"],
          r["input_tokens"], r["output_tokens"], r["cache_read"], r["cache_write"],
          r["reasoning_tokens"], r["cost"], r["project"],
          r.get("source_metadata", "{}"))
@@ -202,33 +252,38 @@ def scan(sources: Optional[List[str]] = None, verbose: bool = True) -> Dict:
         if verbose:
             print(f"  [{source_name}] {len(rows)} turns")
 
-        if rows:
-            # For sources with existing data, we need to be smarter about dedup.
-            # Simple approach: delete old data for this source and re-insert.
-            # This is safe because adapters return ALL rows (not incremental).
-            conn.execute("DELETE FROM unified_turns WHERE source = ?", (source_name,))
-            conn.execute("DELETE FROM unified_sessions WHERE source LIKE ? || ':%'",
-                         (source_name,))
+        # Always delete old data for this source (even if rows is empty).
+        # This prevents stale data persisting when an adapter returns [].
+        conn.execute("DELETE FROM unified_turns WHERE source = ?", (source_name,))
+        conn.execute("DELETE FROM unified_sessions WHERE source LIKE ? || ':%'",
+                     (source_name,))
 
+        # Determine status for scan_state
+        if rows:
             upsert_turns(conn, rows)
             sessions = _aggregate_sessions(rows)
             upsert_sessions(conn, sessions)
 
             total_rows += len(rows)
             total_sessions += len(sessions)
+            status = "ok"
+        else:
+            status = "empty"
 
-            conn.execute("""
-                INSERT OR REPLACE INTO scan_state (source, last_scan, row_count)
-                VALUES (?, ?, ?)
-            """, (
-                source_name,
-                datetime.now(timezone.utc).isoformat(),
-                len(rows),
-            ))
+        conn.execute("""
+            INSERT OR REPLACE INTO scan_state (source, last_scan, row_count, status)
+            VALUES (?, ?, ?, ?)
+        """, (
+            source_name,
+            datetime.now(timezone.utc).isoformat(),
+            len(rows),
+            status,
+        ))
 
         conn.commit()
 
     # Recompute session totals from actual turns (correctness guarantee)
+    # Only recompute sessions that have matching turns; never zero correct totals.
     if total_rows > 0:
         conn.execute("""
             UPDATE unified_sessions SET
@@ -262,6 +317,11 @@ def scan(sources: Optional[List[str]] = None, verbose: bool = True) -> Dict:
                     WHERE unified_turns.session_id = unified_sessions.session_id
                       AND unified_turns.source = unified_sessions.source
                 ), 0)
+            WHERE EXISTS (
+                SELECT 1 FROM unified_turns
+                WHERE unified_turns.session_id = unified_sessions.session_id
+                  AND unified_turns.source = unified_sessions.source
+            )
         """)
         conn.commit()
 

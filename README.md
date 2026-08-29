@@ -110,13 +110,13 @@ Track usage across **all your AI tools** in one place:
 
 ```bash
 dashboard open      # Scan + open browser at localhost:9898
-dashboard scan      # Scan all sources (Claude, OpenCode, Hermes, Codex, 9router, RoutingMagic)
+dashboard scan      # Scan all sources (Claude, OpenCode, Hermes, Codex, RoutingMagic)
 dashboard stop      # Stop the dashboard server
 ```
 
 Or from inside REPL: `/dashboard`
 
-**Sources tracked:** Claude Code, OpenCode, Hermes, Codex CLI, 9router, RoutingMagic internal metrics
+**Sources tracked:** Claude Code, OpenCode, Hermes, Codex CLI, RoutingMagic internal metrics
 
 ---
 
