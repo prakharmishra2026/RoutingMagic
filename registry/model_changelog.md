@@ -65,3 +65,6 @@
   ➖ **Removed**: moonshotai/kimi-k2.6 (nim, agentic)
   ➖ **Removed**: mistralai/mistral-large-2-instruct (nim, general)
   ➖ **Removed**: google/gemma-4-31b-it (nim, general)
+
+## 2026-09-04 05:41 UTC
+  ➖ **Removed**: openai/gpt-oss-120b (nim, reasoning)
