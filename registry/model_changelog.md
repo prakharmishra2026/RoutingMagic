@@ -68,3 +68,6 @@
 
 ## 2026-09-04 05:41 UTC
   ➖ **Removed**: openai/gpt-oss-120b (nim, reasoning)
+
+## 2026-09-05 05:29 UTC
+  ➕ **Added**: inclusionai/ling-3.0-flash-sante:free (openrouter, agentic, score: 42.6)
