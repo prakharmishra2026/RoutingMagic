@@ -71,3 +71,6 @@
 
 ## 2026-09-05 05:29 UTC
   ➕ **Added**: inclusionai/ling-3.0-flash-sante:free (openrouter, agentic, score: 42.6)
+
+## 2026-09-07 05:52 UTC
+  ➖ **Removed**: z-ai/glm-5.2:free (openrouter, agentic)
