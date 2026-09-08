@@ -74,3 +74,7 @@
 
 ## 2026-09-07 05:52 UTC
   ➖ **Removed**: z-ai/glm-5.2:free (openrouter, agentic)
+
+## 2026-09-08 05:45 UTC
+  ➖ **Removed**: minimax/minimax-m2.7:free (openrouter, agentic)
+  ➖ **Removed**: minimax/minimax-m3:free (openrouter, long_context)
