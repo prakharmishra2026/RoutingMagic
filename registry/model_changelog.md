@@ -78,3 +78,7 @@
 ## 2026-09-08 05:45 UTC
   ➖ **Removed**: minimax/minimax-m2.7:free (openrouter, agentic)
   ➖ **Removed**: minimax/minimax-m3:free (openrouter, long_context)
+
+## 2026-09-09 05:49 UTC
+  ➕ **Added**: nex-agi/nex-n2.5-pro:free (openrouter, agentic, score: 42.6)
+  ➕ **Added**: nex-agi/nex-n2.5-mini:free (openrouter, agentic, score: 42.6)
