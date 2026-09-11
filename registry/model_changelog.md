@@ -82,3 +82,6 @@
 ## 2026-09-09 05:49 UTC
   ➕ **Added**: nex-agi/nex-n2.5-pro:free (openrouter, agentic, score: 42.6)
   ➕ **Added**: nex-agi/nex-n2.5-mini:free (openrouter, agentic, score: 42.6)
+
+## 2026-09-11 05:44 UTC
+  ➕ **Added**: inclusionai/ling-3.0-flash-vl:free (openrouter, vision, score: 42.6)
