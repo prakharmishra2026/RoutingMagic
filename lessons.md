@@ -196,3 +196,14 @@ chain, regardless of registry score.
 - **Rule going forward**: vision probes must treat `choices=None` on 200 as transient
   (retry, don't hard-fail), classify `NoneType`/`no-choices` as transient, and verify
   vision CANNOT be inferred from a text probe of the same model.
+
+## #034 — The fallback-chain builder ignored its own degraded filter
+- **What broke**: `apply_health_degradation()` claimed "Rebuild fallback chain excluding
+  degraded models", but `build_merged_fallback_chain()` never checked `degraded_until`.
+  `merged_fallback_chain[0]` was `deepseek-ai/deepseek-v4-flash-0731` — flagged degraded
+  in health_cache.json (empty content) yet still the chain leader.
+- **Root cause**: the filter lived in the wrapper at runtime (lines 139/1643 skip degraded)
+  but was never applied at chain-build time, so the stored artifact lied and wasted the
+  first consecutive request slot.
+- **Rule going forward**: when a function's docstring promises exclusion, verify the loop
+  that consumes the data. Rebuild chain = first check health_cache actually shapes it.

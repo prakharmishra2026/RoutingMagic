@@ -114,3 +114,8 @@
 - [x] Bug-fix verify script: catastrophic-backtracking regex → line slicing; keep-on-fail so roles never vacate; `choices=None` on 200 treated as transient
 - [~] Vision pool: omni:free image path DOWN at OR as of 19:40 UTC (transient flap; text healthy; runtime safe via paid gpt-4o-mini last resort) — expect auto-green at next daily run
 
+- [x] Registry fallback chain honors health degradation (#034): chain 35 → 19, empty-content leader deepseek-v4-flash dropped, super-120b leads
+- [x] Verifier refreshes stale registry before `--fix` rotation (aborts loudly if refresh fails)
+- [x] `.DS_Store` untracked + `.gitignore` entry
+- [x] Final sweep re-verified: pytest 20/20, council_health 3/3, verifier green except vision (OR-side outage, auto-heals daily)
+- [ ] CEO note: confirm nightly GHA verify step goes green after OR restores vision (external, next 1–2 runs)

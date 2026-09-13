@@ -157,3 +157,23 @@ everything runs; chairman path always-free. No commits made (per instruction).
 GEMINI_API_KEY/ZAI_API_KEY secrets to GHA env (verify dynamic fallbacks in CI). (3)
 `ensure_registry_fresh()` is defined but not called from main() — wire it in if the cron
 ever splits.
+
+## Session checkpoint — 2026-09-13 20:15 UTC | Pending-items sweep
+
+- **Registry chain contract bug fixed** (#034): `build_merged_fallback_chain` now skips
+  `degraded_until` models. Rebuilt offline via `apply_health_degradation` + save_registry_atomic:
+  chain 35 → 19; leader `deepseek-ai/deepseek-v4-flash-0731` (empty-content.degraded) dropped;
+  `nvidia/nemotron-3-super-120b-a12b` now leads. Runtime wrapper already filtered degraded,
+  this cleans the stored artifact for external consumers.
+- **Verifier hardening**: `ensure_registry_fresh()` wired into main(); with `--fix` it
+  refreshes a stale registry (re-measures age after refresh) and aborts loudly if STILL
+  stale — no more rotating against a week-old candidate list. GHA path unaffected.
+- **Housekeeping**: `.DS_Store` removed from git tracking + added to `.gitignore`.
+- `REASONING_MODELS` verified already clean (no dead/paid ids) — false alarm from earlier
+  sweep memory.
+- **Re-verified**: pytest 20/20, council_health 3/3 PASS (lightning tail 73s this probe),
+  verifier --fix: council/chairman green, vision still RED (OR free image path down all day;
+  text healthy). health_report.md committed as evidence. Runtime unaffected.
+- **Still-open external**: OR free vision image path — auto-heals when OR restores;
+  nightly cron re-probes. GHA verify step unproven in CI until tonight's 1 AM run.
+- **Commits**: NONE yet this round (pending this write-up).

@@ -448,19 +448,19 @@ def build_merged_fallback_chain(registry: Registry) -> List[str]:
     
     # Tier 1: NVIDIA NIM Direct (highest priority)
     for m in registry.nim_models:
-        if m.id not in seen:
+        if m.id not in seen and not m.degraded_until:
             chain.append(m.id)
             seen.add(m.id)
     
     # Tier 2: OpenRouter Free
     for m in registry.openrouter_models:
-        if m.id not in seen:
+        if m.id not in seen and not m.degraded_until:
             chain.append(m.id)
             seen.add(m.id)
     
     # Tier 3: opencode built-in
     for m in registry.opencode_models:
-        if m.id not in seen:
+        if m.id not in seen and not m.degraded_until:
             chain.append(m.id)
             seen.add(m.id)
     

@@ -1,6 +1,6 @@
 {
   "generated_by": "scripts/verify_free_models.py",
-  "last_verified_at": "2026-09-13T14:00:30.436186Z",
+  "last_verified_at": "2026-09-13T15:46:25.940441Z",
   "note": "Single source of truth for PINNED free-tier models. Runtime council reads this pool first (verified-first), then fills from the live registry draw with provider diversity. Vision + chairman chains are pinned to these members. Auto-maintained daily by the update-models.yml cron; never edit by hand.",
   "pool": {
     "council": [
@@ -8,27 +8,27 @@
         "id": "nvidia/nemotron-3-super-120b-a12b",
         "provider": "nvidia",
         "endpoint": "integrate.api.nvidia.com/v1",
-        "last_check": "2026-09-13T14:00:30.436186Z",
+        "last_check": "2026-09-13T15:46:25.940441Z",
         "probes": true,
-        "median_latency_ms": 1242,
+        "median_latency_ms": 1322,
         "note": "NIM direct. Only NIM model with 5/5 probe evidence (2026-09-13)."
       },
       {
         "id": "nex-agi/nex-n2.5-mini:free",
         "provider": "openrouter",
         "endpoint": "openrouter.ai/api/v1",
-        "last_check": "2026-09-13T14:00:30.436186Z",
+        "last_check": "2026-09-13T15:46:25.940441Z",
         "probes": true,
-        "median_latency_ms": 2296,
+        "median_latency_ms": 2241,
         "note": "OpenRouter free. Also the chairman default."
       },
       {
         "id": "nvidia/nemotron-3.5-lightning:free",
         "provider": "openrouter",
         "endpoint": "openrouter.ai/api/v1",
-        "last_check": "2026-09-13T14:00:30.436186Z",
+        "last_check": "2026-09-13T15:46:25.940441Z",
         "probes": true,
-        "median_latency_ms": 8132,
+        "median_latency_ms": 4803,
         "note": "OpenRouter free. Beware rare 30s first-token; chain leads with super-120b."
       }
     ],
@@ -37,9 +37,9 @@
         "id": "nex-agi/nex-n2.5-mini:free",
         "provider": "openrouter",
         "endpoint": "openrouter.ai/api/v1",
-        "last_check": "2026-09-13T14:00:30.436186Z",
+        "last_check": "2026-09-13T15:46:25.940441Z",
         "probes": true,
-        "median_latency_ms": 1556,
+        "median_latency_ms": 1432,
         "note": "Always-free chairman. Replaces the old paid o3-mini high-reasoning path."
       }
     ],
@@ -49,7 +49,7 @@
         "provider": "openrouter",
         "role": "vision",
         "median_latency_ms": 1312,
-        "last_check": "2026-09-13T14:00:30.436186Z",
+        "last_check": "2026-09-13T15:46:25.940441Z",
         "probes": false
       }
     ]

@@ -86,15 +86,17 @@ def last_update_age_hours():
 
 
 def ensure_registry_fresh():
+    """Refresh the registry if stale. Returns (fresh_now, age_hours_now)."""
     age = last_update_age_hours()
-    if age is None or age <= 24:
+    if age <= 24:
         return True, age
     subprocess.run(
         [sys.executable, str(REPO / "model_registry_updater.py"),
          "--daily", "--force", "--output-dir", "./registry"],
         cwd=REPO, check=False, capture_output=True,
     )
-    return False, age
+    age2 = last_update_age_hours()
+    return age2 <= 24, age2
 
 
 def probe_member(entry):
@@ -252,7 +254,15 @@ def main():
     ap.add_argument("--report", metavar="PATH", help="also write a markdown report")
     args = ap.parse_args()
 
-    if not args.fix:
+    if args.fix:
+        # rotation needs a fresh registry for candidates; GHA guarantees it, local
+        # runs get an on-demand refresh. Abort loudly if it genuinely can't update.
+        fresh, age = ensure_registry_fresh()
+        if not fresh:
+            print(f"[verify] registry STILL stale ({age:.1f}h) after refresh — "
+                  f"aborting rotation", file=sys.stderr)
+            sys.exit(1)
+    else:
         old_age = last_update_age_hours()
         if old_age and old_age > 24:
             print(f"[warn] registry last update {old_age:.1f}h old — run the updater first")
