@@ -481,7 +481,14 @@ def build_merged_fallback_chain(registry: Registry) -> List[str]:
 
 # ─── Health Checks ──────────────────────────────────────────────────────
 async def health_check_model(session: aiohttp.ClientSession, model: ModelInfo, api_key: str, base_url: str) -> bool:
-    """Test a single model with a tiny prompt. Returns True if healthy."""
+    """Test a single model with a tiny prompt. Returns True if healthy.
+
+    Definition of healthy: HTTP 200 + non-empty content. A verbatim "OK" match
+    was too strict — many healthy free models (e.g. Nemotron-3-Super-120B)
+    reply with verbose meta-commentary, which falsely degraded good models
+    on 2026-09-13. 429/5xx are transient provider errors on free tiers, not
+    model deaths; only 404/empty/timeout mark a model degraded.
+    """
     test_prompt = "Reply with exactly: OK"
     
     headers = {
@@ -501,9 +508,16 @@ async def health_check_model(session: aiohttp.ClientSession, model: ModelInfo, a
             if resp.status == 200:
                 data = await resp.json()
                 content = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
-                return content == "OK"
-            elif resp.status in (404, 429, 500, 502, 503, 504):
+                # Healthy = HTTP 200 + non-empty content (a verbatim "OK" is too
+                # strict: many healthy models reply with verbose meta-commentary,
+                # e.g. Nemotron-3-Super-120B, which falsely marked good models
+                # degraded on 2026-09-13).
+                return bool(content)
+            elif resp.status in (404, 500, 502, 503, 504):
                 return False
+            elif resp.status == 429:
+                # Transient shared free-tier rate limit; not a health failure.
+                return True
             return False
     except asyncio.TimeoutError:
         return False
@@ -705,14 +719,13 @@ def get_fallback_chain(task_type: str = "general", registry_dir: Path = REGISTRY
     registry = load_existing_registry(registry_dir)
     
     if not registry.merged_fallback_chain:
-        # Hardcoded ultimate fallback
+        # Hardcoded ultimate fallback (free tiers verified 2026-09-13)
         return [
-            "nvidia/deepseek-ai/deepseek-v4-flash",
-            "nvidia/z-ai/glm-5.2",
-            "nvidia/nvidia/nemotron-3-ultra-550b-a55b",
-            "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
-            "openrouter/poolside/laguna-s-2.1:free",
+            "nvidia/nemotron-3-super-120b-a12b",
+            "openrouter/nex-agi/nex-n2.5-mini:free",
+            "openrouter/nvidia/nemotron-3.5-lightning:free",
             "opencode/nemotron-3-ultra-free",
+            "opencode/nemotron-3.5-lightning-free",
             "gemini-2.5-pro",
         ]
     

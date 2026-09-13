@@ -88,3 +88,72 @@
 - Ollama proxy not yet tested
 - Competitor adapters scaffolded but not implemented
 - Standalone package `pipx install routingmagic-dashboard` not yet published
+
+---
+
+## Session: Council Staleness Removal & Health Probe
+**Date**: Sun Sep 13 2026
+
+### What was done this session
+- **Council refreshed to verified-live free models** (real probes, 5 completions each on 2026-09-13):
+  - `nvidia/nemotron-3-super-120b-a12b` (NIM direct) — 5/5, median 1179ms
+  - `nex-agi/nex-n2.5-mini:free` (OpenRouter) — 5/5, median 2809ms
+  - `nvidia/nemotron-3.5-lightning:free` (OpenRouter) — 5/5, median 4536ms
+- **Purged stale/dead ids from `openai_wrapper.py` and `vercel/api/council.py`**: gemma-2-9b-it:free, mistral-7b-instruct:free, gpt-oss-120b:free, qwen3-coder:free, qwen-2.5-72b:free, llama-3.1-8b:free, phi-3-mini:free, phi-4-mini-reasoning:free, llama-3.3-70b:free, z-ai/glm-5.2:free, minimax:free, plus the malformed doubled-id `nvidia/nvidia/nemotron-3-ultra-550b-a55b`.
+- **Fixed registry health-check false degradations** (`model_registry_updater.py`): exact-`"OK"` content match marked healthy verbose models degraded → now healthy = HTTP 200 + non-empty content; 429 treated as transient, not dead.
+- **Refreshed registry** via `--daily --force`: `last_update.txt` 2026-09-13T12:19:23Z, `health_cache.json` repopulated (16 degraded at 2026-09-13T12:19:08Z), changelog gained 2026-09-13 sections.
+- **Added `scripts/council_health.py`**: free-only reusable probe, reads keys via loaders, retries transient 5xx/429, exits non-zero on any failure. First full run: 3/3 PASS.
+- **Tests**: 20/20 pytest pass (baseline was 20/20).
+
+### Key decisions
+- Council trio = NIM direct (Tier 1) + 2 OpenRouter free members; distinct endpoints, all 3 reasoning-capable.
+- Candidates failing 429-limit probes (laguna-s 1/7, gemma-4 2/7), empty content (north-mini-code 0/7), 403 agentic-only (inkling), or 5/5 timeouts (ultra-550b:free, NIM deepseek/gemma/moonshot/glm) were dropped.
+- **OmniRouter: NOT present in this repo.** Grep for omni/OmniRouter found only `nemotron-3-nano-omni-*` model references. Investogram Part C's premise "OmniRouter lives in this repo" is UNVERIFIED. Registry (`model_registry_updater.py` + `registry/model_registry.json`) is the live selector source.
+
+### Commits
+- **No commits made** — user must explicitly request.
+
+### Post-check follow-ups (same session, live e2e)
+- **Real `ask MC` run SUCCEEDED end-to-end** (general query): Stage 1 37s, Stage 2 peer review (gemini-2.5-flash + dots-3-note-preview:free + nex-n2.5-mini:free) 19s, chairman synthesized a coherent "2+2=4" answer. Zero cost.
+- **KEY REALIZATION: local council is REGISTRY-driven, not `COUNCIL_MODELS`-driven.** `vercel/api/council.py` COUNCIL_MODELS is the Vercel deployment path. The local `run_council` picks 3 members RANDOMLY from registry top-5 per source (nim/openrouter/opencode) + direct gem/zai. So my verified trio only pads fallbacks; the runtime draw can include flaky models (e.g. laguna-s 1/7, dots-3 empty-on-short). This gate is the audit gap.
+- **Vision chain was 100% paid**: member1 `nvidia/llama-3.1-nemotron-nano-vl-8b-v1` = NIM 500 always; member2 `google/gemini-2.5-flash:free` = empty content; only gpt-4o-mini (paid) ever succeeded. Fixed → `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` (LIVE, answered "Green") + gpt-4o-mini.
+- **registry `merged_fallback_chain` leader `deepseek-ai/deepseek-v4-flash-0731` returns EMPTY content** via its real bare NIM id (not a prefix artifact — probed bare). It passed the non-empty health check at refresh but produces empty replies at runtime; the chain self-heals to super-120b at a latency cost.
+- **NIM direct is flaky**: super-120b works 5/5; vision-instruct 500s; omni 403 (integration perms); deepseek-4-flash empty. NIM id convention = BARE id (`deepseek-ai/...`), double `nvidia/` prefix breaks resolution.
+- **High-reasoning council chairman can go PAID**: regex (`audit|proof|algorithm|...)` → `get_dynamic_model(free=False, ...)` default `openai/o3-mini`. A real audit prompt may invoke a paid chairman.
+
+### Open issues
+- `opencode/*` built-ins cannot be probed via HTTP (they resolve inside opencode); registry flags them degraded — expected.
+- NIM free tier returns transient 503s; `scripts/council_health.py` retries 2x on 5xx/429 and still fails on persistent errors.
+- Free vision: only omni-vision:free works today; gemini direct returns empty for images.
+
+## Session checkpoint — 2026-09-13 19:40 UTC | Council automation (round 2)
+
+**Objective**: staleness-proof the pinned free pool — cron keeps models fresh AND verifies
+everything runs; chairman path always-free. No commits made (per instruction).
+
+**Delivered**
+- `registry/verified_free_models.json` = single source of truth (council 3, chairman,
+  vision) — pinned verified-free members only.
+- `scripts/verify_free_models.py` — daily probe (watchdog 60s, transient classification,
+  3 attempts) + `--fix` auto-rotation (provider-diverse candidates, council.py rewrite,
+  changelog log), exit 1 = loud failure. Registry-freshness guard in code.
+- GHA `update-models.yml` extended: verify step after registry refresh, fail-on-failure,
+  commit covers `vercel/`. (Local halite-invocations verified; GHA itself fires nightly.)
+- Chairman: paid o3-mini high-reasoning path removed → pinned to verified free pool.
+  Ultimate chain: `gemini-2.5-pro` dropped. Vision pool pinned to omni:free with
+  gpt-4o-mini paid last-resort unchanged at runtime.
+- Fixed two self-inflicted bugs: catastrophic-backtracking rewrite regex (#031) and
+  role-vacancy-on-flap (#032). #033 = vision flap finding.
+
+**Verification**
+- pytest: 20 passed 0.85s/0.64s. council_health: 3/3 PASS ×2. Live `council` e2e: coherent
+  unanimous verdict, zero cost. verify script: council/chairman healthy on every run.
+- vision member flagged `probes=false` 19:40 UTC (OR free image path down; text fine) —
+  role stays pinned and red → GHA will fail loudly until OR restores. Runtime unaffected
+  (paid 4o last resort). Intended audit behavior.
+
+**Commits**: NONE (uncommitted: modified + new scripts/, registry json).
+**Open items**: (1) re-check vision at next daily run; expect auto-green. (2) optionally add
+GEMINI_API_KEY/ZAI_API_KEY secrets to GHA env (verify dynamic fallbacks in CI). (3)
+`ensure_registry_fresh()` is defined but not called from main() — wire it in if the cron
+ever splits.

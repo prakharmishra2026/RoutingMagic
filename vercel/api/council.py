@@ -6,11 +6,16 @@ from datetime import datetime, timezone
 from typing import Dict, List
 from openai import OpenAI
 
-# Free models that work on respective providers
+# Free models verified live via real probes 2026-09-13 (5 completions each):
+#   ("nvidia",     "nvidia/nemotron-3-super-120b-a12b")  5/5 ok, median 1095ms
+#   ("openrouter", "nex-agi/nex-n2.5-mini:free")         5/5 ok, median 1750ms
+#   ("openrouter", "nvidia/nemotron-3.5-lightning:free") 5/5 ok, median 5834ms
+# Prior COUNCIL_MODELS were deleted as stale: an invalid NIM id, and two
+# 2024-era OpenRouter :free ids absent from the live catalog.
 COUNCIL_MODELS = [
-    ("nvidia", "nvidia/nemotron-3-ultra"),
-    ("openrouter", "mistralai/mistral-7b-instruct:free"),
-    ("openrouter", "google/gemma-2-9b-it:free"),
+    ("nvidia", "nvidia/nemotron-3-super-120b-a12b"),
+    ("openrouter", "nex-agi/nex-n2.5-mini:free"),
+    ("openrouter", "nvidia/nemotron-3.5-lightning:free"),
 ]
 
 def get_clients() -> Dict[str, OpenAI]:

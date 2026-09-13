@@ -95,3 +95,22 @@
 | Unified Dashboard | 10 | 10 | 100% |
 | UAT Fixes | 12 | 12 | 100% |
 | **Total** | **51** | **51** | **100%** |
+
+---
+
+## Phase 9: Staleness Removal & Council Healthproofing
+
+- [x] [~] Refresh the Model Council to verified-live free models (2026-09-13)
+- [x] Replace every stale/dead model id in `openai_wrapper.py` hardcoded pools (gemma-2-9b-it, mistral-7b-instruct, gpt-oss-120b, qwen3-coder, phi-3/4, llama-3.3-70b, 2024-era qwen-2.5/llama-3.1/mistral-7b/phi-3) + fix doubled `nvidia/nvidia/` id
+- [x] Fix the same malformed id in `model_registry_updater.py` hardcoded fallback
+- [x] Refresh registry from live catalogs (`--daily --force`): last_update.txt 2026-09-13, health_cache.json repopulated 2026-09-13, changelog gained 2026-09-13 section
+- [x] Fix registry health-check false degradations (exact-`"OK"` → non-empty content; 429 = transient not dead)
+- [x] Add reusable `scripts/council_health.py` probe (free-only, reads keys via loaders, exits non-zero on failure)
+- [x] Final proof: 5/5 real probes per member (super-120b NIM, nex-n2.5-mini OR, nemotron-3.5-lightning OR), 20/20 pytest
+- [x] Prove end-to-end council (live `ask MC`): Stage 1 + Stage 2 peer review + Stage 3 chairman synthesis, zero cost, coherent verdict
+- [x] Add same-day GHA guard: `scripts/verify_free_models.py` re-probes pinned pool daily, `--fix` auto-rotates stale members, fail-on-failure breaks the cron
+- [x] Pin council/chairman/vision to `registry/verified_free_models.json` (single source of truth; verified-first selection in `run_council`)
+- [x] Chairman path always-free (`openai/o3-mini` paid branch removed; `gemini-2.5-pro` dropped from ultimate chain)
+- [x] Bug-fix verify script: catastrophic-backtracking regex → line slicing; keep-on-fail so roles never vacate; `choices=None` on 200 treated as transient
+- [~] Vision pool: omni:free image path DOWN at OR as of 19:40 UTC (transient flap; text healthy; runtime safe via paid gpt-4o-mini last resort) — expect auto-green at next daily run
+

@@ -83,3 +83,50 @@
 | LOW-13/14 | 11/11 pytest pass, smoke tests verified |
 
 All 11 pytest tests pass.
+
+## Model Council — VERIFIED FREE MEMBERS (2026-09-13)
+- `nvidia/nemotron-3-super-120b-a12b` (NIM direct, Tier 1) — 5/5 probe, ~1.2s
+- `nex-agi/nex-n2.5-mini:free` (OpenRouter) — 5/5 probe, ~2.8s
+- `nvidia/nemotron-3.5-lightning:free` (OpenRouter) — 5/5 probe, ~4.5s (occasionally 30s first-token)
+- Defined in `vercel/api/council.py` COUNCIL_MODELS; local council engine (`openai_wrapper.py`)
+  sources from `registry/model_registry.json` via `_get_council_fallback_models()`.
+- Health proof: `python3 scripts/council_health.py` (free-only, exit≠0 on failure).
+- KEY FACT: health = HTTP 200 + NON-EMPTY content. A verbatim "OK" match falsely degrades
+  verbose-but-healthy models (Nemotron super-120b). 429/transient 5xx ≠ dead.
+
+## Dead-model graveyard (2026-09-13, verified ABSENT from live OpenRouter catalog)
+`google/gemma-2-9b-it:free`, `mistralai/mistral-7b-instruct:free`, `openai/gpt-oss-120b:free`,
+`qwen/qwen3-coder:free`, `qwen/qwen-2.5-72b-instruct:free`, `meta-llama/llama-3.1-8b-instruct:free`,
+`microsoft/phi-3-mini-128k-instruct:free`, `microsoft/phi-4-mini-reasoning:free`,
+`meta-llama/llama-3.3-70b-instruct:free`, `z-ai/glm-5.2:free`, `minimax/minimax-m2.7:free`,
+`deepseek/deepseek-v4-flash:free`, `qwen/qwen-2.5-coder-32b-instruct:free`.
+Never restore these from memory — they are delisted.
+
+## OmniRouter — NOT in this repo
+- No file matches omni/omnirouter. Grep found only `nemotron-3-nano-omni-*` model ids.
+- Selector sources are `model_registry_updater.py` + `registry/model_registry.json`
+  (`merged_fallback_chain`, `openrouter_free_models`, `nim_free_models`).
+- Any doc referencing "OmniRouter lives in RoutingMagic" is unverified.
+
+## Council architecture facts (2026-09-13, audited)
+- `vercel/api/council.py` COUNCIL_MODELS = the Vercel path. The LOCAL `run_council` in
+  `openai_wrapper.py` is REGISTRY-driven: picks members RANDOMLY from registry top-5 per
+  source (nim/openrouter/opencode) + direct gemini/zai when keys present. Edit
+  `_get_council_fallback_models()` (line ~104) only pads fallbacks, it does not pin members.
+- Chairman: high-reasoning regex (`audit|proof|algorithm|...`) → `get_dynamic_model(free=False)`
+  default `openai/o3-mini` — PAID path for audit-style prompts. General → free.
+- Vision chain: `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` (probed LIVE, vision)
+  then `openai/gpt-4o-mini` (paid last resort). No free vision alternative works via this wrapper.
+- NIM direct: only `nvidia/nemotron-3-super-120b-a12b` verified 5/5. `deepseek-ai/deepseek-v4-flash-0731`
+  returns EMPTY content (registry chain leader — self-heals downstream). vision-instruct 500s, omni 403.
+- NIM id convention: provider-native BARE ids (`deepseek-ai/...`); local `nvidia/`/`openrouter/`
+  prefixes are wrapper-local and stripped before the call.
+- Verified-live free models (2026-09-13 probe evidence): super-120b (NIM), nex-n2.5-mini:free,
+  nemotron-3.5-lightning:free (OR), nemotron-3-nano-omni-30b-a3b-reasoning:free (OR, vision).
+
+## Model Council automation (2026-09-13)
+- **Pinned free pool** = `registry/verified_free_models.json` (single source of truth; NEVER hand-edit). council: super-120b + nex-n2.5-mini:free + lightning:free; chairman: nex-n2.5-mini:free; vision: omni :free.
+- **`scripts/verify_free_models.py`** probes pool → GHA daily 1 AM UTC (`update-models.yml` step after registry refresh), `--fix` auto-rotates, exit 1 breaks the run. `rewrite_council_py` uses line-slicing (regex = catastrophic backtracking, LESSONS #031).
+- **Runtime load order**: verified pool first → registry random draw (provider-diverse ≥3 sources); plan: get_dynamic_model free only.
+- **Chairman is ALWAYS free** (o3-mini path removed 2026-09-13). Ultimate chain: no paid members.
+- **Vision reality**: only free vision-capable id = omni model; image path flaps at OR (choices=None on 200 is transient); runtime chain = omni → paid gpt-4o-mini last resort. Never treat a text probe of a vision model as vision-capable proof.

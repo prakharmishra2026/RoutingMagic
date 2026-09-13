@@ -85,3 +85,61 @@
 
 ## 2026-09-11 05:44 UTC
   ➕ **Added**: inclusionai/ling-3.0-flash-vl:free (openrouter, vision, score: 42.6)
+## 2026-09-06 05:35 UTC
+  ➕ **Added**: inclusionai/ling-3.0-flash-sante:free (openrouter, agentic, score: 42.6)
+  ➖ **Removed**: openai/gpt-oss-120b (nim, reasoning)
+
+## 2026-09-13 12:17 UTC
+  ➕ **Added**: nex-agi/nex-n2.5-mini:free (openrouter, agentic, score: 42.6)
+  ➕ **Added**: inclusionai/ling-3.0-flash-vl:free (openrouter, vision, score: 42.6)
+  ➕ **Added**: nex-agi/nex-n2.5-pro:free (openrouter, agentic, score: 42.6)
+  ➖ **Removed**: minimax/minimax-m2.7:free (openrouter, agentic)
+  ➖ **Removed**: z-ai/glm-5.2:free (openrouter, agentic)
+  ➖ **Removed**: minimax/minimax-m3:free (openrouter, long_context)
+
+## 2026-09-13 12:25 UTC — Model Council staleness removal
+Council refreshed to verified-live free models (real probes, 5 completions each):
+  🟢 **Selected**: nvidia/nemotron-3-super-120b-a12b (NIM direct, 5/5, median 1179ms)
+  🟢 **Selected**: nex-agi/nex-n2.5-mini:free (OpenRouter, 5/5, median 2809ms)
+  🟢 **Selected**: nvidia/nemotron-3.5-lightning:free (OpenRouter, 5/5, median 4536ms)
+  ❌ **Dropped**: google/gemma-2-9b-it:free, mistralai/mistral-7b-instruct:free,
+     openai/gpt-oss-120b:free, qwen/qwen3-coder:free, qwen/qwen-2.5-72b-instruct:free,
+     meta-llama/llama-3.1-8b-instruct:free, microsoft/phi-3-mini-128k-instruct:free,
+     microsoft/phi-4-mini-reasoning:free, meta-llama/llama-3.3-70b-instruct:free,
+     z-ai/glm-5.2:free, minimax/minimax-m2.7:free, deepseek/deepseek-v4-flash:free —
+     all ABSENT from the 2026-09-13 live OpenRouter catalog.
+  ⚠️ **Dropped (429-degraded, present in catalog)**: poolside/laguna-s-2.1:free (1/7),
+     google/gemma-4-31b-it:free (2/7), cohere/north-mini-code:free (0/7 EMPTY),
+     nvidia/nemotron-3-ultra-550b-a55b:free (5/5 timed out), thinkingmachines/inkling:free (403 agentic-only).
+  🛠 **Health tooling fixed**: registry health check now flags only 404/timeout/empty as
+     degraded (verbatim-"OK" match falsely degraded super-120b / lightning on 13 Sep).
+  🧪 **scripts/council_health.py**: reusable free-only probe, 3/3 PASS on first full run.
+
+## 2026-09-13 19:40 UTC — Council automation landed (staleness-proofing round 2)
+
+  🔒 **Pinned free pool (single source of truth)**: `registry/verified_free_models.json` —
+     council = nvidia/nemotron-3-super-120b-a12b + nex-agi/nex-n2.5-mini:free +
+     nvidia/nemotron-3.5-lightning:free; chairman = nex-agi/nex-n2.5-mini:free;
+     vision = nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free. Never edit by hand.
+  🤖 **`scripts/verify_free_models.py`** (new): re-probes every pinned member through the
+     SAME resolver the runtime uses, with a 60s watchdog (free-tier create() can hang past
+     the client timeout). Exit 0 = all roles healthy, exit 1 = loud failure for cron/CI.
+  🔁 **`--fix` auto-rotation**: failed members rotate to live free alternatives from the
+     fresh registry (provider-diverse; vision candidates filtered by vl/omni/vision),
+     rewrites `vercel/api/council.py` COUNCIL_MODELS + appends this changelog. On rotation
+     failure the member is KEPT pinned (role never vacated on one flaky red) but the role
+     still fails loudly.
+  ⏰ **GitHub Action extended**: daily 1 AM UTC run now executes the verifier after the
+     registry refresh, so stale members self-heal and a hard-down path breaks the run.
+  🎩 **Chairman always-free**: paid `openai/o3-mini` high-reasoning path removed — chairman
+     is pinned to verified free pool first (dynamic-free fallback). Paid `gemini-2.5-pro`
+     dropped from the ultimate hardcoded chain.
+  👁 **Vision status 19:40 UTC**: omni:free TEXT path healthy; OR free IMAGE path currently
+     returning `choices=None` on every request (was working 13:29/13:39 UTC — transient
+     free-tier flap). Runtime vision fallback (omni → paid gpt-4o-mini last resort)
+     unaffected. Vision role will stay red until OR restores the image path — by design.
+  📉 **Latency tails**: lightning first-token tails of 30–85s observed; council probes run
+     in parallel so wall-time stays bounded.
+  🐛 **Fixed regression**: `verify_free_models.py` v1 rewrote council.py with a lazy
+     `(?:.*?\n)*?` + DOTALL regex → catastrophic backtracking hung re.sub forever; replaced
+     with linear line-slicing (LESSONS #031).

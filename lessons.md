@@ -115,3 +115,84 @@
 ## 025 — Atomic PID File Write
 **What worked**: `write_pid_file` uses `tempfile.NamedTemporaryFile` + `os.replace()` for atomic PID+port write. No partial reads on quick restart.
 **Rule**: Always write PID/state files atomically: temp file in same directory + `os.replace()` (POSIX atomic rename).
+
+## 026 — Health bar = Non-empty content, NOT a verbatim match
+**What broke**: Registry health check required content `== "OK"`. Models that answer with
+verbose meta-commentary (Nemotron-3-Super-120B replied "We need to reply exactly with...")
+were marked DEGRADED for 24h despite being perfectly healthy — my verified council member
+got excluded from the fallback/council filter it should have been leading.
+**Root cause**: Health probe asserted on response SHAPE (exact string) instead of response
+FACT (did we get meaningful bytes back).
+**Rule**: Healthy = HTTP 200 + non-empty content. 404/timeout/empty = dead. 429/transient
+5xx on free tiers = alive-but-throttled, retry, never mark degraded on first hit.
+
+## 027 — Never probe free reasoning models sequentially without timeouts
+**What broke**: Batch-probing 8 free candidates × 5 sequential requests hung the whole run
+(hit the 400s shell timeout, output lost) because free reasoning models have high and
+variable first-token latency and the OpenAI client had no `timeout=` set.
+**Root cause**: Sequential probing of slow endpoints = unbounded wall-clock; no per-request
+client timeout capped each call.
+**Rule**: For any multi-model probe, set `OpenAI(..., timeout=40, max_retries=0)` and run
+per-candidate requests concurrently (ThreadPoolExecutor). Re-run candidates whose failures
+are EOF-level (timeout/batch-throttle) once, spaced, before declaring them dead.
+
+## 028 — Copy-paste model-id drift in bulk edits (3_super typo)
+**What broke**: During the bulk stale-id sweep I wrote `nvidia/nemotron-3_super-120b-a12b`
+(underscore in a hyphenated id) in one fallback return — caught by the post-batch compile
++ id sweep before any run.
+**Root cause**: Hand-retyping a long model id in a multi-edit batch.
+**Rule**: After any bulk model-id edit, run `grep` for every touched id token and a
+`py_compile`; never trust the tenth hand-typed copy of a 34-char id.
+
+## 029 — Never trust a fallback chain until you fire it
+**What broke**: The vision chain's first member `nvidia/llama-3.1-nemotron-nano-vl-8b-v1`
+500'd on EVERY call and the second `google/gemini-2.5-flash:free` returned EMPTY — so
+100% of real vision calls landed on paid `gpt-4o-mini`. Catalog-membership ("is the id in
+the live list") said "present"; runtime said "dead".
+**Root cause**: I validated the COUNCIL pools but not the OTHER fallback chains in the file
+(they're named differently than I swept). Membership ≠ usable.
+**Rule**: For every fallback chain, run one REAL completion probe per member (with the
+wrapper's own `get_client_and_model`), not just catalog membership. A member that 500/403/
+empty/429-every-time is dead regardless of catalog listing. Fix vision: replaced with
+probed-live `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` ("Green" on a green PNG)
++ gpt-4o-mini as paid last resort.
+
+## 030 — NIM ids are bare; the nvidia/ prefix is a local convention
+**What broke**: Probed NIM `nvidia/deepseek-ai/deepseek-v4-flash-0731` (double prefix) →
+timeout+empty, concluded the model was dead. Probed the registry's bare
+`deepseek-ai/deepseek-v4-flash-0731` → real NIM endpoint, but STILL empty content (just
+faster). The id convention was misleading but the real finding (empty runtime output on a
+model the registry rates first) stood.
+**Root cause**: The wrapper's NIM resolver strips local `nvidia/` and `openrouter/` org
+prefixes before calling the provider. Catalog ids are provider-native (bare).
+**Rule**: When NIM probing, query the catalog's native bare id on the NIM endpoint; treat
+"empty content on long prompt" as its own failure class (health check passed it, runtime
+failed it) — models that return empty deserve a slot below models that return text in the
+chain, regardless of registry score.
+
+## #031 — Lazy re.sub + DOTALL = catastrophic backtracking
+- **What broke**: verify_free_models.py v1 rewrote `vercel/api/council.py` with
+  `re.sub(r"COUNCIL_MODELS = \[\n(?:.*?\n)*?\n\]", ..., flags=re.DOTALL)`. Every `--fix`
+  run hung forever (looked like a network stall) after probing completed.
+- **Root cause**: `(?:.*?\n)*?` with DOTALL gives the backtracking engine an exponential
+  space of split points at every `\n]` defect; on a 4.7 KB file re.sub never returns.
+- **Rule going forward**: for anchored small block replacements use `str.index` line
+  slicing, not lazy-quantified regex. NEVER write `(?:.*?\n)*?` against arbitrary text.
+
+## #032 — A flaky (but alive) pinned model must never be silently vacated
+- **What broke**: v1 `--fix` wrote `pool[role] = healthy`, DROPPING a member whose single
+  probe red-hiccups → the role emptied and the next run "passed" vacuously (vision role
+  vanished once).
+- **Root cause**: replaced the list with only the healthy subset on any failure.
+- **Rule going forward**: on rotation failure, KEEP the pinned member (flag probes=false)
+  and let exit 1 broadcast the red role. A role must never be vacated; it can only be
+  rotated to a proven-live alternative.
+
+## #033 — The vision capability probe flaps; text probe doesn't
+- **What broke**: omni:free image path returned `choices=None` on 200 repeatedly 13:51–19:40
+  UTC while its text path answered "OK" instantly; 64×64 PNG had passed 2× earlier that day.
+- **Root cause**: OpenRouter free-tier multimodal route is independently flaky; `choices`
+  came back `None`, and only a parse-time `TypeError` surfaced (no status code).
+- **Rule going forward**: vision probes must treat `choices=None` on 200 as transient
+  (retry, don't hard-fail), classify `NoneType`/`no-choices` as transient, and verify
+  vision CANNOT be inferred from a text probe of the same model.

@@ -56,10 +56,19 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           SKIP_HEALTH_CHECKS: ${{ steps.keys.outputs.has_nvidia_key == 'false' && 'true' || 'false' }}
       
+      - name: Verify and auto-rotate free model pool
+        run: |
+          python scripts/verify_free_models.py --fix --report registry/health_report.md
+        env:
+          NVAPI_KEY: ${{ secrets.NVAPI_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
+      
       - name: Check for changes
         id: changes
         run: |
-          if git diff --quiet registry/; then
+          if git diff --quiet registry/ vercel/; then
             echo "changed=false" >> $GITHUB_OUTPUT
             echo "No changes to registry"
           else
@@ -72,7 +81,7 @@ jobs:
         run: |
           git config user.name "RoutingMagic Bot"
           git config user.email "bot@routingmagic.ai"
-          git add registry/
+          git add registry/ vercel/
           git commit -m "chore: daily model registry update $(date -u +'%Y-%m-%d')"
           git push
         env:

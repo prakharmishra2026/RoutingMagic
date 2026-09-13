@@ -90,20 +90,40 @@ def _get_fallback_chain():
     except Exception as e:
         print(f"[Fallback] Registry unavailable, using hardcoded: {e}")
     
-    # Ultimate hardcoded fallback
+    # Ultimate hardcoded fallback (free-only tiers; verified 2026-09-13)
     return [
-        "nvidia/deepseek-ai/deepseek-v4-flash",
-        "nvidia/z-ai/glm-5.2",
-        "nvidia/nvidia/nemotron-3-ultra-550b-a55b",
-        "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
-        "openrouter/poolside/laguna-s-2.1:free",
+        "nvidia/nemotron-3-super-120b-a12b",
+        "openrouter/nex-agi/nex-n2.5-mini:free",
+        "openrouter/nvidia/nemotron-3.5-lightning:free",
         "opencode/nemotron-3-ultra-free",
-        "gemini-2.5-pro",
+        "opencode/nemotron-3.5-lightning-free",
     ]
 
 
+def _load_verified_pool():
+    """Read the cron-maintained pinned free pool (registry/verified_free_models.json).
+    Re-probed + auto-rotated daily by scripts/verify_free_models.py."""
+    try:
+        repo_registry = Path(__file__).parent / "registry"
+        home_registry = Path.home() / ".routingmagic" / "registry"
+        registry_dir = repo_registry if repo_registry.exists() else home_registry
+        data = json.loads((registry_dir / "verified_free_models.json").read_text())
+        return data.get("pool", {})
+    except Exception:
+        return {}
+
+
+def _verified_model_ids(role):
+    """Ids of pinned free models for `role` (council/chairman/vision), probe-evidence fresh."""
+    return [e.get("id") for e in _load_verified_pool().get(role, [])]
+
+
 def _get_council_fallback_models():
-    """Get council fallback models from registry, spread across providers for resilience."""
+    """Council fallback models: verified free pool first (cron re-probes + auto-rotates
+    it daily), then registry spread across providers for resilience."""
+    verified = list(_verified_model_ids("council"))
+    if verified:
+        return verified[:6]
     try:
         repo_registry = Path(__file__).parent / "registry"
         home_registry = Path.home() / ".routingmagic" / "registry"
@@ -163,11 +183,11 @@ def _get_council_fallback_models():
     if has_zai:
         chain.append("glm-4.5-flash")
     if has_or:
-        chain.extend(["google/gemma-4-31b-it:free", "nvidia/nemotron-3-super-120b-a12b:free"])
+        chain.extend(["nex-agi/nex-n2.5-mini:free", "nvidia/nemotron-3.5-lightning:free"])
     if has_nv:
-        chain.extend(["nvidia/nemotron-3-ultra-550b-a55b", "nvidia/llama-3.3-nemotron-super-49b-v1.5"])
+        chain.append("nvidia/nemotron-3-super-120b-a12b")
     
-    return chain[:6] if chain else ["gemini-2.5-flash"]
+    return chain[:6] if chain else ["nex-agi/nex-n2.5-mini:free"]
 
 
 def _check_api_keys():
@@ -307,7 +327,7 @@ def get_deep_context():
             except Exception:
                 pass
                 
-    summarizer_models = ["deepseek-ai/deepseek-v4-flash", "google/gemma-4-31b-it", "mistralai/mistral-medium-3.5-128b"]
+    summarizer_models = ["nvidia/nemotron-3-super-120b-a12b", "nex-agi/nex-n2.5-mini:free"]
     prompt = f"Summarize the architecture, tech stack, and purpose of this codebase based on the following context. Be concise and focus on structural elements useful for a developer.\n\n{content}"
     
     print("\033[93m[Smart Router] Scanning codebase for deep context...\033[0m")
@@ -574,9 +594,12 @@ def run_vision_query(image_paths, prompt, model_name=None, detail="auto"):
     ]
     
     # Vision fallback chain
+    # NOTE 2026-09-13: nvidia/llama-3.1-nemotron-nano-vl-8b-v1 was dead (NIM 500 on
+    # every call), google/gemini-2.5-flash:free never resolved (empty content).
+    # Replaced with the verified-live free NVIDIA Omni image model (probed: replied
+    # "Green" to a green PNG via OpenRouter). gpt-4o-mini stays as paid last resort.
     vision_fallback = [
-        "nvidia/llama-3.1-nemotron-nano-vl-8b-v1",
-        "google/gemini-2.5-flash:free",
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
         "openai/gpt-4o-mini"
     ]
     if model_name:
@@ -622,10 +645,10 @@ def run_vision_query(image_paths, prompt, model_name=None, detail="auto"):
 
 # Models that support reasoning tokens (OpenRouter reasoning parameter)
 REASONING_MODELS = {
-    "zhipu/glm-4.5-air": {"effort": True},           # Thinking mode
-    "nvidia/nemotron-3-ultra-550b-a55b": {"effort": True},  # Deep reasoning
-    "openai/gpt-oss-120b": {"effort": True},          # Configurable reasoning
-    "qwen/qwen3-coder:free": {"effort": True},        # Coding reasoning
+    "nvidia/nemotron-3-super-120b-a12b": {"effort": True},  # NIM flagship reasoning
+    "nvidia/nemotron-3-super-120b-a12b:free": {"effort": True},  # OpenRouter co-listed
+    "nex-agi/nex-n2.5-mini:free": {"effort": True},        # Reasoning, default effort high
+    "nvidia/nemotron-3.5-lightning:free": {"effort": True},  # Reasoning-capable
 }
 
 # Multi-pass prompting templates (Loop-based reasoning)
@@ -812,26 +835,26 @@ def smart_route(prompt):
             model = find_best_model("reasoning_flagship", prefer_reasoning=True) or find_best_model("reasoning", prefer_reasoning=True)
             if model:
                 return model, "mythos_reasoning_effort"
-            return "openai/gpt-oss-120b:free", "mythos_reasoning_effort"
+            return "nex-agi/nex-n2.5-mini:free", "mythos_reasoning_effort"
         
         if re.search(r'\b(math|financial analysis|tradeoffs|trade-offs|step-by-step|chain of thought|deep analysis)\b', prompt_lower):
             model = find_best_model("reasoning_flagship", prefer_reasoning=True) or find_best_model("reasoning", prefer_reasoning=True)
             if model:
                 return model, "mythos_deep_reasoning"
-            return "nvidia/nemotron-3-ultra-550b-a55b:free", "mythos_deep_reasoning"
+            return "nvidia/nemotron-3-super-120b-a12b:free", "mythos_deep_reasoning"
         
         # Phi-4 Mini Reasoning for focused reasoning
         if re.search(r'\b(analyze|critically|audit|algorithm|proof|equation|derivation)\b', prompt_lower):
             model = find_best_model("reasoning", prefer_reasoning=True)
             if model:
                 return model, "mythos_reasoning_focused"
-            return "microsoft/phi-4-mini-reasoning:free", "mythos_reasoning_focused"
+            return "nex-agi/nex-n2.5-mini:free", "mythos_reasoning_focused"
         
         # Default high-effort: best reasoning model
         model = find_best_model("reasoning_flagship") or find_best_model("reasoning")
         if model:
             return model, "mythos_high_effort"
-        return "openai/gpt-oss-120b:free", "mythos_high_effort"
+        return "nvidia/nemotron-3-super-120b-a12b:free", "mythos_high_effort"
     
     # 2. Long Document RAG & Heavy Agentic Planning -> Best long-context model
     if re.search(r'\b(large repo|long doc|architecture|strategy|plan|tool orchestration|codebase reasoning|massive context|rag|planning)\b', prompt_lower):
@@ -845,14 +868,14 @@ def smart_route(prompt):
         model = find_best_model("coding")
         if model:
             return model, "fast_coding"
-        return "qwen/qwen3-coder:free", "fast_coding"
+        return "nex-agi/nex-n2.5-mini:free", "fast_coding"
     
     # 4. Agentic Workflows & Tool Use -> Best agentic model
     if re.search(r'\b(n8n|tool call|json extraction|workflow|extract data|structure this|json)\b', prompt_lower):
         model = find_best_model("agentic")
         if model:
             return model, "n8n_tool_calling"
-        return "meta-llama/llama-3.3-70b-instruct:free", "n8n_tool_calling"
+        return "nvidia/nemotron-3.5-lightning:free", "n8n_tool_calling"
     
     # 5. Vision / Chart Parsing -> Nemotron VL 8B (NVIDIA NIM)
     if re.search(r'\b(image|chart|graph|vision|parse screenshot|look at this picture)\b', prompt_lower):
@@ -885,13 +908,13 @@ def smart_route(prompt):
         model = find_best_model("reasoning_flagship") or find_best_model("reasoning")
         if model:
             return model, "security_audit"
-        return "nvidia/nemotron-3-ultra-550b-a55b:free", "security_audit"
+        return "nvidia/nemotron-3-super-120b-a12b:free", "security_audit"
     
     # Default General Tasks -> Best general model
     model = find_best_model("general")
     if model:
         return model, "default_general"
-    return "google/gemma-4-31b-it:free", "default_general"
+    return "nex-agi/nex-n2.5-mini:free", "default_general"
 
 
 def classify_task(prompt: str) -> str:
@@ -1047,7 +1070,7 @@ def compress_context(messages):
     
     prompt = f"Summarize the key technical decisions, bugs fixed, and current goal of this chat history. Be concise.\n\n{hist}"
     
-    fallback_chain = ["google/gemma-4-31b-it:free", "nvidia/nemotron-3-super-120b-a12b:free", "openai/gpt-oss-120b:free", "qwen/qwen3-coder:free"]
+    fallback_chain = ["nvidia/nemotron-3-super-120b-a12b", "nex-agi/nex-n2.5-mini:free", "nvidia/nemotron-3.5-lightning:free"]
     summary = None
     
     for target_model in fallback_chain:
@@ -1386,21 +1409,18 @@ def _query_model_with_fallback_and_timing(model_name, messages, temperature=0.7,
     # We will try the primary model first, and then fallback to other free models if it fails.
     attempts = [model_name]
     
-    # Dynamic multi-provider free backup pool across OpenRouter, Google Gemini, NVIDIA NIM, and OpenAI
+    # Dynamic multi-provider free backup pool (verified 2026-09-13)
     fallbacks = [
-        "google/gemma-2-9b-it:free",
+        "nex-agi/nex-n2.5-mini:free",
     ]
     if os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"):
         fallbacks.extend(["gemini-2.5-flash", "gemini-2.0-flash"])
     if os.getenv("ZAI_API_KEY") or os.getenv("ZHIPUAI_API_KEY"):
         fallbacks.extend(["glm-4.5-flash"])  # glm-4-flash removed upstream
     if os.getenv("NVAPI_KEY") or os.getenv("NVIDIA_API_KEY"):
-        fallbacks.extend(["meta/llama-3.1-8b-instruct"])
+        fallbacks.append("nvidia/nemotron-3-super-120b-a12b")
     fallbacks.extend([
-        "qwen/qwen-2.5-72b-instruct:free",
-        "meta-llama/llama-3.1-8b-instruct:free",
-        "mistralai/mistral-7b-instruct:free",
-        "microsoft/phi-3-mini-128k-instruct:free",
+        "nvidia/nemotron-3.5-lightning:free",
     ])
     
     for f in fallbacks:
@@ -1492,24 +1512,24 @@ def run_council(prompt, use_deep_context=False):
         # Updated July 2026 - current free models on OpenRouter
         task_model_preferences = {
             "reasoning": {
-                "keywords": ["reasoning", "reason", "thinking", "thought", "oss"],
-                "fallback": "openai/gpt-oss-120b:free"
+                "keywords": ["reasoning", "reason", "thinking", "thought", "nex", "nemotron"],
+                "fallback": "nex-agi/nex-n2.5-mini:free"
             },
             "coding": {
-                "keywords": ["coder", "code", "qwen"],
-                "fallback": "qwen/qwen3-coder:free"
+                "keywords": ["coder", "code", "nex", "nemotron"],
+                "fallback": "nex-agi/nex-n2.5-mini:free"
             },
             "agentic": {
-                "keywords": ["tool", "function", "structured", "llama"],
-                "fallback": "meta-llama/llama-3.3-70b-instruct:free"
+                "keywords": ["tool", "function", "structured", "nemotron", "nex"],
+                "fallback": "nvidia/nemotron-3.5-lightning:free"
             },
             "analysis": {
-                "keywords": ["analysis", "summarize", "gemma", "nemotron"],
-                "fallback": "google/gemma-4-31b-it:free"
+                "keywords": ["analysis", "summarize", "nemotron", "nex"],
+                "fallback": "nvidia/nemotron-3-super-120b-a12b:free"
             },
             "general": {
-                "keywords": ["gemma", "llama", "nemotron"],
-                "fallback": "google/gemma-4-31b-it:free"
+                "keywords": ["nvidia", "nex", "nemotron"],
+                "fallback": "nex-agi/nex-n2.5-mini:free"
             }
         }
         
@@ -1541,7 +1561,7 @@ def run_council(prompt, use_deep_context=False):
         # Fallback to default for this task type
         return preferences["fallback"]
 
-    FAST_FREE_PREFIXES = ("google/", "qwen/", "meta-llama/", "microsoft/", "nvidia/")
+    FAST_FREE_PREFIXES = ("nvidia/", "nex-agi/", "thinkingmachines/", "cohere/", "poolside/")
 
     def _multi_provider_fallback(default_or, alt_gemini="gemini-2.5-flash", alt_nvidia="nvidia/nemotron-4-340b-instruct"):
         if os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"):
@@ -1559,7 +1579,7 @@ def run_council(prompt, use_deep_context=False):
                 if "coder" in m_id or "code" in m_id or "qwen" in m_id:
                     if avg_price_per_m(m) == 0.0:
                         return m["id"]
-        return _multi_provider_fallback("qwen/qwen-2.5-coder-32b-instruct:free", "gemini-2.5-flash", "nvidia/nemotron-4-340b-instruct")
+        return _multi_provider_fallback("nex-agi/nex-n2.5-mini:free", "gemini-2.5-flash", "nvidia/nemotron-3-super-120b-a12b")
 
     def select_reasoning(models, excluded_set):
         for prefix in FAST_FREE_PREFIXES:
@@ -1569,7 +1589,7 @@ def run_council(prompt, use_deep_context=False):
                     continue
                 if avg_price_per_m(m) == 0.0:
                     return m["id"]
-        return _multi_provider_fallback("meta-llama/llama-3.3-70b-instruct:free", "gemini-2.5-flash", "nvidia/nemotron-4-340b-instruct")
+        return _multi_provider_fallback("nvidia/nemotron-3-super-120b-a12b:free", "gemini-2.5-flash", "nvidia/nemotron-3-super-120b-a12b")
 
     def select_agentic(models, excluded_set):
         for prefix in FAST_FREE_PREFIXES:
@@ -1579,7 +1599,7 @@ def run_council(prompt, use_deep_context=False):
                     continue
                 if avg_price_per_m(m) == 0.0:
                     return m["id"]
-        return _multi_provider_fallback("google/gemma-4-31b-it:free", "gemini-2.5-flash", "meta/llama-3.3-70b-instruct")
+        return _multi_provider_fallback("nvidia/nemotron-3.5-lightning:free", "gemini-2.5-flash", "nvidia/nemotron-3-super-120b-a12b")
 
     def select_general(models, excluded_set):
         for prefix in FAST_FREE_PREFIXES:
@@ -1589,7 +1609,7 @@ def run_council(prompt, use_deep_context=False):
                     continue
                 if avg_price_per_m(m) == 0.0:
                     return m["id"]
-        return _multi_provider_fallback("google/gemma-4-31b-it:free", "gemini-2.0-flash", "meta/llama-3.3-70b-instruct")
+        return _multi_provider_fallback("nex-agi/nex-n2.5-mini:free", "gemini-2.5-flash", "nvidia/nemotron-3-super-120b-a12b")
 
     # ── Multi-Provider Council Selection ──────────────────────────────
     # DESIGN INVARIANT: Spread council members across DIFFERENT providers
@@ -1649,6 +1669,13 @@ def run_council(prompt, use_deep_context=False):
                 candidates.append("gemini-2.5-flash")  # Direct Google
             if has_zai:
                 candidates.append("glm-4.5-flash")     # Direct Z.ai
+
+            # Verified-first pinning: the cron-maintained pool (probed daily by
+            # scripts/verify_free_models.py) leads the draw; registry picks fill out
+            # and vary the remainder. The provider-diversity loop below still
+            # guarantees members span >= 3 providers (invariant #7).
+            verified_first = [c for c in _verified_model_ids("council") if c not in candidates]
+            candidates = verified_first + candidates
             
             # Shuffle and pick up to 3 ensuring provider diversity
             random.shuffle(candidates)
@@ -1721,15 +1748,19 @@ def run_council(prompt, use_deep_context=False):
         prompt.lower()
     ))
     
-    if is_high_reasoning:
-        # Dynamically choose the latest paid reasoning model under $3.00/M tokens ceiling
-        chairman_model = get_dynamic_model(models_list, free=False, price_ceiling=3.0, required_params=["reasoning"],
-                                           fallback_default="openai/o3-mini")
-        reasoning_reason = f"high reasoning required (regex matched) -> selected latest {chairman_model}"
+    # ALWAYS-FREE chairman (2026-09-13): the old high-reasoning branch routed to a
+    # PAID model (openai/o3-mini, free=False). Chairman is pinned to the verified
+    # free pool first (cron re-probes & auto-rotates it daily); dynamic-free is the
+    # cold-start fallback.
+    _chairman_pool = list(_verified_model_ids("chairman"))
+    if _chairman_pool:
+        chairman_model = _chairman_pool[0]
+        chairman_source = "verified free pool"
     else:
-        # Dynamically choose the latest free flagship model
-        chairman_model = get_dynamic_model(models_list, free=True, fallback_default="google/gemma-4-31b-it:free")
-        reasoning_reason = f"general query -> selected latest {chairman_model}"
+        chairman_model = get_dynamic_model(models_list, free=True,
+                                           fallback_default="nex-agi/nex-n2.5-mini:free")
+        chairman_source = "dynamic free selection"
+    reasoning_reason = f"{'high reasoning required (regex matched)' if is_high_reasoning else 'general query'} -> chairman {chairman_model} ({chairman_source})"
         
     print("\n\033[95m[LLM Council] Starting deliberation...\033[0m")
     print(f"\033[94m[Stage 1] Querying 3 council members {council_models} for opinions in parallel...\033[0m")
@@ -1834,13 +1865,12 @@ def run_council(prompt, use_deep_context=False):
     
     if not opinions:
         print("\033[91m[LLM Council] Warning: All council models failed in Stage 1. Falling back to direct Chairman query.\033[0m")
-        # Direct Chairman query fallback
+        # Direct Chairman query fallback (free-only; paid o3-mini removed 2026-09-13)
         chairman_fallbacks = [
             chairman_model,
-            "openai/o3-mini",
-            "google/gemma-4-31b-it:free",
-            "meta-llama/llama-3.3-70b-instruct:free",
-            "nvidia/nemotron-3-super-120b-a12b:free"
+            "nex-agi/nex-n2.5-mini:free",
+            "nvidia/nemotron-3-super-120b-a12b:free",
+            "nvidia/nemotron-3.5-lightning:free"
         ]
         resp = None
         target_model = None
@@ -2045,9 +2075,8 @@ def run_council(prompt, use_deep_context=False):
     
     chairman_fallbacks = [
         chairman_model,
-        "openai/o3-mini",
-        "google/gemma-4-31b-it:free",
-        "meta-llama/llama-3.3-70b-instruct:free",
+        "nex-agi/nex-n2.5-mini:free",
+        "nvidia/nemotron-3.5-lightning:free",
         "nvidia/nemotron-3-super-120b-a12b:free"
     ]
     resp = None
@@ -2673,12 +2702,11 @@ def repl(model, use_deep_context=False, session_context=None):
             
             models_list = [
                 ("smart", "Auto (Smart Router)"),
-                ("google/gemma-4-31b-it:free", "Gemma-4 31B · OpenRouter (Best Free General)"),
-                ("qwen/qwen3-coder:free", "Qwen3 Coder 480B · OpenRouter (Best Free Code)"),
+                ("nex-agi/nex-n2.5-mini:free", "Nex N2.5 Mini · OpenRouter (Free Reasoning)"),
                 ("nvidia/nemotron-3-super-120b-a12b:free", "Nemotron 3 Super 120B · OpenRouter (Reasoning & 1M Context)"),
+                ("nvidia/nemotron-3.5-lightning:free", "Nemotron 3.5 Lightning · OpenRouter (Reasoning Flash)"),
                 ("deepseek/deepseek-r1", "DeepSeek R1 · OpenRouter (Paid Reasoning Anchor)"),
-                ("meta-llama/llama-3.3-70b-instruct:free", "Llama-3.3 70B · OpenRouter (Tools/JSON)"),
-                ("nvidia/llama-3.3-nemotron-super-49b-v1.5", "Nemotron Super 49B · NIM (Flagship)"),
+                ("nvidia/nemotron-3-super-120b-a12b", "Nemotron 3 Super 120B · NIM (Flagship)"),
                 ("gemini-2.5-pro", "Gemini 2.5 Pro · Google (Paid Anchor)"),
                 ("claude-3-7-sonnet-20250219", "Claude Sonnet 3.7 · Anthropic (Paid Anchor)")
             ]
@@ -2690,7 +2718,7 @@ def repl(model, use_deep_context=False, session_context=None):
                 if m_id == "smart": prefix = "   "
                 print(f"{prefix}[{i}] {desc}")
                 
-            sys.stdout.write("Select model (0-5): ")
+            sys.stdout.write("Select model (0-7): ")
             sys.stdout.flush()
             choice = sys.stdin.readline().strip()
             try:
