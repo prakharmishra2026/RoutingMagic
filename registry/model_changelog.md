@@ -143,3 +143,19 @@ Council refreshed to verified-live free models (real probes, 5 completions each)
   🐛 **Fixed regression**: `verify_free_models.py` v1 rewrote council.py with a lazy
      `(?:.*?\n)*?` + DOTALL regex → catastrophic backtracking hung re.sub forever; replaced
      with linear line-slicing (LESSONS #031).
+
+## 2026-09-13 19:59 UTC — Vision model hunt: omni:free CONFIRMED working (runtime retry fix)
+
+  👁 **Diagnosis**: probed all 10 free image-capable models via the runtime resolver.
+     Only `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` works (nex-* 400/503,
+     gemma-* 429, content-safety 502, dots empty, ling 429, inkling 403, NIM vision
+     404/timeout/500/403). Vision pool stays pinned to omni:free.
+  🔁 **Runtime bug fixed**: ~50% of omni:free image requests return HTTP 200 with
+     choices=None; the old loop broke on a non-raising create() so those returned an
+     EMPTY answer. Streaming now wrapped in try/except; empty responses retry the free
+     model up to 3× before spending on gpt-4o-mini. E2E proof: "colorful pattern of
+     diagonal stripes in rainbow hues..." — first try, zero cost.
+  🖼 **Verify probe fixed**: 64×64 flat-green PNG caused false negatives (NIM streaming
+     decoder rejects tiny synthetic images) → 128×128 multi-color gradient (LESSONS #035).
+  ✅ **Status**: verify_free_models --fix = ALL ROLES HEALTHY (rc=0), vision 14s;
+     pytest 20/20; council_health 3/3 PASS.

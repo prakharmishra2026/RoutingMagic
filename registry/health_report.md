@@ -1,13 +1,13 @@
-# Free model pool verification — 2026-09-13T15:46:25.940441Z
+# Free model pool verification — 2026-09-13T15:59:17.858808Z
 
-  ✓ council  nvidia/nemotron-3-super-120b-a12b                  1322ms
+  ✓ council  nvidia/nemotron-3-super-120b-a12b                  594ms
 
-  ✓ council  nex-agi/nex-n2.5-mini:free                         2241ms
+  ✓ council  nex-agi/nex-n2.5-mini:free                         1220ms
 
-  ✓ council  nvidia/nemotron-3.5-lightning:free                 4803ms
+  ✓ council  nvidia/nemotron-3.5-lightning:free                 25214ms
 
-  ✓ chairman nex-agi/nex-n2.5-mini:free                         1432ms
+  ✓ chairman nex-agi/nex-n2.5-mini:free                         972ms
 
-  ✗ vision   nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free DEAD/empty: RuntimeError: no-choices (transient gate)
+  ✓ vision   nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free 14096ms
 
-**Summary:** {'vision': 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free'}
+**Summary:** ALL HEALTHY

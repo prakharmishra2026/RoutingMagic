@@ -54,9 +54,21 @@ def _now():
 
 
 def _tiny_png_b64():
-    ihdr = struct.pack(">IIBBBBB", 64, 64, 8, 2, 0, 0, 0)
-    row = b"\x00\x00\xff\x00" * 64
-    raw = row * 64
+    """Generate a 128×128 multi-color gradient PNG (realistic enough for vision
+    decoders — tiny flat-color PNGs trigger NIM upstream 'unrecognized format'
+    errors on streaming, LESSONS #035)."""
+    n = 128
+    ihdr = struct.pack(">IIBBBBB", n, n, 8, 2, 0, 0, 0)
+    rows = []
+    for y in range(n):
+        row = bytearray(b"\x00")
+        for x in range(n):
+            r = ((x * 7 + y * 11) % 256) & 0xFF
+            g = ((x * 13 + y * 3) % 256) & 0xFF
+            b = ((x * 5 + y * 17) % 256) & 0xFF
+            row += bytes([r, g, b])
+        rows.append(row)
+    raw = b"".join(rows)
 
     def chunk(tag, data):
         return (struct.pack(">I", len(data)) + tag + data

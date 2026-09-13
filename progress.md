@@ -119,3 +119,8 @@
 - [x] `.DS_Store` untracked + `.gitignore` entry
 - [x] Final sweep re-verified: pytest 20/20, council_health 3/3, verifier green except vision (OR-side outage, auto-heals daily)
 - [ ] CEO note: confirm nightly GHA verify step goes green after OR restores vision (external, next 1–2 runs)
+- [x] Vision model hunt: all 10 free image-capable OR models probed; omni:free confirmed the only working one
+- [x] Runtime vision retry-on-empty (free first, 3×, paid gpt-4o-mini only as last resort) — E2E verified zero-cost
+- [x] Verify probe image fixed (#035): tiny flat PNG was a false negative → realistic gradient
+- [x] **ALL ROLES HEALTHY**: verify --fix rc=0, vision 14s, pytest 20/20, council_health 3/3
+- [ ] CEO note: confirm nightly GHA verify step green (external, next 1–2 runs)

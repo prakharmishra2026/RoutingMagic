@@ -177,3 +177,19 @@ ever splits.
 - **Still-open external**: OR free vision image path — auto-heals when OR restores;
   nightly cron re-probes. GHA verify step unproven in CI until tonight's 1 AM run.
 - **Commits**: NONE yet this round (pending this write-up).
+
+## Session checkpoint — 2026-09-13 20:15 UTC | Vision model hunt + runtime fix
+
+- **Diagnosis**: OR free list = 10 image-capable models; probed ALL via the runtime
+  resolver. Only omni:free works (nex-* 400/503, gemma-* 429, content-safety 502, dots
+  empty, ling 429, inkling 403, NIM vision 404/timeout/500/403). omni:free image path
+  flaps ~50% (choices=None on 200) but streams correctly for realistic images.
+- **Runtime fix** (openai_wrapper.py run_vision_query): streaming now wrapped in
+  try/except; empty/no-choices responses retry the SAME free model up to 3× before
+  falling to paid gpt-4o-mini. Proven e2e: "colorful pattern of diagonal stripes..."
+  FIRST TRY, no paid spend.
+- **Verify probe fix** (#035): tiny flat-green PNG was a false-negative (NIM streaming
+  decoder rejects it). Probe now uses 128×128 multi-color gradient.
+- **Fully green**: `verify_free_models.py --fix` → ALL ROLES HEALTHY (rc=0), vision
+  14s. pytest 20/20, council_health 3/3 PASS.
+- **Commits**: pending.

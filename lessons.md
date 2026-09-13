@@ -207,3 +207,25 @@ chain, regardless of registry score.
   first consecutive request slot.
 - **Rule going forward**: when a function's docstring promises exclusion, verify the loop
   that consumes the data. Rebuild chain = first check health_cache actually shapes it.
+
+## #035 — Tiny flat-color PNGs break free-tier vision streaming; probe must be realistic
+- **What broke**: omni:free vision probes with a 64×64 solid-green PNG kept failing
+  ("NO CHOICES" or NIM upstream `Failed to decoding image ... unrecognized data stream
+  contents` on the streaming path) while real 256×256 multi-color images answered
+  instantly. The vision "outage" was partly the probe's synthetic image, not the model.
+- **Root cause**: NIM's streaming vision pipeline rejects tiny flat-region synthetic
+  PNGs, and OpenRouter's free Omni route intermittently drops image requests
+  (choices=None on 200) — retry recovered it.
+- **Rule going forward**: vision health probes must use a realistic multi-color image
+  (≥128px gradient); tiny flat PNGs produce false negatives.
+
+## #036 — Free vision works; the runtime chain just never retried it
+- **What broke**: ~50% of omni:free image requests return HTTP 200 with choices=None.
+  The runtime loop `break`-ed on any non-raising create(), so those calls returned an
+  EMPTY answer — gpt-4o-mini was only reached when create() raised, and the empty reply
+  was never retried.
+- **Root cause**: emptiness was only detectable after streaming the response, which sat
+  outside the try/except.
+- **Rule going forward**: decision-quality detection must inspect the full response
+  (stream all chunks inside try/except), retry the free model on empty, and spend paid
+  only after free genuinely cannot answer.

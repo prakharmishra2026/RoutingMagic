@@ -598,42 +598,57 @@ def run_vision_query(image_paths, prompt, model_name=None, detail="auto"):
     # every call), google/gemini-2.5-flash:free never resolved (empty content).
     # Replaced with the verified-live free NVIDIA Omni image model (probed: replied
     # "Green" to a green PNG via OpenRouter). gpt-4o-mini stays as paid last resort.
+    #
+    # The Omni free route is FLAKY: ~50% of image requests return HTTP 200 with
+    # choices=None (empty). The old loop broke on any non-raising create(), so those
+    # calls returned an empty answer and never reached gpt-4o-mini. Now retries the
+    # free model (no content is ever printed on a dropped request, so retries are
+    # silent) and only spends on gpt-4o-mini when free genuinely cannot answer.
     vision_fallback = [
         "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
         "openai/gpt-4o-mini"
     ]
     if model_name:
         vision_fallback = [model_name] + [m for m in vision_fallback if m != model_name]
-        
-    resp = None
-    selected_model = None
+
     for attempt in vision_fallback:
-        try:
-            client, selected_model = get_client_and_model(attempt)
-            resp = client.chat.completions.create(
-                model=selected_model,
-                messages=messages,
-                stream=True
-            )
-            break
-        except Exception as e:
-            continue
-            
-    if not resp:
-        print("\033[91m[Vision] All vision models failed to start the request.\033[0m")
-        return None
-        
-    print(f"\033[96m🤖 Vision ({selected_model}):\033[0m\n", end="", flush=True)
-    assistant_reply = ""
-    for chunk in resp:
-        if not getattr(chunk, "choices", None) or len(chunk.choices) == 0:
-            continue
-        content = getattr(chunk.choices[0].delta, "content", None)
-        if content:
-            print(content, end="", flush=True)
-            assistant_reply += content
-    print()
-    return assistant_reply
+        for retry in range(4):
+            try:
+                client, selected_model = get_client_and_model(attempt)
+                resp = client.chat.completions.create(
+                    model=selected_model,
+                    messages=messages,
+                    stream=True
+                )
+            except Exception:
+                resp = None
+            if resp is None:
+                continue
+            print(f"\033[96m🤖 Vision ({selected_model}):\033[0m\n", end="", flush=True)
+            assistant_reply = ""
+            try:
+                for chunk in resp:
+                    if not getattr(chunk, "choices", None) or len(chunk.choices) == 0:
+                        continue
+                    content = getattr(chunk.choices[0].delta, "content", None)
+                    if content:
+                        print(content, end="", flush=True)
+                        assistant_reply += content
+            except Exception:
+                # streaming failure (e.g. NIM upstream decode error on tiny/synthetic
+                # images, OR 5xx mid-stream) — treat same as empty, retry.
+                resp = None
+            print()
+            if assistant_reply.strip():
+                return assistant_reply
+            # empty stream (OR free choice-drop) — retry silently, then move on
+            print(f"\033[90m[Vision] {selected_model.split('/')[-1]} returned empty — "
+                  f"retrying ({retry + 1}/3)...\033[0m\n", flush=True)
+        # retries exhausted for this model — try next in chain
+        continue
+
+    print("\033[91m[Vision] All vision models returned empty.\033[0m")
+    return None
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  MYTHOS-INSPIRED ROUTING — Adaptive Computation Time (ACT) & Multi-Pass
