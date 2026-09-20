@@ -154,6 +154,54 @@ ask MC "Should we use Postgres or SQLite for this project?"
 ask deep MC "Design the authentication system"
 ```
 
+### Council Self-Maintenance (three-strike system)
+
+The council keeps itself healthy from `vercel/api/council_registry.json`. The
+roster is chosen from the models marked `active`; if that file is ever missing or
+corrupt, the council falls back to its built-in list and never crashes an audit.
+
+**The contamination lesson.** A previous "wrong consensus" was not caused by weak
+models — the orchestrator had listed the suspected defects inside the prompt, and
+all four models simply repeated them back. So a finding that merely echoes the
+prompt is classified `prompt_echo` and is **ignored forever**: it never counts as
+a strike.
+
+**When a model gets a strike.** Only four outcomes count:
+
+| Outcome | Strike? |
+|---|---|
+| `empty_content` | yes |
+| `timeout` | yes |
+| `provider_error` | yes |
+| `wrong_finding_verified` (orchestrator proved the finding false against an artefact) | yes |
+| `prompt_echo` | **never** |
+| `ok` | never |
+
+**Benching, expiry, retirement.**
+
+- 3 strikes inside a rolling **14-day** window bench the model.
+- Strikes older than 14 days expire and are pruned automatically.
+- A run where **every** member fails is an **infrastructure fault** — the problem
+  is our plumbing, not the models, so nobody is struck.
+- A model benched **twice inside 60 days** is **retired**.
+- A newly added model gets a **3-run grace period**: during those runs only
+  `empty_content` and `timeout` strike; `provider_error` and
+  `wrong_finding_verified` are exempt.
+
+**The roster floor.** The council must always have at least **3 active** models.
+Before benching a model that would drop the roster below 3, the system probes
+candidate free models with a planted-bug benchmark and promotes the best passers.
+If no candidate passes the benchmark, the bench is withheld, the model stays
+active, and `LOW_ROSTER_HOLD` is logged. The council never runs itself below three
+working models.
+
+`probe_candidates.py` discovers free OpenRouter models from `/models` (pricing 0)
+and scores them on `found_planted_defects`, `numbered_output`,
+`no_reasoning_leak`, and `latency`; results append to
+`council_probe_history.json`. Every probe disables reasoning output
+(`extra_body={"reasoning": {"enabled": False}}`) so reasoning models return
+content instead of burning the token budget thinking.
+
 ---
 
 ## ⚡ Power User Aliases

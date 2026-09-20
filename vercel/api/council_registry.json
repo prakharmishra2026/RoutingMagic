@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "min_active": 3,
+  "strike_window_days": 14,
+  "retire_window_days": 60,
+  "grace_runs": 3,
+  "updated_at": "2026-09-20T00:00:00+00:00",
+  "models": {
+    "nvidia/nemotron-3-ultra-550b-a55b:free": {
+      "provider": "openrouter",
+      "added_at": "2026-09-20T00:00:00+00:00",
+      "last_verified": "2026-09-20T00:00:00+00:00",
+      "status": "active",
+      "runs_observed": 0,
+      "probe_score": {
+        "found_planted_defects": 3,
+        "numbered_output": true,
+        "no_reasoning_leak": true,
+        "latency": 5.8,
+        "score": 14.2,
+        "passed": true
+      },
+      "strikes": [],
+      "bench_history": []
+    },
+    "inclusionai/ling-3.0-flash-vl:free": {
+      "provider": "openrouter",
+      "added_at": "2026-09-20T00:00:00+00:00",
+      "last_verified": "2026-09-20T00:00:00+00:00",
+      "status": "active",
+      "runs_observed": 0,
+      "probe_score": {
+        "found_planted_defects": 3,
+        "numbered_output": true,
+        "no_reasoning_leak": true,
+        "latency": 8.4,
+        "score": 12.6,
+        "passed": true
+      },
+      "strikes": [],
+      "bench_history": []
+    },
+    "nex-agi/nex-n2.5-pro:free": {
+      "provider": "openrouter",
+      "added_at": "2026-09-20T00:00:00+00:00",
+      "last_verified": "2026-09-20T00:00:00+00:00",
+      "status": "active",
+      "runs_observed": 0,
+      "probe_score": {
+        "found_planted_defects": 3,
+        "numbered_output": true,
+        "no_reasoning_leak": true,
+        "latency": 16.4,
+        "score": 8.6,
+        "passed": true
+      },
+      "strikes": [],
+      "bench_history": []
+    },
+    "poolside/laguna-s-2.1:free": {
+      "provider": "openrouter",
+      "added_at": "2026-09-20T00:00:00+00:00",
+      "last_verified": "2026-09-20T00:00:00+00:00",
+      "status": "active",
+      "runs_observed": 0,
+      "probe_score": {
+        "found_planted_defects": 3,
+        "numbered_output": true,
+        "no_reasoning_leak": true,
+        "latency": 4.3,
+        "score": 14.7,
+        "passed": true
+      },
+      "strikes": [],
+      "bench_history": []
+    }
+  }
+}
