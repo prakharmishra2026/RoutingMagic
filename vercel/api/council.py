@@ -6,17 +6,34 @@ from datetime import datetime, timezone
 from typing import Dict, List
 from openai import OpenAI
 
-# Free models verified live via real probes 2026-09-13 (5 completions each):
-#   ("nvidia",     "nvidia/nemotron-3-super-120b-a12b")  5/5 ok, median 1095ms
-#   ("openrouter", "nex-agi/nex-n2.5-mini:free")         5/5 ok, median 1750ms
-#   ("openrouter", "nvidia/nemotron-3.5-lightning:free") 5/5 ok, median 5834ms
-# Prior COUNCIL_MODELS were deleted as stale: an invalid NIM id, and two
-# 2024-era OpenRouter :free ids absent from the live catalog.
+# Council roster re-probed live 2026-09-20 with a planted-bug audit task (see
+# LESSONS L-208/L-215 in the Investogram repo). Each member below returned a
+# clean numbered findings list, found the planted defects, and did not ramble.
+#
+# ROOT CAUSE of the old roster's unreliability: reasoning models spent their
+# whole `max_tokens` budget on internal reasoning and returned EMPTY content
+# (or leaked "Here's a thinking process..." into the answer). Disabling
+# reasoning output fixes both, so every call now sends
+# extra_body={"reasoning": {"enabled": False}}.
+#
+# Probe results (reasoning disabled, 1200-token cap):
+#   nvidia/nemotron-3-ultra-550b-a55b:free   5.8s  7 key defects, numbered
+#   inclusionai/ling-3.0-flash-vl:free       8.4s  6-7 key defects, numbered
+#   nex-agi/nex-n2.5-pro:free               16.4s  4 key defects, numbered
+#   poolside/laguna-s-2.1:free               4.3s  5 key defects, numbered
+# Dropped: nvidia/nemotron-3-super-120b-a12b (NIM 503s / empty content),
+#   nvidia/nemotron-3.5-lightning:free (usable but 135s), nex-n2.5-mini (empty).
 COUNCIL_MODELS = [
-    ("nvidia", "nvidia/nemotron-3-super-120b-a12b"),
-    ("openrouter", "nex-agi/nex-n2.5-mini:free"),
-    ("openrouter", "nvidia/nemotron-3.5-lightning:free"),
+    ("openrouter", "nvidia/nemotron-3-ultra-550b-a55b:free"),
+    ("openrouter", "inclusionai/ling-3.0-flash-vl:free"),
+    ("openrouter", "nex-agi/nex-n2.5-pro:free"),
+    ("openrouter", "poolside/laguna-s-2.1:free"),
 ]
+
+# An audit that takes 4 minutes is still cheaper than a missed defect; the old
+# 25s ceiling was the second cause of "council failed" (L-208).
+COUNCIL_TIMEOUT_SECONDS = 240.0
+COUNCIL_MAX_TOKENS = 8000
 
 def get_clients() -> Dict[str, OpenAI]:
     """Initialize OpenAI clients for different providers."""
@@ -40,8 +57,15 @@ def get_clients() -> Dict[str, OpenAI]:
     
     return clients
 
-async def run_single_model(client: OpenAI, model: str, prompt: str, timeout: float = 25.0) -> Dict:
-    """Run a single model and return result."""
+async def run_single_model(
+    client: OpenAI, model: str, prompt: str, timeout: float = COUNCIL_TIMEOUT_SECONDS
+) -> Dict:
+    """Run a single model and return result.
+
+    Reasoning output is disabled: with it on, reasoning models burn the token
+    budget thinking and return empty content, which read as a "successful"
+    member contributing nothing. Empty content is now an explicit failure.
+    """
     try:
         loop = asyncio.get_event_loop()
         response = await asyncio.wait_for(
@@ -49,14 +73,18 @@ async def run_single_model(client: OpenAI, model: str, prompt: str, timeout: flo
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
-                max_tokens=2000,
+                max_tokens=COUNCIL_MAX_TOKENS,
+                extra_body={"reasoning": {"enabled": False}},
             )),
             timeout=timeout
         )
+        content = response.choices[0].message.content or ""
+        if not content.strip():
+            return {"model": model, "success": False, "error": "empty content", "content": ""}
         return {
             "model": model,
             "success": True,
-            "content": response.choices[0].message.content,
+            "content": content,
             "usage": {
                 "prompt_tokens": response.usage.prompt_tokens if response.usage else 0,
                 "completion_tokens": response.usage.completion_tokens if response.usage else 0,
