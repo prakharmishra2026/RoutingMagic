@@ -1,0 +1,1727 @@
+{
+  "generated_at": "2026-09-22T10:11:01.457260Z",
+  "tasks": {
+    "coding": {
+      "label": "Coding",
+      "primary_free": [
+        {
+          "id": "cohere/north-mini-code:free",
+          "name": "Cohere: North Mini Code (free)",
+          "score": 9999.0,
+          "free": true,
+          "verified_free": false,
+          "context_length": 256000,
+          "pricing": {
+            "prompt": "0",
+            "completion": "0"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        }
+      ],
+      "secondary_paid": [
+        {
+          "id": "deepseek/deepseek-v4-flash",
+          "name": "DeepSeek: DeepSeek V4 Flash 0423",
+          "score": 131669036709.33,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0.000000088606",
+            "completion": "0.000000177212",
+            "input_cache_read": "0.0000000177212"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "~z-ai/glm-flash-latest",
+          "name": "Z.ai: GLM Flash Latest",
+          "score": 107692307692.31,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1310720,
+          "pricing": {
+            "prompt": "0.000000075",
+            "completion": "0.00000025",
+            "input_cache_read": "0.000000015"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "z-ai/glm-5.3-flash:batch",
+          "name": "Z.ai: GLM 5.3 Flash (batch)",
+          "score": 107692307692.31,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0.000000075",
+            "completion": "0.00000025",
+            "input_cache_read": "0.000000015"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "openai/gpt-5-nano:batch",
+          "name": "OpenAI: GPT-5 Nano (batch)",
+          "score": 102222222222.22,
+          "free": false,
+          "verified_free": false,
+          "context_length": 400000,
+          "pricing": {
+            "prompt": "0.000000025",
+            "completion": "0.0000002",
+            "web_search": "0.01",
+            "input_cache_read": "0.0000000025"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "openai/gpt-4.1-nano:batch",
+          "name": "OpenAI: GPT-4.1 Nano (batch)",
+          "score": 80000000000.0,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1047576,
+          "pricing": {
+            "prompt": "0.00000005",
+            "completion": "0.0000002",
+            "web_search": "0.01",
+            "input_cache_read": "0.0000000125"
+          },
+          "reasoning": false,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "deepseek/deepseek-v4-flash-vision-exp:batch",
+          "name": "DeepSeek: DeepSeek V4 Flash Vision Exp (batch)",
+          "score": 79545454545.45,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0.00000011",
+            "completion": "0.00000033",
+            "input_cache_read": "0.0000000035"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "deepseek/deepseek-v4-flash-0731:batch",
+          "name": "DeepSeek: DeepSeek V4 Flash 0731 (batch)",
+          "score": 79545454545.45,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0.00000011",
+            "completion": "0.00000033",
+            "input_cache_read": "0.0000000035"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "~deepseek/deepseek-flash-latest",
+          "name": "DeepSeek: DeepSeek Flash Latest",
+          "score": 58333333333.33,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0.00000012",
+            "completion": "0.00000048",
+            "input_cache_read": "0.0000000036"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "openai/gpt-4.1-nano",
+          "name": "OpenAI: GPT-4.1 Nano",
+          "score": 57120000000.0,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1047576,
+          "pricing": {
+            "prompt": "0.0000001",
+            "completion": "0.0000004",
+            "web_search": "0.01",
+            "input_cache_read": "0.000000025"
+          },
+          "reasoning": false,
+          "tool_call": false,
+          "aider_pass_rate_2": 8.9,
+          "release_date": ""
+        },
+        {
+          "id": "mistralai/mistral-small-2603:batch",
+          "name": "Mistral: Mistral Small 4 (batch)",
+          "score": 53981013333.33,
+          "free": false,
+          "verified_free": false,
+          "context_length": 262144,
+          "pricing": {
+            "prompt": "0.000000075",
+            "completion": "0.0000003",
+            "input_cache_read": "0.0000000075"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        }
+      ],
+      "total_evaluated": 122
+    },
+    "reasoning": {
+      "label": "Reasoning / Hard Bugs",
+      "primary_free": [
+        {
+          "id": "nvidia/nemotron-3.5-lightning:free",
+          "name": "NVIDIA: Nemotron 3.5 Lightning (free)",
+          "score": 9999.0,
+          "free": true,
+          "verified_free": true,
+          "context_length": 1000000,
+          "pricing": {
+            "prompt": "0",
+            "completion": "0"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+          "name": "NVIDIA: Nemotron 3 Nano Omni (free)",
+          "score": 9999.0,
+          "free": true,
+          "verified_free": true,
+          "context_length": 256000,
+          "pricing": {
+            "prompt": "0",
+            "completion": "0"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "thinkingmachines/inkling-small:free",
+          "name": "Thinking Machines: Inkling Small (free)",
+          "score": 9999.0,
+          "free": true,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0",
+            "completion": "0"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "thinkingmachines/inkling:free",
+          "name": "Thinking Machines: Inkling (free)",
+          "score": 9999.0,
+          "free": true,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0",
+            "completion": "0"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        }
+      ],
+      "secondary_paid": [
+        {
+          "id": "nvidia/nemotron-3.5-lightning",
+          "name": "NVIDIA: Nemotron 3.5 Lightning",
+          "score": 74973629629.63,
+          "free": false,
+          "verified_free": false,
+          "context_length": 262144,
+          "pricing": {
+            "prompt": "0.00000007",
+            "completion": "0.0000002",
+            "input_cache_read": "0.00000004"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "thinkingmachines/inkling-small",
+          "name": "Thinking Machines: Inkling Small",
+          "score": 21212121212.12,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0.00000045",
+            "completion": "0.0000012",
+            "input_cache_read": "0.0000001"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "arcee-ai/trinity-large-thinking",
+          "name": "Arcee AI: Trinity Large Thinking",
+          "score": 19278933333.33,
+          "free": false,
+          "verified_free": false,
+          "context_length": 262144,
+          "pricing": {
+            "prompt": "0.00000025",
+            "completion": "0.0000008",
+            "input_cache_read": "0.00000006"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "qwen/qwen3-next-80b-a3b-thinking",
+          "name": "Qwen: Qwen3 Next 80B A3B Thinking",
+          "score": 14994725925.93,
+          "free": false,
+          "verified_free": false,
+          "context_length": 262144,
+          "pricing": {
+            "prompt": "0.00000015",
+            "completion": "0.0000012"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "qwen/qwen3-vl-30b-a3b-thinking",
+          "name": "Qwen: Qwen3 VL 30B A3B Thinking",
+          "score": 7785723076.92,
+          "free": false,
+          "verified_free": false,
+          "context_length": 262144,
+          "pricing": {
+            "prompt": "0.0000002",
+            "completion": "0.0000024"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "qwen/qwen3-vl-8b-thinking",
+          "name": "Qwen: Qwen3 VL 8B Thinking",
+          "score": 7728701754.39,
+          "free": false,
+          "verified_free": false,
+          "context_length": 131072,
+          "pricing": {
+            "prompt": "0.00000018",
+            "completion": "0.0000021"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "qwen/qwen3-235b-a22b-thinking-2507",
+          "name": "Qwen: Qwen3 235B A22B Thinking 2507",
+          "score": 6964996047.43,
+          "free": false,
+          "verified_free": false,
+          "context_length": 131072,
+          "pricing": {
+            "prompt": "0.00000023",
+            "completion": "0.0000023"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "thinkingmachines/inkling",
+          "name": "Thinking Machines: Inkling",
+          "score": 6930693069.31,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0.000001",
+            "completion": "0.00000405",
+            "input_cache_read": "0.00000017"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "moonshotai/kimi-k2-thinking",
+          "name": "MoonshotAI: Kimi K2 Thinking",
+          "score": 6529961290.32,
+          "free": false,
+          "verified_free": false,
+          "context_length": 262144,
+          "pricing": {
+            "prompt": "0.0000006",
+            "completion": "0.0000025",
+            "input_cache_read": "0.00000015"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "qwen/qwen3-30b-a3b-thinking-2507",
+          "name": "Qwen: Qwen3 30B A3B Thinking 2507",
+          "score": 6399384615.38,
+          "free": false,
+          "verified_free": false,
+          "context_length": 81920,
+          "pricing": {
+            "prompt": "0.0000002",
+            "completion": "0.0000024"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        }
+      ],
+      "total_evaluated": 17
+    },
+    "agentic": {
+      "label": "Agentic / Tool Use",
+      "primary_free": [],
+      "secondary_paid": [
+        {
+          "id": "minimax/minimax-m3",
+          "name": "MiniMax: MiniMax M3",
+          "score": 23333333333.33,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0.0000003",
+            "completion": "0.0000012",
+            "input_cache_read": "0.00000006"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "minimax/minimax-m2",
+          "name": "MiniMax: MiniMax M2",
+          "score": 14977254901.96,
+          "free": false,
+          "verified_free": false,
+          "context_length": 204800,
+          "pricing": {
+            "prompt": "0.000000255",
+            "completion": "0.00000102"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "minimax/minimax-m2.5",
+          "name": "MiniMax: MiniMax M2.5",
+          "score": 14145185185.19,
+          "free": false,
+          "verified_free": false,
+          "context_length": 204800,
+          "pricing": {
+            "prompt": "0.00000027",
+            "completion": "0.00000108",
+            "input_cache_read": "0.000000027"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "minimax/minimax-m1",
+          "name": "MiniMax: MiniMax M1",
+          "score": 13461538461.54,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1000000,
+          "pricing": {
+            "prompt": "0.0000004",
+            "completion": "0.0000022"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "minimax/minimax-m2.7",
+          "name": "MiniMax: MiniMax M2.7",
+          "score": 12730666666.67,
+          "free": false,
+          "verified_free": false,
+          "context_length": 204800,
+          "pricing": {
+            "prompt": "0.0000003",
+            "completion": "0.0000012",
+            "input_cache_read": "0.00000006"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "minimax/minimax-m2.1",
+          "name": "MiniMax: MiniMax M2.1",
+          "score": 12730666666.67,
+          "free": false,
+          "verified_free": false,
+          "context_length": 204800,
+          "pricing": {
+            "prompt": "0.0000003",
+            "completion": "0.0000012",
+            "input_cache_read": "0.00000003"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "moonshotai/kimi-k2",
+          "name": "MoonshotAI: Kimi K2 0711",
+          "score": 10892487804.88,
+          "free": false,
+          "verified_free": false,
+          "context_length": 131072,
+          "pricing": {
+            "prompt": "0.00000057",
+            "completion": "0.0000023"
+          },
+          "reasoning": false,
+          "tool_call": false,
+          "aider_pass_rate_2": 59.1,
+          "release_date": ""
+        },
+        {
+          "id": "moonshotai/kimi-k2.5",
+          "name": "MoonshotAI: Kimi K2.5",
+          "score": 7497362962.96,
+          "free": false,
+          "verified_free": false,
+          "context_length": 262144,
+          "pricing": {
+            "prompt": "0.00000045",
+            "completion": "0.00000225",
+            "input_cache_read": "0.00000007"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "moonshotai/kimi-k2-thinking",
+          "name": "MoonshotAI: Kimi K2 Thinking",
+          "score": 6529961290.32,
+          "free": false,
+          "verified_free": false,
+          "context_length": 262144,
+          "pricing": {
+            "prompt": "0.0000006",
+            "completion": "0.0000025",
+            "input_cache_read": "0.00000015"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "moonshotai/kimi-k2.7-code",
+          "name": "MoonshotAI: Kimi K2.7 Code",
+          "score": 5169010775.75,
+          "free": false,
+          "verified_free": false,
+          "context_length": 262144,
+          "pricing": {
+            "prompt": "0.0000007062",
+            "completion": "0.00000321",
+            "input_cache_read": "0.00000018"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        }
+      ],
+      "total_evaluated": 14
+    },
+    "long_context": {
+      "label": "Long Context",
+      "primary_free": [
+        {
+          "id": "nvidia/nemotron-3.5-lightning:free",
+          "name": "NVIDIA: Nemotron 3.5 Lightning (free)",
+          "score": 9999.0,
+          "free": true,
+          "verified_free": true,
+          "context_length": 1000000,
+          "pricing": {
+            "prompt": "0",
+            "completion": "0"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "dots-studio/dots-3-note-preview:free",
+          "name": "Dots Studio: Dots3-Note Preview (free)",
+          "score": 9999.0,
+          "free": true,
+          "verified_free": false,
+          "context_length": 512000,
+          "pricing": {
+            "prompt": "0",
+            "completion": "0"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "thinkingmachines/inkling-small:free",
+          "name": "Thinking Machines: Inkling Small (free)",
+          "score": 9999.0,
+          "free": true,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0",
+            "completion": "0"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "thinkingmachines/inkling:free",
+          "name": "Thinking Machines: Inkling (free)",
+          "score": 9999.0,
+          "free": true,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0",
+            "completion": "0"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "nvidia/nemotron-3-ultra-550b-a55b:free",
+          "name": "NVIDIA: Nemotron 3 Ultra (free)",
+          "score": 9999.0,
+          "free": true,
+          "verified_free": false,
+          "context_length": 1000000,
+          "pricing": {
+            "prompt": "0",
+            "completion": "0"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "google/lyria-3-pro-preview",
+          "name": "Google: Lyria 3 Pro Preview",
+          "score": 9999.0,
+          "free": true,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0",
+            "completion": "0"
+          },
+          "reasoning": false,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "google/lyria-3-clip-preview",
+          "name": "Google: Lyria 3 Clip Preview",
+          "score": 9999.0,
+          "free": true,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0",
+            "completion": "0"
+          },
+          "reasoning": false,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        }
+      ],
+      "secondary_paid": [
+        {
+          "id": "qwen/qwen3.7-flash",
+          "name": "Qwen: Qwen3.7 Flash",
+          "score": 218750000000.0,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1000000,
+          "pricing": {
+            "prompt": "0.00000003",
+            "completion": "0.00000013",
+            "input_cache_read": "0.000000006",
+            "input_cache_write": "0.000000038",
+            "overrides": [
+              {
+                "min_prompt_tokens": 32000,
+                "prompt": "0.0000001",
+                "completion": "0.0000004",
+                "input_cache_read": "0.00000002",
+                "input_cache_write": "0.000000125"
+              },
+              {
+                "min_prompt_tokens": 256000,
+                "prompt": "0.0000002",
+                "completion": "0.0000008",
+                "input_cache_read": "0.00000004",
+                "input_cache_write": "0.00000025"
+              }
+            ]
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "google/gemini-2.5-flash-lite:batch",
+          "name": "Google: Gemini 2.5 Flash Lite (batch)",
+          "score": 140000000000.0,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0.00000005",
+            "completion": "0.0000002",
+            "image": "0.00000005",
+            "audio": "0.00000015",
+            "input_audio_cache": "0.00000003",
+            "web_search": "0.014",
+            "internal_reasoning": "0.0000002",
+            "input_cache_read": "0.00000001"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "deepseek/deepseek-v4-flash",
+          "name": "DeepSeek: DeepSeek V4 Flash 0423",
+          "score": 131669036709.33,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0.000000088606",
+            "completion": "0.000000177212",
+            "input_cache_read": "0.0000000177212"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "poolside/laguna-s-2.1",
+          "name": "Poolside: Laguna S 2.1",
+          "score": 129629629629.63,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0.00000009",
+            "completion": "0.00000018",
+            "input_cache_read": "0.000000009"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "meta/muse-spark-1.3-contributor",
+          "name": "Meta: Muse Spark 1.3 Contributor",
+          "score": 116666666666.67,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0.0000001",
+            "completion": "0.0000002",
+            "web_search": "0.0025",
+            "input_cache_read": "0.000000002"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "meta/muse-spark-1.2-contributor",
+          "name": "Meta: Muse Spark 1.2 Contributor",
+          "score": 116666666666.67,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0.0000001",
+            "completion": "0.0000002",
+            "web_search": "0.0025",
+            "input_cache_read": "0.000000002"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "~z-ai/glm-flash-latest",
+          "name": "Z.ai: GLM Flash Latest",
+          "score": 107692307692.31,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1310720,
+          "pricing": {
+            "prompt": "0.000000075",
+            "completion": "0.00000025",
+            "input_cache_read": "0.000000015"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "z-ai/glm-5.3-flash:batch",
+          "name": "Z.ai: GLM 5.3 Flash (batch)",
+          "score": 107692307692.31,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0.000000075",
+            "completion": "0.00000025",
+            "input_cache_read": "0.000000015"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "qwen/qwen3.5-flash-02-23",
+          "name": "Qwen: Qwen3.5-Flash",
+          "score": 107692307692.31,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1000000,
+          "pricing": {
+            "prompt": "0.000000065",
+            "completion": "0.00000026"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "xiaomi/mimo-v2.6-flash",
+          "name": "Xiaomi: MiMo-V2.6-Flash",
+          "score": 83333333333.33,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0.00000014",
+            "completion": "0.00000028",
+            "input_cache_read": "0.0000000028"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        }
+      ],
+      "total_evaluated": 168
+    },
+    "fast_chat": {
+      "label": "Fast / Cheap Chat",
+      "primary_free": [
+        {
+          "id": "nex-agi/nex-n2.5-mini:free",
+          "name": "Nex AGI: Nex-N2.5-Mini (free)",
+          "score": 9999.0,
+          "free": true,
+          "verified_free": true,
+          "context_length": 262144,
+          "pricing": {
+            "prompt": "0",
+            "completion": "0"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "nvidia/nemotron-3.5-lightning:free",
+          "name": "NVIDIA: Nemotron 3.5 Lightning (free)",
+          "score": 9999.0,
+          "free": true,
+          "verified_free": true,
+          "context_length": 1000000,
+          "pricing": {
+            "prompt": "0",
+            "completion": "0"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+          "name": "NVIDIA: Nemotron 3 Nano Omni (free)",
+          "score": 9999.0,
+          "free": true,
+          "verified_free": true,
+          "context_length": 256000,
+          "pricing": {
+            "prompt": "0",
+            "completion": "0"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "inclusionai/ling-3.0-flash-vl:free",
+          "name": "inclusionAI: Ling 3.0 Flash VL (free)",
+          "score": 9999.0,
+          "free": true,
+          "verified_free": false,
+          "context_length": 262144,
+          "pricing": {
+            "prompt": "0",
+            "completion": "0"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "nex-agi/nex-n2.5-pro:free",
+          "name": "Nex AGI: Nex-N2.5-Pro (free)",
+          "score": 9999.0,
+          "free": true,
+          "verified_free": false,
+          "context_length": 262144,
+          "pricing": {
+            "prompt": "0",
+            "completion": "0"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "inclusionai/ling-3.0-flash-sante:free",
+          "name": "inclusionAI: Ling 3.0 Flash Sante (free)",
+          "score": 9999.0,
+          "free": true,
+          "verified_free": false,
+          "context_length": 262144,
+          "pricing": {
+            "prompt": "0",
+            "completion": "0"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "inclusionai/ling-3.0-flash-fin:free",
+          "name": "inclusionAI: Ling 3.0 Flash Fin (free)",
+          "score": 9999.0,
+          "free": true,
+          "verified_free": false,
+          "context_length": 262144,
+          "pricing": {
+            "prompt": "0",
+            "completion": "0"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "qwen/qwen3.8-27b:free",
+          "name": "Qwen: Qwen3.8 27B (free)",
+          "score": 9999.0,
+          "free": true,
+          "verified_free": false,
+          "context_length": 262144,
+          "pricing": {
+            "prompt": "0",
+            "completion": "0"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "dots-studio/dots-3-note-preview:free",
+          "name": "Dots Studio: Dots3-Note Preview (free)",
+          "score": 9999.0,
+          "free": true,
+          "verified_free": false,
+          "context_length": 512000,
+          "pricing": {
+            "prompt": "0",
+            "completion": "0"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "liquid/lfm-2.5-2.6b:free",
+          "name": "LiquidAI: LFM2.5-2.6B (free)",
+          "score": 9999.0,
+          "free": true,
+          "verified_free": false,
+          "context_length": 65536,
+          "pricing": {
+            "prompt": "0",
+            "completion": "0"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        }
+      ],
+      "secondary_paid": [
+        {
+          "id": "nvidia/nemotron-3-super-120b-a12b",
+          "name": "NVIDIA: Nemotron 3 Super",
+          "score": 38194113207.55,
+          "free": false,
+          "verified_free": true,
+          "context_length": 262144,
+          "pricing": {
+            "prompt": "0.00000008",
+            "completion": "0.00000045"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "inclusionai/ling-3.0-flash",
+          "name": "inclusionAI: Ling 3.0 Flash",
+          "score": 240986666666.67,
+          "free": false,
+          "verified_free": false,
+          "context_length": 262144,
+          "pricing": {
+            "prompt": "0.000000021",
+            "completion": "0.000000063",
+            "input_cache_read": "0.0000000042"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "qwen/qwen3.7-flash",
+          "name": "Qwen: Qwen3.7 Flash",
+          "score": 218750000000.0,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1000000,
+          "pricing": {
+            "prompt": "0.00000003",
+            "completion": "0.00000013",
+            "input_cache_read": "0.000000006",
+            "input_cache_write": "0.000000038",
+            "overrides": [
+              {
+                "min_prompt_tokens": 32000,
+                "prompt": "0.0000001",
+                "completion": "0.0000004",
+                "input_cache_read": "0.00000002",
+                "input_cache_write": "0.000000125"
+              },
+              {
+                "min_prompt_tokens": 256000,
+                "prompt": "0.0000002",
+                "completion": "0.0000008",
+                "input_cache_read": "0.00000004",
+                "input_cache_write": "0.00000025"
+              }
+            ]
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "nex-agi/nex-n2.5-mini",
+          "name": "Nex AGI: Nex-N2.5-Mini",
+          "score": 161943040000.0,
+          "free": false,
+          "verified_free": false,
+          "context_length": 262144,
+          "pricing": {
+            "prompt": "0.000000025",
+            "completion": "0.0000001",
+            "input_cache_read": "0.0000000025"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "google/gemini-2.5-flash-lite:batch",
+          "name": "Google: Gemini 2.5 Flash Lite (batch)",
+          "score": 140000000000.0,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0.00000005",
+            "completion": "0.0000002",
+            "image": "0.00000005",
+            "audio": "0.00000015",
+            "input_audio_cache": "0.00000003",
+            "web_search": "0.014",
+            "internal_reasoning": "0.0000002",
+            "input_cache_read": "0.00000001"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "deepseek/deepseek-v4-flash",
+          "name": "DeepSeek: DeepSeek V4 Flash 0423",
+          "score": 131669036709.33,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0.000000088606",
+            "completion": "0.000000177212",
+            "input_cache_read": "0.0000000177212"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "poolside/laguna-s-2.1",
+          "name": "Poolside: Laguna S 2.1",
+          "score": 129629629629.63,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0.00000009",
+            "completion": "0.00000018",
+            "input_cache_read": "0.000000009"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "meta/muse-spark-1.3-contributor",
+          "name": "Meta: Muse Spark 1.3 Contributor",
+          "score": 116666666666.67,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0.0000001",
+            "completion": "0.0000002",
+            "web_search": "0.0025",
+            "input_cache_read": "0.000000002"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "meta/muse-spark-1.2-contributor",
+          "name": "Meta: Muse Spark 1.2 Contributor",
+          "score": 116666666666.67,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0.0000001",
+            "completion": "0.0000002",
+            "web_search": "0.0025",
+            "input_cache_read": "0.000000002"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "poolside/laguna-xs-2.1",
+          "name": "Poolside: Laguna XS 2.1",
+          "score": 112460444444.44,
+          "free": false,
+          "verified_free": false,
+          "context_length": 262144,
+          "pricing": {
+            "prompt": "0.00000006",
+            "completion": "0.00000012",
+            "input_cache_read": "0.00000003"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        }
+      ],
+      "total_evaluated": 432
+    },
+    "vision": {
+      "label": "Vision / Multimodal",
+      "primary_free": [
+        {
+          "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+          "name": "NVIDIA: Nemotron 3 Nano Omni (free)",
+          "score": 9999.0,
+          "free": true,
+          "verified_free": true,
+          "context_length": 256000,
+          "pricing": {
+            "prompt": "0",
+            "completion": "0"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "inclusionai/ling-3.0-flash-vl:free",
+          "name": "inclusionAI: Ling 3.0 Flash VL (free)",
+          "score": 9999.0,
+          "free": true,
+          "verified_free": false,
+          "context_length": 262144,
+          "pricing": {
+            "prompt": "0",
+            "completion": "0"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "google/gemma-4-26b-a4b-it:free",
+          "name": "Google: Gemma 4 26B A4B  (free)",
+          "score": 9999.0,
+          "free": true,
+          "verified_free": false,
+          "context_length": 262144,
+          "pricing": {
+            "prompt": "0",
+            "completion": "0"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "google/gemma-4-31b-it:free",
+          "name": "Google: Gemma 4 31B (free)",
+          "score": 9999.0,
+          "free": true,
+          "verified_free": false,
+          "context_length": 262144,
+          "pricing": {
+            "prompt": "0",
+            "completion": "0"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        }
+      ],
+      "secondary_paid": [
+        {
+          "id": "qwen/qwen3.5-flash-02-23",
+          "name": "Qwen: Qwen3.5-Flash",
+          "score": 107692307692.31,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1000000,
+          "pricing": {
+            "prompt": "0.000000065",
+            "completion": "0.00000026"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "qwen/qwen3.5-9b",
+          "name": "Qwen: Qwen3.5-9B",
+          "score": 80971520000.0,
+          "free": false,
+          "verified_free": false,
+          "context_length": 262144,
+          "pricing": {
+            "prompt": "0.0000001",
+            "completion": "0.00000015"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "deepseek/deepseek-v4-flash-vision-exp:batch",
+          "name": "DeepSeek: DeepSeek V4 Flash Vision Exp (batch)",
+          "score": 79545454545.45,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0.00000011",
+            "completion": "0.00000033",
+            "input_cache_read": "0.0000000035"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "inclusionai/ling-3.0-flash-vl",
+          "name": "inclusionAI: Ling 3.0 Flash VL",
+          "score": 73422666666.67,
+          "free": false,
+          "verified_free": false,
+          "context_length": 131072,
+          "pricing": {
+            "prompt": "0.00000006",
+            "completion": "0.00000018",
+            "input_cache_read": "0.000000012"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "google/gemma-4-26b-a4b-it",
+          "name": "Google: Gemma 4 26B A4B ",
+          "score": 51904820512.82,
+          "free": false,
+          "verified_free": false,
+          "context_length": 262144,
+          "pricing": {
+            "prompt": "0.00000009",
+            "completion": "0.0000003",
+            "input_cache_read": "0.00000005"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "google/gemma-4-31b-it",
+          "name": "Google: Gemma 4 31B",
+          "score": 47076465116.28,
+          "free": false,
+          "verified_free": false,
+          "context_length": 262144,
+          "pricing": {
+            "prompt": "0.00000009",
+            "completion": "0.00000034",
+            "input_cache_read": "0.00000005"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "deepseek/deepseek-v4-flash-vision-exp",
+          "name": "DeepSeek: DeepSeek V4 Flash Vision Exp",
+          "score": 39772727272.73,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0.00000022",
+            "completion": "0.00000066",
+            "input_cache_read": "0.000000007"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "qwen/qwen3.5-plus-02-15",
+          "name": "Qwen: Qwen3.5 Plus 2026-02-15",
+          "score": 19230769230.77,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1000000,
+          "pricing": {
+            "prompt": "0.00000026",
+            "completion": "0.00000156",
+            "overrides": [
+              {
+                "min_prompt_tokens": 256000,
+                "prompt": "0.000000325",
+                "completion": "0.00000195"
+              }
+            ]
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "google/gemma-3-27b-it",
+          "name": "Google: Gemma 3 27B",
+          "score": 18078188679.25,
+          "free": false,
+          "verified_free": false,
+          "context_length": 131072,
+          "pricing": {
+            "prompt": "0.00000008",
+            "completion": "0.00000045",
+            "input_cache_read": "0.00000004"
+          },
+          "reasoning": false,
+          "tool_call": false,
+          "aider_pass_rate_2": 4.9,
+          "release_date": ""
+        },
+        {
+          "id": "google/gemma-3-4b-it",
+          "name": "Google: Gemma 3 4B",
+          "score": 17476266666.67,
+          "free": false,
+          "verified_free": false,
+          "context_length": 131072,
+          "pricing": {
+            "prompt": "0.00000005",
+            "completion": "0.0000001"
+          },
+          "reasoning": false,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        }
+      ],
+      "total_evaluated": 31
+    },
+    "finance": {
+      "label": "Finance / Numbers",
+      "primary_free": [],
+      "secondary_paid": [
+        {
+          "id": "deepseek/deepseek-v4-flash",
+          "name": "DeepSeek: DeepSeek V4 Flash 0423",
+          "score": 131669036709.33,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0.000000088606",
+            "completion": "0.000000177212",
+            "input_cache_read": "0.0000000177212"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "openai/gpt-oss-20b",
+          "name": "OpenAI: gpt-oss-20b",
+          "score": 110134000000.0,
+          "free": false,
+          "verified_free": false,
+          "context_length": 131072,
+          "pricing": {
+            "prompt": "0.00000003",
+            "completion": "0.00000013",
+            "input_cache_read": "0.00000003"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "openai/gpt-5-nano:batch",
+          "name": "OpenAI: GPT-5 Nano (batch)",
+          "score": 102222222222.22,
+          "free": false,
+          "verified_free": false,
+          "context_length": 400000,
+          "pricing": {
+            "prompt": "0.000000025",
+            "completion": "0.0000002",
+            "web_search": "0.01",
+            "input_cache_read": "0.0000000025"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "deepseek/deepseek-v4-flash-vision-exp:batch",
+          "name": "DeepSeek: DeepSeek V4 Flash Vision Exp (batch)",
+          "score": 79545454545.45,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0.00000011",
+            "completion": "0.00000033",
+            "input_cache_read": "0.0000000035"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "deepseek/deepseek-v4-flash-0731:batch",
+          "name": "DeepSeek: DeepSeek V4 Flash 0731 (batch)",
+          "score": 79545454545.45,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0.00000011",
+            "completion": "0.00000033",
+            "input_cache_read": "0.0000000035"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "~deepseek/deepseek-flash-latest",
+          "name": "DeepSeek: DeepSeek Flash Latest",
+          "score": 58333333333.33,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1048576,
+          "pricing": {
+            "prompt": "0.00000012",
+            "completion": "0.00000048",
+            "input_cache_read": "0.0000000036"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "openai/gpt-5.6-luna-pro",
+          "name": "OpenAI: GPT-5.6 Luna Pro",
+          "score": 53714285714.29,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1050000,
+          "pricing": {
+            "prompt": "0.0000002",
+            "completion": "0.0000012",
+            "web_search": "0.01",
+            "input_cache_read": "0.00000002",
+            "input_cache_write": "0.00000025",
+            "overrides": [
+              {
+                "min_prompt_tokens": 272000,
+                "prompt": "0.0000004",
+                "completion": "0.0000018",
+                "input_cache_read": "0.00000004",
+                "input_cache_write": "0.0000005"
+              }
+            ]
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 88.0,
+          "release_date": ""
+        },
+        {
+          "id": "openai/gpt-oss-120b",
+          "name": "OpenAI: gpt-oss-120b",
+          "score": 52455253333.33,
+          "free": false,
+          "verified_free": false,
+          "context_length": 131072,
+          "pricing": {
+            "prompt": "0.00000015",
+            "completion": "0.0000006",
+            "input_cache_read": "0.000000075"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 41.8,
+          "release_date": ""
+        },
+        {
+          "id": "deepseek/deepseek-v4-flash-0731",
+          "name": "DeepSeek: DeepSeek V4 Flash 0731",
+          "score": 51470588235.29,
+          "free": false,
+          "verified_free": false,
+          "context_length": 1310720,
+          "pricing": {
+            "prompt": "0.00000004",
+            "completion": "0.00000064",
+            "input_cache_read": "0.000000016"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        },
+        {
+          "id": "openai/gpt-5-nano",
+          "name": "OpenAI: GPT-5 Nano",
+          "score": 51111111111.11,
+          "free": false,
+          "verified_free": false,
+          "context_length": 400000,
+          "pricing": {
+            "prompt": "0.00000005",
+            "completion": "0.0000004",
+            "web_search": "0.01",
+            "input_cache_read": "0.000000005"
+          },
+          "reasoning": true,
+          "tool_call": false,
+          "aider_pass_rate_2": 0,
+          "release_date": ""
+        }
+      ],
+      "total_evaluated": 121
+    }
+  },
+  "metadata": {
+    "models_in_catalog": 448,
+    "verified_free_count": 4,
+    "benchmark_source": "openrouter + aider_polyglot + hf_trending"
+  }
+}
