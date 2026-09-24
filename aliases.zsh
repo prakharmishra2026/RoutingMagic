@@ -219,23 +219,32 @@ open() {
 #  AUTO-PLACEMENT OF save_handler.py AT REPOSITORY ROOTS
 # ═══════════════════════════════════════════════════════════════════
 _routing_magic_save_handler_sync() {
-  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    local repo_root
-    repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
-    if [ -n "$repo_root" ] && [ ! -f "$repo_root/save_handler.py" ]; then
-      local src="${HOME}/Projects/RoutingMagic/save_handler.py"
-      if [ -f "$src" ]; then
-        cp "$src" "$repo_root/save_handler.py"
-        chmod +x "$repo_root/save_handler.py"
-        local exclude_file="$repo_root/.git/info/exclude"
-        if [ -f "$exclude_file" ]; then
-          if ! grep -q "^save_handler.py" "$exclude_file"; then
-            echo "save_handler.py" >> "$exclude_file"
-          fi
-        fi
-        echo "🪄  RoutingMagic: Auto-placed save_handler.py at repository root (ignored locally)."
-      fi
+  # Places a SYMLINK (not a copy) to the live save_handler.py at each repo root, so every repo
+  # always runs the current RoutingMagic code: update RoutingMagic once and all repos follow.
+  # Old frozen copies from earlier versions are upgraded to symlinks automatically.
+  # A copy is only left alone if it was edited locally (differs AND is newer than the source).
+  git rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
+  local repo_root src dst
+  repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+  src="${HOME}/Projects/RoutingMagic/save_handler.py"
+  dst="$repo_root/save_handler.py"
+  [ -n "$repo_root" ] && [ -f "$src" ] || return 0
+  if [ -L "$dst" ]; then
+    [ "$(readlink "$dst")" = "$src" ] && return 0
+    ln -sfn "$src" "$dst"
+  elif [ -f "$dst" ]; then
+    if cmp -s "$src" "$dst" || [ "$src" -nt "$dst" ]; then
+      ln -sfn "$src" "$dst"
+      echo "🪄  RoutingMagic: replaced stale save_handler.py copy with a live link."
     fi
+    return 0
+  else
+    ln -s "$src" "$dst"
+    echo "🪄  RoutingMagic: linked save_handler.py at repository root (ignored locally)."
+  fi
+  local exclude_file="$repo_root/.git/info/exclude"
+  if [ -f "$exclude_file" ] && ! grep -q "^save_handler.py" "$exclude_file"; then
+    echo "save_handler.py" >> "$exclude_file"
   fi
 }
 

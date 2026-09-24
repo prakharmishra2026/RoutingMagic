@@ -76,7 +76,81 @@ def parse_llm_json(output: str):
     except json.JSONDecodeError:
         return None
 
-def get_git_info():
+
+# ── Project layout ─────────────────────────────────────────────────────────────
+# Legacy projects keep the four status files at the repo root. Projects that adopted a `pm/`
+# folder (e.g. Investogram) keep them there, and their history files can be hundreds of KB.
+# In pm-mode we NEVER send whole files to a model or write whole files back: the model returns
+# only NEW entries, and we insert them at the top. A truncated model reply can then never wipe
+# history, and nothing is ever created at the repo root.
+PM_DIR = "pm"
+PM_HEAD_CHARS = 4000          # context per file sent to the model in pm-mode
+SCRATCHPAD_KEEP = 3           # rolling checkpoints kept in pm/scratchpad.md
+_CHECKPOINT_RE = re.compile(r"^## (SESSION CHECKPOINT|Checkpoint)\b", re.M)
+
+
+def detect_layout(root: str = ".") -> dict:
+    """Return {'mode': 'pm'|'root', 'paths': {logical_name: path}}."""
+    if os.path.isdir(os.path.join(root, PM_DIR)):
+        return {"mode": "pm", "paths": {f: os.path.join(root, PM_DIR, f) for f in FILES}}
+    return {"mode": "root", "paths": {f: os.path.join(root, f) for f in FILES}}
+
+
+def insert_after_header(text: str, snippet: str) -> str:
+    """Insert `snippet` after the file's leading title/blockquote block (before the first `## `)."""
+    snippet = snippet.strip()
+    if not snippet:
+        return text
+    m = re.search(r"^## ", text, re.M)
+    if not m:
+        return text.rstrip() + "\n\n" + snippet + "\n"
+    return text[:m.start()] + snippet + "\n\n" + text[m.start():]
+
+
+def insert_before_first(text: str, pattern: str, snippet: str) -> str:
+    """Insert `snippet` before the first line matching `pattern` (regex); fall back to after-header."""
+    snippet = snippet.strip()
+    if not snippet:
+        return text
+    m = re.search(pattern, text, re.M)
+    if not m:
+        return insert_after_header(text, snippet)
+    return text[:m.start()] + snippet + "\n\n" + text[m.start():]
+
+
+def trim_checkpoints(text: str, keep: int = SCRATCHPAD_KEEP) -> str:
+    """Keep only the newest `keep` checkpoint sections (they are newest-first)."""
+    starts = [m.start() for m in _CHECKPOINT_RE.finditer(text)]
+    if len(starts) <= keep:
+        return text
+    return text[:starts[keep]].rstrip() + "\n"
+
+
+def apply_pm_entries(contents: dict, data: dict) -> dict:
+    """Pure function: given current file texts and the model's new entries, return new texts.
+    Only files that change are returned. Never shortens progress/memory/lessons."""
+    out = {}
+    plan = {
+        "progress.md": ("progress_entry", lambda t, s: insert_after_header(t, s)),
+        "memory.md": ("memory_facts", lambda t, s: insert_after_header(t, s)),
+        "lessons.md": ("lessons_entry", lambda t, s: insert_before_first(t, r"^## L-\d+", s)),
+        "scratchpad.md": ("scratchpad_checkpoint",
+                          lambda t, s: trim_checkpoints(insert_after_header(t, s))),
+    }
+    for fname, (key, fn) in plan.items():
+        snippet = (data.get(key) or "").strip()
+        old = contents.get(fname, "")
+        if not snippet or not old:
+            continue
+        new = fn(old, snippet)
+        if fname != "scratchpad.md" and len(new) < len(old):
+            continue  # safety: history files may only grow
+        if new != old:
+            out[fname] = new
+    return out
+
+
+def get_git_info(doc_paths=None):
     """Gathers status, recent commits, and diff from the workspace."""
     if not os.path.exists(".git"):
         return None, None, None
@@ -95,7 +169,7 @@ def get_git_info():
                 last_commit_ts = int(subprocess.check_output(
                     ["git", "log", "-1", "--format=%ct"], stderr=subprocess.DEVNULL, text=True
                 ).strip())
-                doc_files = ["memory.md", "progress.md", "scratchpad.md", "lessons.md"]
+                doc_files = list(doc_paths or FILES)
                 docs_mtime = max(
                     (os.path.getmtime(f) for f in doc_files if os.path.exists(f)),
                     default=0
@@ -124,10 +198,95 @@ def initialize_files(project_name):
             initialized.append(f)
     return initialized
 
+
+FALLBACK_CHAIN = ["google/gemma-4-31b-it:free", "nvidia/nemotron-3-super-120b-a12b:free",
+                  "openai/gpt-oss-120b:free", "qwen/qwen3-coder:free"]
+
+
+def _complete(prompt: str):
+    """Run the prompt down the free-model chain; return the text or None."""
+    for target_model in FALLBACK_CHAIN:
+        try:
+            client, model_id = get_client_and_model(target_model)
+            resp = client.chat.completions.create(
+                model=model_id, messages=[{"role": "user", "content": prompt}], temperature=0.3,
+                response_format={"type": "json_object"},
+            )
+            content = resp.choices[0].message.content if resp and resp.choices else None
+            if content:
+                print(f"\033[92m[Save] Generated entries using {target_model}.\033[0m")
+                return content.strip()
+            raise RuntimeError("empty response")
+        except Exception as e:
+            print(f"\033[93m[Save] Model {target_model} failed: {e}. Trying fallback...\033[0m")
+    return None
+
+
+def main_pm(project_name: str, is_auto: bool, layout: dict):
+    """pm-mode save: model writes only NEW entries; we insert them. Never creates root files."""
+    paths = layout["paths"]
+    missing = [p for p in paths.values() if not os.path.exists(p)]
+    if missing:
+        print(f"\033[91m[Save] pm/ layout is missing {missing}. Not creating anything; fix the layout first.\033[0m")
+        return
+    status, log, diff = get_git_info(list(paths.values()))
+    if not status and not diff:
+        print("\033[93m[Save] No active changes detected in git. Nothing to record.\033[0m")
+        return
+    contents = {f: open(p).read() for f, p in paths.items()}
+    heads = {f: t[:PM_HEAD_CHARS] for f, t in contents.items()}
+    prompt = f"""You are recording a work session for project '{project_name}'.
+git status:
+{status}
+git log:
+{log}
+diff (truncated):
+{diff}
+
+The top of each status file (newest entries are at the top; match their style):
+--- pm/progress.md ---
+{heads['progress.md']}
+--- pm/scratchpad.md ---
+{heads['scratchpad.md']}
+--- pm/memory.md ---
+{heads['memory.md']}
+--- pm/lessons.md ---
+{heads['lessons.md']}
+
+Return ONLY a JSON object with these keys. Each value is a NEW markdown section to insert at the
+top of that file, or "" if nothing new. Never repeat existing content. Only state facts visible above.
+{{
+  "progress_entry": "## Session YYYY-MM-DD: <title>\\n- [x] ...",
+  "scratchpad_checkpoint": "## SESSION CHECKPOINT — YYYY-MM-DD — RoutingMagic save\\n### Completed\\n...",
+  "memory_facts": "## Recently Completed: <name> (YYYY-MM-DD)\\n- permanent fact ...  (or empty)",
+  "lessons_entry": "## L-NNN — <title>\\n**What broke.** ... (or empty)",
+  "diff_summary": "one short plain-English summary"
+}}"""
+    output = _complete(prompt)
+    data = parse_llm_json(output) if output else None
+    if not data:
+        print("\033[91m[Save] No usable model output. Nothing written.\033[0m")
+        return
+    if not is_auto:
+        print(f"\n{data.get('diff_summary', '')}\n")
+        if input("Insert these entries into pm/? (y/N): ").strip().lower() not in ("y", "yes"):
+            print("\033[91m[Save] Aborted by user.\033[0m")
+            return
+    updated = apply_pm_entries(contents, data)
+    for fname, text in updated.items():
+        with open(paths[fname], "w") as fd:
+            fd.write(text)
+    print(f"\033[92m[Save] Inserted entries into: {', '.join('pm/' + f for f in updated) or 'nothing'}\033[0m")
+
+
 def main():
     cwd = os.getcwd()
     project_name = os.path.basename(cwd)
     is_auto = "--auto" in sys.argv
+
+    layout = detect_layout(cwd)
+    if layout["mode"] == "pm":
+        return main_pm(project_name, is_auto, layout)
     
     # 1. Initialize files if they don't exist
     initialized = initialize_files(project_name)
